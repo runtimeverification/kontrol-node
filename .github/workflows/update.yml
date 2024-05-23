@@ -1,0 +1,44 @@
+name: 'Update Version'
+on:
+  push:
+    branches:
+      - '_update-deps/runtimeverification/kontrol'
+      - 'project-setup'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-deps:
+    name: 'Update Dependecies'
+    runs-on: [self-hosted, linux, flyweight]
+    steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.JENKINS_GITHUB_PAT }}
+      - name: 'Configure GitHub user'
+        run: |
+          git config user.name devops
+          git config user.email devops@runtimeverification.com
+      - name: 'Install Python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: 'Install Poetry'
+        uses: Gr1N/setup-poetry@v9
+      - name: 'Update Poetry files'
+        run: |
+          KONTROL_VERSION="$(cat deps/kontrol_release)"
+          sed -i 's!kontrol = { git = "https://github.com/runtimeverification/kontrol.git", tag = "[v0-9\.]*" }!kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v'${KONTROL_VERSION}'" }!' pyproject.toml
+          poetry update
+          git add . && git commit -m "Sync Poetry files: kontrol ${KONTROL_VERSION}" || true
+      - name: 'Update K release'
+        run: |
+          K_VERSION=$(poetry run python3 -c 'import pyk; print(pyk.__version__)')
+          echo ${K_VERSION} > deps/k_release
+          git add deps/k_release && git commit -m "Sync release file: K ${K_VERSION}" || true
+      - name: 'Push updates'
+        run: git push

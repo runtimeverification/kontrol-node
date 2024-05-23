@@ -12,6 +12,7 @@ authors = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
+kontrol = { git = "https://github.com/runtimeverification/kontrol.git", tag = "v0.0.0" }
 
 [tool.poetry.group.dev.dependencies]
 autoflake = "*"
