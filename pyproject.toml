@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "kontrol-vm"
-version = "0.1.1"
+version = "0.1.2"
 description = "Kontrol Virtual Machine"
 authors = [
     "Runtime Verification, Inc. <contact@runtimeverification.com>",
