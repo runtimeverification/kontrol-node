@@ -1,4 +1,4 @@
-# kontrol-vm
+# kontrol-node
 
 
 ## Build from source
@@ -17,7 +17,7 @@ poetry install
 
 poetry run kdist clean
 
-CXX=clang++-14 poetry run --no-cache kdist --verbose build -j8 kontrol-vm.simbolik
+CXX=clang++-14 poetry run --no-cache kdist --verbose build -j8 kontrol-node.simbolik
 ```
 
 #### Poetry dependencies
@@ -29,19 +29,19 @@ poetry install
 
 #### Build using the virtual environment
 
-In order to build `kontrol-vm`, you need to build these specific targets:
+In order to build `kontrol-node`, you need to build these specific targets:
 ```sh
-poetry run --no-cache kdist --verbose build -j2 kontrol-vm.simbolik
+poetry run --no-cache kdist --verbose build -j2 kontrol-node.simbolik
 ```
 
 To change the default compiler:
 ```sh
-CXX=clang++-14 poetry run --no-cache kdist --verbose build -j2 kontrol-vm.simbolik
+CXX=clang++-14 poetry run --no-cache kdist --verbose build -j2 kontrol-node.simbolik
 ```
 
 On Apple Silicon:
 ```sh
-APPLE_SILICON=true poetry run --no-cache kdist --verbose build -j2 kontrol-vm.simbolik
+APPLE_SILICON=true poetry run --no-cache kdist --verbose build -j2 kontrol-node.simbolik
 ```
 
 Targets can be cleaned with:
@@ -61,3 +61,6 @@ Use `make` to run common tasks (see the [Makefile](Makefile) for a complete list
 * `make test-unit`: Run unit tests
 
 For interactive use, spawn a shell with `poetry shell` (after `poetry install`), then run an interpreter.
+
+[K Framework]: <https://kframework.org>
+[kup package manager]: <https://github.com/runtimeverification/kup>

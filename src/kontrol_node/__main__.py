@@ -64,7 +64,7 @@ def main() -> None:
 
 
 def exec_version(options: VersionOptions) -> None:
-    print(f'Kontrol-VM version: {VERSION}')
+    print(f'Kontrol-Node version: {VERSION}')
 
 
 def exec_run(options: VMOptions) -> None:

@@ -3,18 +3,18 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "kontrol-vm"
+name = "kontrol-node"
 version = "0.1.3"
-description = "Kontrol Virtual Machine"
+description = "A local testnet node powered by KEVM"
 authors = [
     "Runtime Verification, Inc. <contact@runtimeverification.com>",
 ]
 
 [tool.poetry.scripts]
-kontrol-vm = "kontrol_vm.__main__:main"
+kontrol-node = "kontrol_node.__main__:main"
 
 [tool.poetry.plugins.kdist]
-kontrol-vm = "kontrol_vm.kdist.plugin"
+kontrol-node = "kontrol_node.kdist.plugin"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -55,4 +55,4 @@ skip-string-normalization = true
 
 [tool.mypy]
 disallow_untyped_defs = true
-exclude = "src/kontrol_vm/rpc.py" #TODO: remove this
+exclude = "src/kontrol_node/rpc.py" #TODO: remove this

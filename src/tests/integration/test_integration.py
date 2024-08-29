@@ -1,4 +1,4 @@
-from kontrol_vm.hello import hello
+from kontrol_node.hello import hello
 
 
 def test_hello() -> None:

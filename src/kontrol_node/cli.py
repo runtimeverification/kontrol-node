@@ -80,11 +80,11 @@ def _create_argument_parser() -> ArgumentParser:
 
     kevm_cli_args = KEVMCLIArgs()
     config_args = ConfigArgs()
-    parser = ArgumentParser(prog='kontrol-vm')
+    parser = ArgumentParser(prog='kontrol-node')
 
     command_parser = parser.add_subparsers(dest='command', required=True)
 
-    command_parser.add_parser('version', help='Print out version of Kontrol-VM command.')
+    command_parser.add_parser('version', help='Print out version of Kontrol-Node command.')
 
     run = command_parser.add_parser(
         'run',
