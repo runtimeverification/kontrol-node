@@ -29,6 +29,7 @@ version_sub() {
     local version
     version="$(cat $version_file)"
     sed --in-place 's/^version = ".*"$/version = "'${version}'"/' pyproject.toml
+    sed --in-place "s/^VERSION: Final = '.*'$/VERSION: Final = '${version}'/" src/kontrol_vm/__init__.py
 }
 
 version_command="$1" ; shift
