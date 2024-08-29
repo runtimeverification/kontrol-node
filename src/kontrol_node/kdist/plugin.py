@@ -16,9 +16,9 @@ __TARGETS__: Final = {
     'simbolik': KEVMTarget(
         {
             'target': KompileTarget.LLVM,
-            'main_file': KSRC_DIR / 'vm.md',
-            'main_module': 'KONTROL-VM',
-            'syntax_module': 'KONTROL-VM',
+            'main_file': KSRC_DIR / 'node.md',
+            'main_module': 'KONTROL-NODE',
+            'syntax_module': 'KONTROL-NODE',
             'includes': [KONTROL_KSRC_DIR],
         },
     ),

@@ -49,7 +49,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.register_method('kontrol_requestValue', self.exec_request_value)
         self.register_method('kontrol_addAccount', self.exec_add_account)
 
-        dir_path = Path(f'{kdist.kdist_dir}/kontrol-vm/simbolik')
+        dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
 
         start_time = datetime.now()
