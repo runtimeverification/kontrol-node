@@ -63,7 +63,7 @@ jobs:
           container-name: ${CONTAINER}
       - name: 'Create poetry virtual environment'
         run: docker exec --user user ${CONTAINER} poetry install
-      - name: 'Build kontrol'
+      - name: 'Build kontrol-vm'
         run: docker exec --user user ${CONTAINER} poetry run kdist -v build kontrol-vm.simbolik
       - name: 'Run integration tests'
         run: docker exec --user user ${CONTAINER} make test-integration
