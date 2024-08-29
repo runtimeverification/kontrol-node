@@ -4,11 +4,11 @@
   "checkout": null,
   "context": {
     "cookiecutter": {
-      "project_name": "kontrol-vm",
-      "project_slug": "kontrol-vm",
-      "package_name": "kontrol_vm",
+      "project_name": "kontrol-node",
+      "project_slug": "kontrol-node",
+      "package_name": "kontrol_node",
       "version": "0.1.0",
-      "description": "Kontrol Virtual Machine",
+      "description": "A local testnet node powered by KEVM",
       "author_name": "Runtime Verification, Inc.",
       "author_email": "contact@runtimeverification.com",
       "_template": "https://github.com/runtimeverification/python-project-template"

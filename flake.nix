@@ -1,5 +1,5 @@
 {
-  description = "kontrol-vm - Kontrol Virtual Machine";
+  description = "kontrol-node - A local testnet node powered by KEVM";
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-22.05";
     flake-utils.url = "github:numtide/flake-utils";
@@ -10,7 +10,7 @@
       allOverlays = [
         poetry2nix.overlay
         (final: prev: {
-          kontrol-vm = prev.poetry2nix.mkPoetryApplication {
+          kontrol-node = prev.poetry2nix.mkPoetryApplication {
             python = prev.python310;
             projectDir = ./.;
             groups = [];
@@ -32,8 +32,8 @@
         };
       in {
         packages = rec {
-          inherit (pkgs) kontrol-vm;
-          default = kontrol-vm;
+          inherit (pkgs) kontrol-node;
+          default = kontrol-node;
         };
       }) // {
         overlay = nixpkgs.lib.composeManyExtensions allOverlays;

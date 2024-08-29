@@ -2,7 +2,7 @@
 requires "foundry.md"
 requires "state-utils.md"
 
-module KONTROL-VM
+module KONTROL-NODE
     imports FOUNDRY
     imports STATE-UTILS
 
