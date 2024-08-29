@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "kontrol-node"
-version = "0.1.3"
+version = "0.1.4"
 description = "A local testnet node powered by KEVM"
 authors = [
     "Runtime Verification, Inc. <contact@runtimeverification.com>",
