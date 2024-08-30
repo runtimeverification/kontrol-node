@@ -57,11 +57,11 @@ module KONTROL-NODE
 ```k
     syntax BlockchainItem ::= ".BlockchainItem"
                             | "{" NetworkCell "|" BlockCell "}"
-    // --------------------------------------------------------
+ // -----------------------------------------------------------
 
     syntax KItem ::= "#pushBlockchainState"
                    | "#pushBlockchainState" BlockchainItem
-    // ---------------------------------------------------
+ // ------------------------------------------------------
     rule <k> #pushBlockchainState => #pushBlockchainState { <network> NETWORK </network> | <block> BLOCK </block> } ... </k>
         <network> NETWORK </network>
         <block>   BLOCK   </block>
@@ -73,7 +73,7 @@ module KONTROL-NODE
         <blockhashes> (.List => ListItem(#blockchainItemHash(BCHAINITEM))) ... </blockhashes>
 
     syntax BlockchainItem ::= #getBlockByNumber ( BlockIdentifier , Map , BlockchainItem ) [function]
-    // ----------------------------------------------------------------------------------------------
+ // -------------------------------------------------------------------------------------------------
     rule #getBlockByNumber( _                 , _                   , _     ) => .BlockchainItem [owise]
     rule #getBlockByNumber( BLOCKID           , BLOCKID |-> BLOCK _ , _     ) => BLOCK
     rule #getBlockByNumber( LATEST            , .Map                , BLOCK ) => BLOCK
@@ -82,15 +82,15 @@ module KONTROL-NODE
     rule #getBlockByNumber( PENDING => LATEST , _                   , _     )
 
     syntax AccountItem ::= AccountCell | ".AccountItem"
-    // ------------------------------------------------
+  // --------------------------------------------------
 
     syntax AccountItem ::= #getAccountFromBlockchainItem ( BlockchainItem , Int ) [function]
-    // -------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------
     rule #getAccountFromBlockchainItem ( { <network> <accounts> (<account> <acctID> ACCT </acctID> ACCOUNTDATA </account>) ... </accounts>  ... </network> | _ } , ACCT ) => <account> <acctID> ACCT </acctID> ACCOUNTDATA </account>
     rule #getAccountFromBlockchainItem(_, _) => .AccountItem [owise]
 
     syntax KItem ::= #getAccountAtBlock ( BlockIdentifier , Int )
-    // ----------------------------------------------------------
+ //  ------------------------------------------------------------
     rule <k> #getAccountAtBlock(BLOCKNUM , ACCTID)
           => #getAccountFromBlockchainItem(#getBlockByNumber(BLOCKNUM, BLOCKSTORAGE, {<network> NETWORK </network> | <block> BLOCK </block>}), ACCTID) ... </k>
         <blockStorage> BLOCKSTORAGE </blockStorage>
@@ -98,14 +98,13 @@ module KONTROL-NODE
         <block>        BLOCK        </block>
 
     syntax Int ::= #getNumberFromBlockchainItem (BlockchainItem) [function]
-    // --------------------------------------------------------------------
+ //  ----------------------------------------------------------------------
     rule #getNumberFromBlockchainItem({ _ | <block> <number> BLOCKNUM </number> ... </block> }) => BLOCKNUM
 
     syntax Int ::= #getNumberAtBlock ( BlockIdentifier , Map , BlockchainItem ) [function]
-    // -----------------------------------------------------------------------------------
+ //  -------------------------------------------------------------------------------------
     rule #getNumberAtBlock (X:Int  , _           , _     ) => X
     rule #getNumberAtBlock (BLOCKID, BLOCKSTORAGE, BLOCK ) => #getNumberFromBlockchainItem(#getBlockByNumber(BLOCKID, BLOCKSTORAGE, BLOCK)) [owise]
-
 ```
 
   Transaction Signing and execution
@@ -114,7 +113,6 @@ module KONTROL-NODE
   The next block of K code contains the set of functions used to implement `eth_sendTransaction`. The information send with the request is used to load a new `<message>` cell, sign, validate, and execute it. Once these steps are performed, the transaction id is incremented and a block is mined.
 
 ```k
-
     rule <k> #eth_sendTransaction TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
           => #loadTx TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
           ~> #update_current_tx_id
@@ -143,7 +141,7 @@ module KONTROL-NODE
     syntax EthereumCommand ::= "#finishTx"
                              | #loadAccessList ( JSON )              [symbol(loadAccessList)]
                              | #loadAccessListAux ( Account , List ) [symbol(loadAccessListAux)]
-    // -----------------------------------------------------------------------------------------
+ //  -------------------------------------------------------------------------------------------
     rule <k> #loadTx TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
           => #makeTX TXID
           ~> #loadNonce ACCTFROM TXNONCE
@@ -185,11 +183,7 @@ module KONTROL-NODE
            <nonce> NONCE </nonce>
            ...
          </account>
-  
-  
-    // ------------------------------------------
 
-    // ------------------------------------------
     //TODO: Retreive the proper value for txAccess cell
     rule <k> #loadTransaction
                 TXID:Int
@@ -322,6 +316,12 @@ module KONTROL-NODE
          </message>
       requires TT =/=K .Account
  
+ 
+ 
+    // ------------------------------------------
+
+    // ------------------------------------------
+
  
     // ------------------------------------------
 
@@ -464,14 +464,15 @@ module KONTROL-NODE
     syntax BlockchainItem ::= ".BlockchainItem"
                             | "{" NetworkCell "|" BlockCell "}"
  // -----------------------------------------------------------
+
     syntax KItem ::= "#mineBlock"
-    // --------------------------
+ // -----------------------------
     rule <k> #mineBlock
           => #finalizeBlock
           ~> #setParentHash #getBlockByNumber( LATEST, BLOCKSTORAGE, {<network> NETWORK </network> | <block> BLOCK </block>} )
           ~> #makeTxReceipts
-          // ~> #updateStateTrie
-          // ~> #updateTrieRoots
+       //  ~> #updateStateTrie
+       //  ~> #updateTrieRoots
           ~> #saveState
           ~> #startBlock
           ~> #cleanTxLists
@@ -487,12 +488,12 @@ module KONTROL-NODE
                    | "#cleanTxLists"
                    | "#clearGas"
                    | "#setParentHash" BlockchainItem
-                  //  | "#updateTrieRoots"
-                  //  | "#updateStateRoot"
-                  //  | "#updateTransactionsRoot"
-                  //  | "#updateReceiptsRoot"
-                  //  | "#initStateTrie"
-                  //  | "#updateStateTrie"
+               //   | "#updateTrieRoots"
+               //   | "#updateStateRoot"
+               //   | "#updateTransactionsRoot"
+               //   | "#updateReceiptsRoot"
+               //   | "#initStateTrie"
+               //   | "#updateStateTrie"
                    | #updateStateTrie ( JSONs )
  // -------------------------------------------
 
@@ -516,6 +517,12 @@ module KONTROL-NODE
 ```k
     syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
     // ---------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------
+    syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
+ // ---------------------------------------------------------------
+    syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
+ // ---------------------------------------------------------------
     // ---------------------------------------------------------------
     syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
  // ---------------------------------------------------------------
