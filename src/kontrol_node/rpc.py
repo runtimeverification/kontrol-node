@@ -430,6 +430,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                     for args in cell.args:
                         assert type(args) is KApply
                         cell_dict = _extract_cell_data(args)
+                        assert type(cell_dict) is dict
                         item_dict[args.label.name] = cell_dict
 
                     # msg_id = str(message_dict['<network>'])
@@ -584,14 +585,14 @@ def _is_label_a_map(name: str) -> bool:
     return False
 
 
-def _extract_cell_data(cell: KApply):  # type: ignore
+def _extract_cell_data(cell: KApply) -> list | dict | int | str:
     if _is_label_a_map(cell.label.name):
         return _from_cell_map_to_list(cell)
 
     return _convert_cell_to_dict(cell)
 
 
-def _from_cell_map_to_list(cell: KApply):  #  type: ignore
+def _from_cell_map_to_list(cell: KApply) -> list:
     index_list = []
     cell_list = list(cell.args)
 
@@ -609,9 +610,7 @@ def _from_cell_map_to_list(cell: KApply):  #  type: ignore
     for index in index_list:
         cell_list.pop(index)
 
-    return_list = []
-    for _c in cell_list:
-        return_list.append(_extract_cell_data(_c))  #  type: ignore
+    return_list = [_extract_cell_data(_c) for _c in cell_list if type(_c) is KApply]
 
     _PPRINT.pprint(return_list)
     return return_list
