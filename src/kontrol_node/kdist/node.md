@@ -8,13 +8,16 @@ module KONTROL-NODE
 
     syntax TxType ::= ".TxType"
                     | "Test"
+ // ------------------------
 
     syntax RPCRequest ::= ".RPCRequest"                     [symbol(EmptyRPCRequest)]
                         | "#kontrol_requestValue"           [symbol(kontrol_requestValue)]
                         | "#eth_sendTransaction" TxType Int Int Int Int Int Int Bytes [symbol(eth_sendTransaction)]
+ // ---------------------------------------------------------------------------------------------------------------
 
     syntax RPCResponse ::= ".RPCResponse" | String | Int | Bytes
-    
+ // ------------------------------------------------------------
+
     configuration <simbolikVM>
                     <foundry/>
                     <rpcRequest> .RPCRequest </rpcRequest>
@@ -40,8 +43,7 @@ module KONTROL-NODE
                     </txReceipts>
                   </simbolikVM>
 
-    rule <k> #kontrol_requestValue => . ... </k> 
-
+    rule <k> #kontrol_requestValue => .K ... </k>
 ```
 
   The Blockchain State
@@ -55,23 +57,23 @@ module KONTROL-NODE
 ```k
     syntax BlockchainItem ::= ".BlockchainItem"
                             | "{" NetworkCell "|" BlockCell "}"
-    // -----------------------------------------------------------
+ // -----------------------------------------------------------
 
     syntax KItem ::= "#pushBlockchainState"
-                  | "#pushBlockchainState" BlockchainItem
-    // ------------------------------------------------------
+                   | "#pushBlockchainState" BlockchainItem
+ // ------------------------------------------------------
     rule <k> #pushBlockchainState => #pushBlockchainState { <network> NETWORK </network> | <block> BLOCK </block> } ... </k>
         <network> NETWORK </network>
         <block>   BLOCK   </block>
 
-    rule <k> #pushBlockchainState ({ _ | <block> <number> NUM </number> _ </block> } #as BCHAINITEM) => . ... </k>
+    rule <k> #pushBlockchainState ({ _ | <block> <number> NUM </number> _ </block> } #as BCHAINITEM) => .K ... </k>
         <blockStorage> M => M[NUM                             <- BCHAINITEM]
-                              [#blockchainItemHash(BCHAINITEM) <- BCHAINITEM]
-                              [LATEST                          <- BCHAINITEM] </blockStorage>
+                             [#blockchainItemHash(BCHAINITEM) <- BCHAINITEM]
+                             [LATEST                          <- BCHAINITEM] </blockStorage>
         <blockhashes> (.List => ListItem(#blockchainItemHash(BCHAINITEM))) ... </blockhashes>
 
     syntax BlockchainItem ::= #getBlockByNumber ( BlockIdentifier , Map , BlockchainItem ) [function]
-    // -------------------------------------------------------------------------------------------------
+ // -------------------------------------------------------------------------------------------------
     rule #getBlockByNumber( _                 , _                   , _     ) => .BlockchainItem [owise]
     rule #getBlockByNumber( BLOCKID           , BLOCKID |-> BLOCK _ , _     ) => BLOCK
     rule #getBlockByNumber( LATEST            , .Map                , BLOCK ) => BLOCK
@@ -80,15 +82,15 @@ module KONTROL-NODE
     rule #getBlockByNumber( PENDING => LATEST , _                   , _     )
 
     syntax AccountItem ::= AccountCell | ".AccountItem"
-    // ---------------------------------------------------
+  // --------------------------------------------------
 
-    syntax AccountItem ::= #getAccountFromBlockchainItem( BlockchainItem , Int ) [function]
-    // ---------------------------------------------------------------------------------------
+    syntax AccountItem ::= #getAccountFromBlockchainItem ( BlockchainItem , Int ) [function]
+  // ---------------------------------------------------------------------------------------
     rule #getAccountFromBlockchainItem ( { <network> <accounts> (<account> <acctID> ACCT </acctID> ACCOUNTDATA </account>) ... </accounts>  ... </network> | _ } , ACCT ) => <account> <acctID> ACCT </acctID> ACCOUNTDATA </account>
     rule #getAccountFromBlockchainItem(_, _) => .AccountItem [owise]
 
     syntax KItem ::= #getAccountAtBlock ( BlockIdentifier , Int )
-    // -------------------------------------------------------------
+ //  ------------------------------------------------------------
     rule <k> #getAccountAtBlock(BLOCKNUM , ACCTID)
           => #getAccountFromBlockchainItem(#getBlockByNumber(BLOCKNUM, BLOCKSTORAGE, {<network> NETWORK </network> | <block> BLOCK </block>}), ACCTID) ... </k>
         <blockStorage> BLOCKSTORAGE </blockStorage>
@@ -96,54 +98,33 @@ module KONTROL-NODE
         <block>        BLOCK        </block>
 
     syntax Int ::= #getNumberFromBlockchainItem (BlockchainItem) [function]
-    // -----------------------------------------------------------------------
+ //  ----------------------------------------------------------------------
     rule #getNumberFromBlockchainItem({ _ | <block> <number> BLOCKNUM </number> ... </block> }) => BLOCKNUM
 
     syntax Int ::= #getNumberAtBlock ( BlockIdentifier , Map , BlockchainItem ) [function]
-    // --------------------------------------------------------------------------------------
+ //  -------------------------------------------------------------------------------------
     rule #getNumberAtBlock (X:Int  , _           , _     ) => X
     rule #getNumberAtBlock (BLOCKID, BLOCKSTORAGE, BLOCK ) => #getNumberFromBlockchainItem(#getBlockByNumber(BLOCKID, BLOCKSTORAGE, BLOCK)) [owise]
-
 ```
 
   Transaction Signing and execution
   ---------------------------------
 
-  The next block of K code contains the set of functions used to implement `eth_sendTransaction`. The information send with the request is used to load a new `<message>` cell, sign, validate, and execute it. Once these steps are performed, the transaction id is incremented and a block is mined. 
+  The next block of K code contains the set of functions used to implement `eth_sendTransaction`. The information send with the request is used to load a new `<message>` cell, sign, validate, and execute it. Once these steps are performed, the transaction id is incremented and a block is mined.
 
 ```k
+    rule <k> #eth_sendTransaction TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
+          => #loadTx TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
+          ~> #update_current_tx_id
+          ~> #mineBlock
+          ... </k>
 
-    rule <k> #eth_sendTransaction 
-                TXTYPE
-                ACCTFROM 
-                ACCTTO 
-                TXGAS 
-                TXGASPRICE 
-                TXVALUE 
-                TXNONCE
-                TXDATA
-                 =>
-                #loadTx 
-                  TXTYPE
-                  ACCTFROM 
-                  ACCTTO 
-                  TXGAS 
-                  TXGASPRICE 
-                  TXVALUE 
-                  TXNONCE
-                  TXDATA  
-                ~> #update_current_tx_id
-                ~> #mineBlock
-                ... 
-              </k>
-    
-
-    syntax KItem ::= "#loadTx" TxType Int Int Int Int Int Int Bytes 
+    syntax KItem ::= "#loadTx" TxType Int Int Int Int Int Int Bytes
                    | "#makeTX" Int
                    | "#loadNonce" Int Int
                    | "#loadTransaction" Int TxType Int Int Int Int Int Int Bytes
                    | "#signTX" Int Int
-                   | "#signTX" Int String 
+                   | "#signTX" Int String
                    | "#prepareTx" Int Account
                    | "#setup_G0" Int
                    | "#validateTx" Int
@@ -152,16 +133,15 @@ module KONTROL-NODE
                    | "#makeTxReceipts"
                    | "#makeTxReceiptsAux" List
                    | "#makeTxReceipt" Int
-
+ // -------------------------------------
 
     syntax Int ::= #time( Bool ) [function]
+ // ---------------------------------------
 
     syntax EthereumCommand ::= "#finishTx"
-                             | #loadAccessList ( JSON )              [klabel(#loadAccessList)]
-                             | #loadAccessListAux ( Account , List ) [klabel(#loadAccessListAux)]
-    
-
-    // ---------------------------------------
+                             | #loadAccessList ( JSON )              [symbol(loadAccessList)]
+                             | #loadAccessListAux ( Account , List ) [symbol(loadAccessListAux)]
+ //  -------------------------------------------------------------------------------------------
     rule <k> #loadTx TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
           => #makeTX TXID
           ~> #loadNonce ACCTFROM TXNONCE
@@ -173,8 +153,7 @@ module KONTROL-NODE
          </k>
          <currentTxID> TXID </currentTxID>
 
-    // ---------------------------------------
-    rule <k> #makeTX TXID => . ... </k>
+    rule <k> #makeTX TXID => .K ... </k>
          <txOrder>   ... (.List => ListItem(TXID)) </txOrder>
          <txPending> ... (.List => ListItem(TXID)) </txPending>
          <gasPrice> GPRICE </gasPrice>
@@ -193,8 +172,7 @@ module KONTROL-NODE
           ...
           </messages> [owise, preserves-definedness]
 
-    // -------------------------------------
-    rule <k> #loadNonce ACCT TXID => . ... </k>
+    rule <k> #loadNonce ACCT TXID => .K ... </k>
          <message>
            <msgID> TXID </msgID>
            <txNonce> _ => NONCE </txNonce>
@@ -205,45 +183,38 @@ module KONTROL-NODE
            <nonce> NONCE </nonce>
            ...
          </account>
-  
-    // ------------------------------------------
-    //TODO: Retreive the proper value for txAccess cell 
-    rule <k> #loadTransaction  
+
+    //TODO: Retreive the proper value for txAccess cell
+    rule <k> #loadTransaction
                 TXID:Int
                 TXTYPE:TxType
-                ACCTFROM:Int 
-                ACCTTO:Int 
-                TXGAS:Int 
-                TXGASPRICE:Int 
-                TXVALUE:Int  
-                TXNONCE:Int 
-                TXDATA:Bytes => . ... </k>
+                _ACCTFROM:Int
+                ACCTTO:Int
+                TXGAS:Int
+                TXGASPRICE:Int
+                TXVALUE:Int
+                TXNONCE:Int
+                TXDATA:Bytes => .K ... </k>
         <chainID> CID </chainID>
-        <message> 
-          <msgID> TXID </msgID> 
+        <message>
+          <msgID> TXID </msgID>
           <txChainID> _ => CID </txChainID>
-          <txNonce> _ => TXNONCE </txNonce> 
-          <txGasPrice> _ => TXGASPRICE </txGasPrice> 
-          <txGasLimit> _ => TXGAS </txGasLimit> 
-          <to> _ => ACCTTO </to> 
-          <value> _ => TXVALUE </value> 
-          <data> _ => TXDATA </data> 
-          <txType> _ => TXTYPE </txType> 
-          // <txAccess> _ => [ null:JSON ] </txAccess> 
+          <txNonce> _ => TXNONCE </txNonce>
+          <txGasPrice> _ => TXGASPRICE </txGasPrice>
+          <txGasLimit> _ => TXGAS </txGasLimit>
+          <to> _ => ACCTTO </to>
+          <value> _ => TXVALUE </value>
+          <data> _ => TXDATA </data>
+          <txType> _ => TXTYPE </txType>
+          // <txAccess> _ => [ null:JSON ] </txAccess>
           ...
         </message>
 
-
-    // ------------------------------------------
     rule <k> #signTX TXID ACCTFROM:Int => #signTX TXID ECDSASign ( #hashTxData( #getTxData (TXID) ), #padToWidth( 32, #asByteStack( KEY ) ) )  ... </k>
         <accountKeys> ... ACCTFROM |-> KEY ... </accountKeys>
         <mode> NORMAL </mode>
 
-    rule <k> #signTX TXID ACCTFROM:Int => #signTX TXID ECDSASign ( #hashTxData( #getTxData (TXID) ), #padToWidth( 32, #asByteStack( KEY ) ) )  ... </k>
-        <accountKeys> ... ACCTFROM |-> KEY ... </accountKeys>
-        <mode> NOGAS </mode>
-
-    rule <k> #signTX TXID SIG:String => . ... </k>
+    rule <k> #signTX TXID SIG:String => .K ... </k>
          <message>
            <msgID> TXID </msgID>
            <sigR> _ => #parseHexBytes( substrString( SIG, 0, 64 ) )           </sigR>
@@ -252,7 +223,7 @@ module KONTROL-NODE
            ...
          </message>
 
-    rule <k> #signTX TXID ACCTFROM:Int => . ... </k>
+    rule <k> #signTX TXID ACCTFROM:Int => .K ... </k>
          <accountKeys> KEYMAP                      </accountKeys>
          <mode>        NORMAL                      </mode>
          <txPending>   ListItem(TXID) => .List ... </txPending>
@@ -260,18 +231,16 @@ module KONTROL-NODE
          <rpcResponse> _ => -1 </rpcResponse> // TODO: Come up with error code values for this cell
       requires notBool ACCTFROM in_keys(KEYMAP)
 
-    // ------------------------------------------
     rule <k> #prepareTx TXID:Int ACCTFROM
-          => #setup_G0 TXID 
-          ~> #validateTx TXID 
+          => #setup_G0 TXID
+          ~> #validateTx TXID
           ~> #updateTimestamp
           ~> #executeTx TXID
-          ... 
+          ...
           </k>
          <origin> _ => ACCTFROM </origin>
 
-    // ------------------------------------------
-    rule <k> #setup_G0 TXID => . ... </k>
+    rule <k> #setup_G0 TXID => .K ... </k>
          <schedule> SCHED </schedule>
          <callGas> _ => G0(SCHED, DATA, (ACCTTO ==K .Account) ) </callGas>
          <message>
@@ -281,7 +250,6 @@ module KONTROL-NODE
            ...
          </message>
 
-    // ------------------------------------------
     rule <k> #validateTx TXID => #end #if BAL <Int GLIMIT *Int GPRICE #then EVMC_BALANCE_UNDERFLOW #else EVMC_OUT_OF_GAS #fi ... </k>
          <callGas> G0_INIT </callGas>
          <origin> ACCTFROM </origin>
@@ -299,7 +267,7 @@ module KONTROL-NODE
       requires GLIMIT <Int G0_INIT
         orBool BAL <Int GLIMIT *Int GPRICE
 
-    rule <k> #validateTx TXID => . ... </k>
+    rule <k> #validateTx TXID => .K ... </k>
          <origin> ACCTFROM </origin>
          <callGas> G0_INIT => GLIMIT -Int G0_INIT </callGas>
          <account>
@@ -316,17 +284,14 @@ module KONTROL-NODE
       requires GLIMIT >=Int G0_INIT
        andBool BAL >=Int GLIMIT *Int GPRICE
 
-    // -----------------------------------
-    rule <k> #updateTimestamp => . ... </k>
+    rule <k> #updateTimestamp => .K ... </k>
          <timestamp> _ => #time(TIMEFREEZE) +Int TIMEDIFF </timestamp>
          <timeFreeze> TIMEFREEZE </timeFreeze>
          <timeDiff>   TIMEDIFF   </timeDiff>
 
-    // ---------------------------------------
     rule #time(false) => 0 // TODO: Originally this was #time. Should represent the current time of the VM.
     rule #time(true)  => 0
 
-    // ------------------------------------------
     rule <statusCode> _:ExceptionalStatusCode </statusCode> <k> #halt ~> #finishTx => #popCallStack ~> #popWorldState                   ... </k>
     rule <statusCode> EVMC_REVERT             </statusCode> <k> #halt ~> #finishTx => #popCallStack ~> #popWorldState ~> #refund GAVAIL ... </k> <gas> GAVAIL </gas>
 
@@ -350,8 +315,7 @@ module KONTROL-NODE
            ...
          </message>
       requires TT =/=K .Account
- 
-    // ------------------------------------------
+
     rule <k> #loadAccessList ([ .JSONs ]) => .K ... </k>
          <schedule> SCHED </schedule>
       requires Ghasaccesslist << SCHED >>
@@ -380,12 +344,11 @@ module KONTROL-NODE
          <schedule> SCHED </schedule>
          <callGas> GLIMIT => GLIMIT -Int Gaccesslistaddress < SCHED > </callGas>
 
-    // ------------------------------------------
     rule <k> #executeTx TXID:Int
-          => #accessAccounts ACCTFROM #newAddr(ACCTFROM, NONCE) #precompiledAccountsSet(SCHED) 
-          ~> #loadAccessList(TA)  
-          ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE 
-          ~> #finishTx 
+          => #accessAccounts ACCTFROM #newAddr(ACCTFROM, NONCE) #precompiledAccountsSet(SCHED)
+          ~> #loadAccessList(TA)
+          ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE
+          ~> #finishTx
           ~> #finalizeTx(false)
          ...
          </k>
@@ -442,14 +405,11 @@ module KONTROL-NODE
          </account>
       requires ACCTTO =/=K .Account
 
-    // ------------------------------------------
-    rule <k> #makeTxReceipts => #makeTxReceiptsAux TXLIST ... </k>
-         <txOrder> TXLIST </txOrder>
-    rule <k> #makeTxReceiptsAux .List => . ... </k>
+    rule <k> #makeTxReceipts => #makeTxReceiptsAux TXLIST ... </k> <txOrder> TXLIST </txOrder>
+    rule <k> #makeTxReceiptsAux .List => .K ... </k>
     rule <k> #makeTxReceiptsAux (ListItem(TXID) TXLIST) => #makeTxReceipt TXID ~> #makeTxReceiptsAux TXLIST ... </k>
 
-    // ------------------------------------------
-    rule <k> #makeTxReceipt TXID => . ... </k>
+    rule <k> #makeTxReceipt TXID => .K ... </k>
          <txReceipts>
            ( .Bag
           => <txReceipt>
@@ -467,15 +427,15 @@ module KONTROL-NODE
          </txReceipts>
          <message>
            <msgID>      TXID </msgID>
-           <txNonce>    TN   </txNonce>
-           <txGasPrice> TP   </txGasPrice>
-           <txGasLimit> TG   </txGasLimit>
-           <to>         TT   </to>
-           <value>      TV   </value>
-           <sigV>       TW   </sigV>
-           <sigR>       TR   </sigR>
-           <sigS>       TS   </sigS>
-           <data>       TD   </data>
+           <txNonce>    _TN  </txNonce>
+           <txGasPrice> _TP  </txGasPrice>
+           <txGasLimit> _TG  </txGasLimit>
+           <to>         _TT  </to>
+           <value>      _TV  </value>
+           <sigV>       _TW  </sigV>
+           <sigR>       _TR  </sigR>
+           <sigS>       _TS  </sigS>
+           <data>       _TD  </data>
            ...
          </message>
          <statusCode> SC   </statusCode>
@@ -483,28 +443,26 @@ module KONTROL-NODE
          <log>        LOGS </log>
          <number>     BN   </number>
          <origin>     ACCT </origin>
-      
 ```
 
   Block Mining
   ------------
 
-  The productions below are used to perform the mining of blocks, advancing the blockchain state as well as storing it. 
+  The productions below are used to perform the mining of blocks, advancing the blockchain state as well as storing it.
 
 ```k
-
-
-     syntax BlockchainItem ::= ".BlockchainItem"
+    syntax BlockchainItem ::= ".BlockchainItem"
                             | "{" NetworkCell "|" BlockCell "}"
+ // -----------------------------------------------------------
 
     syntax KItem ::= "#mineBlock"
-    // -----------------------------
+ // -----------------------------
     rule <k> #mineBlock
           => #finalizeBlock
           ~> #setParentHash #getBlockByNumber( LATEST, BLOCKSTORAGE, {<network> NETWORK </network> | <block> BLOCK </block>} )
           ~> #makeTxReceipts
-          // ~> #updateStateTrie
-          // ~> #updateTrieRoots
+      //  ~> #updateStateTrie
+      //  ~> #updateTrieRoots
           ~> #saveState
           ~> #startBlock
           ~> #cleanTxLists
@@ -520,38 +478,35 @@ module KONTROL-NODE
                    | "#cleanTxLists"
                    | "#clearGas"
                    | "#setParentHash" BlockchainItem
-                  //  | "#updateTrieRoots"
-                  //  | "#updateStateRoot"
-                  //  | "#updateTransactionsRoot"
-                  //  | "#updateReceiptsRoot"
-                  //  | "#initStateTrie"
-                  //  | "#updateStateTrie"
+              //   | "#updateTrieRoots"
+              //   | "#updateStateRoot"
+              //   | "#updateTransactionsRoot"
+              //   | "#updateReceiptsRoot"
+              //   | "#initStateTrie"
+              //   | "#updateStateTrie"
                    | #updateStateTrie ( JSONs )
+ // -------------------------------------------
 
-
-    rule <k> #setParentHash BCI => . ... </k>
+    rule <k> #setParentHash BCI => .K ... </k>
          <previousHash> _ => #blockchainItemHash( BCI ) </previousHash>
 
     rule <k> #saveState => #pushBlockchainState ~> #incrementBlockNumber ... </k>
 
-    rule <k> #incrementBlockNumber => . ... </k>
-         <number> BN => BN +Int 1 </number>
+    rule <k> #incrementBlockNumber => .K ... </k> <number> BN => BN +Int 1 </number>
 
-    rule <k> #cleanTxLists => . ... </k>
+    rule <k> #cleanTxLists => .K ... </k>
          <txPending> _ => .List </txPending>
          <txOrder>   _ => .List </txOrder>
-    
-    rule <k> #clearGas => . ... </k>
-         <gas> _ => 0 </gas>
 
+    rule <k> #clearGas => .K ... </k> <gas> _ => 0 </gas>
 ```
 
   Helper Funcs
   ------------
 
 ```k
-    // ---------------------------------------------------------------
     syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
+ // ---------------------------------------------------------------
     rule #blockchainItemHash( { _ |
          <block>
            <previousHash>      HP </previousHash>
@@ -573,29 +528,28 @@ module KONTROL-NODE
          </block> } )
       => #blockHeaderHash(HP, HO, HC, HR, HT, HE, HB, HD, HI, HL, HG, HS, HX, HM, HN)
 
-    // ---------------------------------------------
-    syntax KItem ::= "#update_current_tx_id" 
-
-    rule <k> TXID:Int ~> #update_current_tx_id => . ... </k>
+    syntax KItem ::= "#update_current_tx_id"
+ // ----------------------------------------
+    rule <k> TXID:Int ~> #update_current_tx_id => .K ... </k>
          <currentTxID> TXID => TXID +Int 1 </currentTxID>
          <rpcResponse> _ => 200 </rpcResponse>
 
-    // ---------------------------------------------
-    syntax KItem ::= "#acctFromPrivateKey" String Int [symbol(acctFromPrivateKey)] 
-    syntax KItem ::= "#setAcctBalance" Int Int 
-
+    syntax KItem ::= "#acctFromPrivateKey" String Int [symbol(acctFromPrivateKey)]
+ // ------------------------------------------------------------------------------
     rule <k> #acctFromPrivateKey KEYSTR BAL => #newAccount #addrFromPrivateKey(KEYSTR) ~> #setAcctBalance #addrFromPrivateKey(KEYSTR) BAL ... </k>
          <accountKeys> M => M[#addrFromPrivateKey(KEYSTR) <- #parseHexWord(KEYSTR)] </accountKeys>
-         
-    rule <k> #setAcctBalance KEY BAL => . ... </k>
-            <accounts> 
+
+    syntax KItem ::= "#setAcctBalance" Int Int
+ // ------------------------------------------
+    rule <k> #setAcctBalance KEY BAL => .K ... </k>
+            <accounts>
               <account>
-                <acctID> KEY </acctID> 
-                <balance> _ => BAL </balance> 
-                ... 
-              </account> 
-              ... 
-            </accounts> 
+                <acctID> KEY </acctID>
+                <balance> _ => BAL </balance>
+                ...
+              </account>
+              ...
+            </accounts>
 endmodule
 
 ```
