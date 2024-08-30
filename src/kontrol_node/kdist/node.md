@@ -315,17 +315,7 @@ module KONTROL-NODE
            ...
          </message>
       requires TT =/=K .Account
- 
- 
- 
-    // ------------------------------------------
 
-    // ------------------------------------------
-
- 
-    // ------------------------------------------
-
-    // ------------------------------------------
     rule <k> #loadAccessList ([ .JSONs ]) => .K ... </k>
          <schedule> SCHED </schedule>
       requires Ghasaccesslist << SCHED >>
@@ -471,8 +461,8 @@ module KONTROL-NODE
           => #finalizeBlock
           ~> #setParentHash #getBlockByNumber( LATEST, BLOCKSTORAGE, {<network> NETWORK </network> | <block> BLOCK </block>} )
           ~> #makeTxReceipts
-       //  ~> #updateStateTrie
-       //  ~> #updateTrieRoots
+      //  ~> #updateStateTrie
+      //  ~> #updateTrieRoots
           ~> #saveState
           ~> #startBlock
           ~> #cleanTxLists
@@ -488,12 +478,12 @@ module KONTROL-NODE
                    | "#cleanTxLists"
                    | "#clearGas"
                    | "#setParentHash" BlockchainItem
-               //   | "#updateTrieRoots"
-               //   | "#updateStateRoot"
-               //   | "#updateTransactionsRoot"
-               //   | "#updateReceiptsRoot"
-               //   | "#initStateTrie"
-               //   | "#updateStateTrie"
+              //   | "#updateTrieRoots"
+              //   | "#updateStateRoot"
+              //   | "#updateTransactionsRoot"
+              //   | "#updateReceiptsRoot"
+              //   | "#initStateTrie"
+              //   | "#updateStateTrie"
                    | #updateStateTrie ( JSONs )
  // -------------------------------------------
 
@@ -516,17 +506,7 @@ module KONTROL-NODE
 
 ```k
     syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
-    // ---------------------------------------------------------------
-    // ---------------------------------------------------------------
-    // ---------------------------------------------------------------
-    syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
  // ---------------------------------------------------------------
-    syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
- // ---------------------------------------------------------------
-    // ---------------------------------------------------------------
-    syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
- // ---------------------------------------------------------------
-    syntax Int ::= #blockchainItemHash( BlockchainItem ) [function]
     rule #blockchainItemHash( { _ |
          <block>
            <previousHash>      HP </previousHash>
