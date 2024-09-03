@@ -19,6 +19,7 @@ kontrol-node = "kontrol_node.kdist.plugin"
 [tool.poetry.dependencies]
 python = "^3.10"
 kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v1.0.10" }
+requests = "^2.32.3"
 
 [tool.poetry.group.dev.dependencies]
 autoflake = "*"
