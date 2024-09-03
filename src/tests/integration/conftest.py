@@ -24,7 +24,7 @@ def server() -> Iterator[StatefulKJsonRpcServer]:
     dynamically allocated port to avoid conflicts. The server is run in a separate thread to allow the
     test to interact with it.
 
-    :yield: A tuple containing the server instance and the port number it is running on.
+    :yield: A `StatefulKJsonRpcServer` instance.
     """
 
     server = StatefulKJsonRpcServer(ServeRpcOptions({'definition_dir': None, 'port': 0, 'host': SERVER_HOST}))
