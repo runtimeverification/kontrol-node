@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import socket
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -17,18 +16,8 @@ if TYPE_CHECKING:
 SERVER_HOST: Final = 'localhost'
 
 
-def get_free_port() -> int:
-    """Finds an available port on the system by temporarily binding to a free port and returning its number.
-
-    :return: port
-    """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        return s.getsockname()[1]
-
-
 @pytest.fixture(scope='function')
-def server_instance() -> Iterator[tuple[StatefulKJsonRpcServer, int]]:
+def server() -> Iterator[StatefulKJsonRpcServer]:
     """Fixture to start a JSON-RPC server instance on a dynamically assigned port.
 
     This fixture sets up a new `StatefulKJsonRpcServer` instance for each test function, running it on a
@@ -38,14 +27,12 @@ def server_instance() -> Iterator[tuple[StatefulKJsonRpcServer, int]]:
     :yield: A tuple containing the server instance and the port number it is running on.
     """
 
-    port = get_free_port()
-    server = StatefulKJsonRpcServer(ServeRpcOptions({'definition_dir': None, 'port': port, 'host': SERVER_HOST}))
+    server = StatefulKJsonRpcServer(ServeRpcOptions({'definition_dir': None, 'port': 0, 'host': SERVER_HOST}))
 
     server_thread = threading.Thread(target=server.serve)
     server_thread.start()
 
     time.sleep(2)
-
-    yield (server, port)
+    yield server
     server.shutdown()
     server_thread.join()
