@@ -13,7 +13,7 @@ def pytest_addoption(parser: Parser) -> None:
         '--update-expected-output',
         action='store_true',
         default=False,
-        help='Write expected output files for proof tests',
+        help='Write expected output files for rpc tests',
     )
 
 
