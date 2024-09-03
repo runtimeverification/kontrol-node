@@ -34,7 +34,7 @@ def test_rpc_file(
     if test_id in RPC_TESTS_SKIPPED:
         pytest.skip()
 
-    with open(INPUT_FILES / f'{test_id}.in.json', 'r') as test_file:
+    with open(INPUT_FILES / f'{test_id}.in.json') as test_file:
         payload = json.loads(test_file.read())
         result = json_rpc_request_payload(port, payload)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
