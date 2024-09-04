@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "kontrol-node"
-version = "0.1.4"
+version = "0.1.6"
 description = "A local testnet node powered by KEVM"
 authors = [
     "Runtime Verification, Inc. <contact@runtimeverification.com>",
@@ -55,4 +55,3 @@ skip-string-normalization = true
 
 [tool.mypy]
 disallow_untyped_defs = true
-exclude = "src/kontrol_node/rpc.py" #TODO: remove this

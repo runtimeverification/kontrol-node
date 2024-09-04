@@ -81,11 +81,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         return int(cell.token)
 
     def exec_get_block_by_number(self, block_number: int) -> int:
-
         print(f'BLOCK NUMBER: {block_number}')
-
         self._get_all_block_storage_dict()
-
         return block_number
 
     def exec_get_balance(self, address: str) -> str:
@@ -433,6 +430,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                     for args in cell.args:
                         assert type(args) is KApply
                         cell_dict = _extract_cell_data(args)
+                        assert type(cell_dict) is dict
                         item_dict[args.label.name] = cell_dict
 
                     # msg_id = str(message_dict['<network>'])
@@ -587,23 +585,24 @@ def _is_label_a_map(name: str) -> bool:
     return False
 
 
-def _extract_cell_data(cell: KApply):
+def _extract_cell_data(cell: KApply) -> list | dict | int | str:
     if _is_label_a_map(cell.label.name):
         return _from_cell_map_to_list(cell)
 
     return _convert_cell_to_dict(cell)
 
 
-def _from_cell_map_to_list(cell: KApply):
+def _from_cell_map_to_list(cell: KApply) -> list:
     index_list = []
     cell_list = list(cell.args)
 
     index = 0
-    for cell in cell_list:
-        if 'CellMap' in cell.label.name:
+    while index < len(cell_list):
+        _c = cell_list[index]
+        if type(_c) is KApply and 'CellMap' in _c.label.name:
             index_list.append(index)
-            for new_cell in list(cell.args):
-                cell_list.append(new_cell)
+            for arg in list(_c.args):
+                cell_list.append(arg)
         index += 1
 
     index_list.reverse()
@@ -611,14 +610,13 @@ def _from_cell_map_to_list(cell: KApply):
     for index in index_list:
         cell_list.pop(index)
 
-    return_list = []
-    for cell in cell_list:
-        return_list.append(_extract_cell_data(cell))
+    return_list = [_extract_cell_data(_c) for _c in cell_list if type(_c) is KApply]
 
+    _PPRINT.pprint(return_list)
     return return_list
 
 
-def _convert_cell_to_dict(cell: KApply, depth=0) -> dict | int | str:
+def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
     cell_dict = {}
 
     for args in cell.args:
@@ -629,7 +627,6 @@ def _convert_cell_to_dict(cell: KApply, depth=0) -> dict | int | str:
             cell_dict[args.label.name] = _extract_cell_data(args)
         else:
             assert type(args) is KToken
-            value = None
             if args.token.isdecimal():
                 value = int(args.token)
             else:
