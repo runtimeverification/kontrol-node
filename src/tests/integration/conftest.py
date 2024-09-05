@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 SERVER_HOST: Final = 'localhost'
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def server() -> Iterator[StatefulKJsonRpcServer]:
     """Fixture to start a JSON-RPC server instance on a dynamically assigned port.
 
