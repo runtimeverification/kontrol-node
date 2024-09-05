@@ -36,6 +36,7 @@ pytest-cov = "*"
 pytest-mock = "*"
 pytest-xdist = "*"
 pyupgrade = "*"
+requests = "*"
 types-requests = "*"
 
 [tool.isort]
