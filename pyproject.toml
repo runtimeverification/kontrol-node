@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "kontrol-node"
-version = "0.1.6"
+version = "0.1.7"
 description = "A local testnet node powered by KEVM"
 authors = [
     "Runtime Verification, Inc. <contact@runtimeverification.com>",
@@ -36,6 +36,8 @@ pytest-cov = "*"
 pytest-mock = "*"
 pytest-xdist = "*"
 pyupgrade = "*"
+requests = "*"
+types-requests = "*"
 
 [tool.isort]
 profile = "black"
