@@ -5,6 +5,7 @@ import sys
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from kontrol.utils import _LOG_FORMAT, check_k_version, config_file_path, loglevel
 from pyk.cli.pyk import parse_toml_args
 from pyk.rpc.rpc import ServeRpcOptions
 from rich.highlighter import NullHighlighter
@@ -13,10 +14,9 @@ from rich.logging import RichHandler
 from . import VERSION
 from .cli import _create_argument_parser, generate_options, get_argument_type_setter, get_option_string_destination
 from .rpc import StatefulKJsonRpcServer
-from .utils import _LOG_FORMAT, _check_k_version, _config_file_path, _loglevel
 
 if TYPE_CHECKING:
-    from typing import TypeVar
+    from typing import Final, TypeVar
 
     from kontrol.options import VersionOptions
 
@@ -24,19 +24,21 @@ if TYPE_CHECKING:
 
     T = TypeVar('T')
 
+_LOGGER: Final = logging.getLogger(__name__)
+
 
 def main() -> None:
     sys.setrecursionlimit(15000000)
     parser = _create_argument_parser()
     args = parser.parse_args()
-    args.config_file = _config_file_path(args)
+    args.config_file = config_file_path(args)
     toml_args = parse_toml_args(args, get_option_string_destination, get_argument_type_setter)
     logging.basicConfig(
-        level=_loglevel(args, toml_args),
+        level=loglevel(args, toml_args),
         format=_LOG_FORMAT,
         handlers=[
             RichHandler(
-                level=_loglevel(args, toml_args),
+                level=loglevel(args, toml_args),
                 show_level=False,
                 show_time=False,
                 show_path=False,
@@ -45,7 +47,7 @@ def main() -> None:
         ],
     )
 
-    _check_k_version()
+    check_k_version()
 
     stripped_args = toml_args | {
         key: val for (key, val) in vars(args).items() if val is not None and not (isinstance(val, Iterable) and not val)
