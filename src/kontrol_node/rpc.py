@@ -120,53 +120,30 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         return 0
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
+        sender: int | None = _get_address_from(transaction_json, 'from')
+        # TODO: if `sender` account is missing, use the first accounts[0] from the initial state
+        assert sender is not None
+        from_account_data = self._get_account_cell_by_address(sender)
+        destination: int | None = _get_address_from(transaction_json, 'to')
 
-        from_acct = transaction_json['from'] if 'from' in transaction_json else None
-        from_account_data = self._get_account_cell_by_address(from_acct)
-        if from_account_data is None:
-            return -1
-
-        tx_type = transaction_json['type'] if 'type' in transaction_json else 'Legacy'
-        to_acct = transaction_json['to'] if 'to' in transaction_json else '0x0'
-        nonce = int(transaction_json['nonce'], 16) if 'nonce' in transaction_json else int(from_account_data['<nonce>'])
-        gas = int(transaction_json['gas'], 16) if 'gas' in transaction_json else 90000  #'0x15f90'
-        gas_price = int(transaction_json['gasPrice'], 16) if 'gasPrice' in transaction_json else 0  #'0x0'
-        value = int(transaction_json['value'], 16) if 'value' in transaction_json else 0  #'0x0'
-        data = transaction_json['data'] if 'data' in transaction_json else '0x0'
+        tx_type: str = transaction_json.get('type', 'Legacy')
+        nonce: int = transaction_json.get('nonce', int(from_account_data['<nonce>']))
+        gas: int = int(transaction_json.get('gas', '0x15f90'), base=16)
+        gas_price: int = int(transaction_json.get('gasPrice', '0x0'), 16)
+        value: int = int(transaction_json.get('value', '0x0'), 16)
+        data: str = transaction_json.get('data', '0x0')
 
         self.cterm = CTerm.from_kast(
             set_cell(
                 self.cterm.config,
                 'K_CELL',
-                KApply(
-                    'eth_sendTransaction',
-                    [
-                        KApply(tx_type + '_EVM-TYPES_TxType'),
-                        intToken(_address_to_acct_id(from_acct)),
-                        intToken(_address_to_acct_id(to_acct)),
-                        intToken(gas),
-                        intToken(gas_price),
-                        intToken(value),
-                        intToken(nonce),
-                        bytesToken(bytes.fromhex(data[2:])),
-                    ],
-                ),
+                eth_send_transaction(tx_type, sender, destination, gas, gas_price, value, nonce, data),
             )
         )
 
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-
-        # print('K----------------------------------------------')
-        # k_cell = self.cterm.cell('K_CELL')
-        # _PPRINT.pprint(k_cell)
-        # print('TXORDER----------------------------------------------')
-        # tx_order_cell = self.cterm.cell('TXORDER_CELL')
-        # _PPRINT.pprint(tx_order_cell)
-        # print('RPCRESPONSE----------------------------------------------')
-        # rpc_response_cell = self.cterm.cell('RPCRESPONSE_CELL')
-        # _PPRINT.pprint(rpc_response_cell)
 
         return self._get_last_message_tx_hash()
 
@@ -217,10 +194,9 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     # VM data fetch helper functions
     # ------------------------------------------------------
 
-    def _get_account_cell_by_address(self, address: str) -> dict:
-        acct_id = _address_to_acct_id(address)
+    def _get_account_cell_by_address(self, address: int) -> dict:
         accounts_dict = self._get_all_accounts_dict()
-        account_data = accounts_dict[str(acct_id)] if str(acct_id) in accounts_dict else None
+        account_data = accounts_dict[str(address)] if str(address) in accounts_dict else None
         return account_data
 
     def _get_all_accounts_dict(self) -> dict:
@@ -266,15 +242,15 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         cells = self.cterm.cells
         cell = cells.get('TXRECEIPTS_CELL', None)
 
-        tx_receipts_dict = {}
+        tx_receipts_dict: dict[str, Any] = {}
 
         if cell is None:
             # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
             cell = self.cterm.cell('TXHASH_CELL')
             assert type(cell) is KToken
-            tx_hash = ast.literal_eval(cell.token).hex()
+            tx_hash = cell.token
 
-            tx_receipts_dict[tx_hash] = {'<txHash>': '0x' + tx_hash}
+            tx_receipts_dict[tx_hash] = {'<txHash>': '0x' + tx_hash[1:-1]}
 
             cell = self.cterm.cell('TXCUMULATIVEGAS_CELL')
             assert type(cell) is KToken
@@ -302,7 +278,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                 tx_receipt_cell = queue.popleft()
                 if isinstance(tx_receipt_cell, KApply):
                     if tx_receipt_cell.label.name == '<txReceipt>':
-                        tx_receipt_dict = {}
+                        tx_receipt_dict: dict[str, Any] = {}
                         for args in tx_receipt_cell.args:
                             assert type(args) is KApply
                             cell_name = args.label.name
@@ -326,7 +302,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         cell = self.cterm.cell('CURRENTTXID_CELL')
         assert type(cell) is KToken
-        last_tx_id = int(cell.token) - 1
+        last_tx_id = int(cell.token)
 
         tx_receipt = self._get_tx_receipt_by_msg_id(last_tx_id)
 
@@ -453,6 +429,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         private_keys = [
             '0xcdeac0dd5ec7c04072af48f2a4451e102a80ca5bb441a7b4d72c176cea61866e',
             '0xafdfd9c3d2095ef696594f6cedcae59e72dcd697e2a7521b1578140422a4f890',
+            '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
         ]
         sequence_of_productions = []
 
@@ -489,7 +466,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         return init_account_list
 
     def _init_cterm(self) -> None:
-        KApply('SHANGHAI_EVM')
         self.krun.definition.empty_config(GENERATED_TOP_CELL)
 
         init_accounts_list = self._create_initial_account_list()
@@ -501,7 +477,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '$MODE': KApply('NORMAL'),
             '$SCHEDULE': KApply('SHANGHAI_EVM'),
             '$USEGAS': TRUE,
-            '$CHAINID': intToken(0),
+            '$CHAINID': intToken(31337),
+            'BASEFEE_CELL': intToken(1000000000),
+            'GASLIMIT_CELL': intToken(30000000),
+            'TIMESTAMP_CELL': intToken(1725635810),
         }
 
         init_config = set_cell(init_config, 'ACCOUNTS_CELL', KEVM.accounts(init_accounts_list))
@@ -526,20 +505,17 @@ def _acct_id_to_address(acct_id: int) -> str:
     return '0x' + padded_address
 
 
+def _get_address_from(data: dict, data_key: str) -> int | None:
+    address: str | None = data.get(data_key, None)
+    if address is None:
+        return None
+    return _address_to_acct_id(address)
+
+
 def _address_to_acct_id(address: str) -> int:
-    try:
-        return int(address, 16)
-    except ValueError:
-        print(f'Invalid hexadecimal string: {address}')
-        return -1  # TODO: Trigger error instead of returning value
-
-
-def _tx_hash_to_msg_id(hash: str) -> int:
-    try:
-        return int(hash, 16)
-    except ValueError:
-        print(f'Invalid hexadecimal string: {hash}')
-        return -1  # TODO: Trigger error instead of returning value
+    if len(address) != 20:
+        raise ValueError('Invalid string length')
+    return int(address, base=16)
 
 
 def _apply_format_to_message_cell_json_dict(message_dict: dict) -> dict:
@@ -635,3 +611,21 @@ def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
             return value
 
     return cell_dict
+
+
+def eth_send_transaction(
+    tx_type: str, sender: int, to: int | None, gas_limit: int, gas_price: int, value: int, nonce: int, data: str
+) -> KApply:
+    return KApply(
+        'eth_sendTransaction',
+        [
+            KApply(tx_type + '_EVM-TYPES_TxType'),
+            intToken(sender),
+            (intToken(to) if type(to) is int else KApply('.Account_EVM-TYPES_Account')),
+            intToken(gas_limit),
+            intToken(gas_price),
+            intToken(value),
+            intToken(nonce),
+            bytesToken(bytes.fromhex(data[2:])),
+        ],
+    )
