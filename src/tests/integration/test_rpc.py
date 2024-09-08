@@ -35,5 +35,12 @@ def test_rpc_file(
 
     with open(INPUT_FILES / f'{test_id}.in.json') as test_file:
         payload = json.loads(test_file.read())
-        result = execute_json_rpc(server.port(), payload)
+        if type(payload) is dict:
+            result = execute_json_rpc(server.port(), payload)
+        if type(payload) is list:
+            response_list = []
+            for request in payload:
+                request_result = execute_json_rpc(server.port(), request)
+                response_list.append(json.loads(request_result))
+            result = json.dumps(response_list, indent= 2)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
