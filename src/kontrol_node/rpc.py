@@ -123,11 +123,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         sender: int | None = _get_address_from(transaction_json, 'from')
         # TODO: if `sender` account is missing, use the first accounts[0] from the initial state
         assert sender is not None
-        from_account_data = self._get_account_cell_by_address(sender)
+        sender_data = self._get_account_cell_by_address(sender)
         destination: int | None = _get_address_from(transaction_json, 'to')
 
         tx_type: str = transaction_json.get('type', 'Legacy')
-        nonce: int = transaction_json.get('nonce', int(from_account_data['<nonce>']))
+        nonce: int = transaction_json.get('nonce', int(sender_data['<nonce>']))
         gas: int = int(transaction_json.get('gas', '0x15f90'), base=16)
         gas_price: int = int(transaction_json.get('gasPrice', '0x0'), 16)
         value: int = int(transaction_json.get('value', '0x0'), 16)
@@ -513,7 +513,7 @@ def _get_address_from(data: dict, data_key: str) -> int | None:
 
 
 def _address_to_acct_id(address: str) -> int:
-    if len(address) != 20:
+    if len(address) != 42:
         raise ValueError('Invalid string length')
     return int(address, base=16)
 
