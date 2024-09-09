@@ -111,16 +111,15 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
-        # TODO: if `sender` account is missing, use the first accounts[0] from the initial state
         assert sender is not None
         sender_data = self._get_account_cell_by_address(sender)
-        destination: int | None = _get_address_from(transaction_json, 'to')
 
+        destination: int | None = _get_address_from(transaction_json, 'to')
         tx_type: str = transaction_json.get('type', 'Legacy')
         nonce: int = transaction_json.get('nonce', int(sender_data['<nonce>']))
         gas: int = int(transaction_json.get('gas', '0x15f90'), base=16)
-        gas_price: int = int(transaction_json.get('gasPrice', '0x0'), 16)
-        value: int = int(transaction_json.get('value', '0x0'), 16)
+        gas_price: int = int(transaction_json.get('gasPrice', '0x0'), base=16)
+        value: int = int(transaction_json.get('value', '0x0'), base=16)
         data: str = transaction_json.get('data', '0x0')
 
         self.cterm = CTerm.from_kast(
@@ -234,36 +233,17 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def _get_tx_receipt_by_hash(self, hash: str) -> dict | None:
         tx_receipts_dict = self._get_all_tx_receipts_dict()
-        return tx_receipts_dict[hash[2:]]
+        return tx_receipts_dict[hash]
 
     def _get_all_tx_receipts_dict(self) -> dict:
         cells = self.cterm.cells
         cell = cells.get('TXRECEIPTS_CELL', None)
 
-        tx_receipts_dict: dict[str, Any] = {}
+        tx_receipts: dict[str, Any] = {}
 
         if cell is None:
             # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
-            tx_hash = self._parse_ktoken_cell('TXHASH_CELL')[1:-1]
-
-            tx_receipts_dict[tx_hash] = {'<txHash>': '0x' + tx_hash}
-
-            tx_receipts_dict[tx_hash]['<txCumulativeGasUsed>'] = int(self._parse_ktoken_cell('TXCUMULATIVEGAS_CELL'))
-            tx_receipts_dict[tx_hash]['<txNonce>'] = int(self._parse_ktoken_cell('TXNONCE_CELL'))
-            tx_receipts_dict[tx_hash]['<bloomFilter>'] = (
-                '0x' + ast.literal_eval(self._parse_ktoken_cell('BLOOMFILTER_CELL')).hex()
-            )
-            tx_receipts_dict[tx_hash]['<txStatus>'] = int(self._parse_ktoken_cell('TXSTATUS_CELL'))
-            tx_receipts_dict[tx_hash]['<txID>'] = int(self._parse_ktoken_cell('TXID_CELL'))
-            tx_receipts_dict[tx_hash]['<sender>'] = int(self._parse_ktoken_cell('SENDER_CELL'))
-            tx_receipts_dict[tx_hash]['<txBlockNumber>'] = int(self._parse_ktoken_cell('TXBLOCKNUMBER_CELL'))
-            cell = self.cterm.cell('LOGSET_CELL')
-            assert type(cell) is KApply
-            tx_receipts_dict[tx_hash]['<logSet>'] = parse_kapply_list(cell)
-            cell = self.cterm.cell('CONTRACTADDRESS_CELL')
-            if type(cell) is KToken:
-                tx_receipts_dict[tx_hash]['<contractAddress>'] = int(cell.token)
-
+            tx_receipts = self._build_first_tx_receipt()
         else:
             assert type(cell) is KApply
             queue: deque[KInner] = deque(cell.args)
@@ -285,11 +265,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
                                 tx_receipt_dict[cell_name] = value
 
-                        tx_receipts_dict[tx_receipt_dict['<txHash>']] = tx_receipt_dict
+                        tx_receipts[tx_receipt_dict['<txHash>']] = tx_receipt_dict
                     elif 'txReceiptCellMap' in tx_receipt_cell.label.name:
                         queue.extend(tx_receipt_cell.args)
 
-        return tx_receipts_dict
+        return tx_receipts
 
     def _get_last_message_tx_hash(self) -> str:
         last_tx_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
@@ -457,9 +437,55 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self._add_initial_accounts()
 
     def _parse_ktoken_cell(self, cell_name: str) -> str:
+        """Retrieves the value of a `KToken` inside a cell.
+
+        This method looks up a cell by its name, verifies that the cell is of type
+        `KToken`, and returns the associated token as a string.
+        :param cell_name: The name of the cell to retrieve.
+        :return: The token value of the `KToken` inside the cell.
+        """
         cell = self.cterm.cell(cell_name)
         assert type(cell) is KToken
         return cell.token
+
+    def _build_first_tx_receipt(self) -> dict[str, Any]:
+        """Manually builds the first transaction receipt when no <txReceipts> cell is found.
+
+        Returns:
+            dict: The manually created transaction receipt.
+        """
+        tx_receipts: dict[str, Any] = {}
+        tx_hash = '0x' + self._parse_ktoken_cell('TXHASH_CELL')[1:-1]
+
+        receipt: dict[str, Any] = {
+            '<txHash>': tx_hash,
+            '<txCumulativeGasUsed>': int(self._parse_ktoken_cell('TXCUMULATIVEGAS_CELL')),
+            '<txNonce>': int(self._parse_ktoken_cell('TXNONCE_CELL')),
+            '<bloomFilter>': '0x' + ast.literal_eval(self._parse_ktoken_cell('BLOOMFILTER_CELL')).hex(),
+            '<txStatus>': int(self._parse_ktoken_cell('TXSTATUS_CELL')),
+            '<txID>': int(self._parse_ktoken_cell('TXID_CELL')),
+            '<sender>': int(self._parse_ktoken_cell('SENDER_CELL')),
+            '<txBlockNumber>': int(self._parse_ktoken_cell('TXBLOCKNUMBER_CELL')),
+        }
+
+        receipt['<logSet>'] = self._parse_log_set()
+        receipt['<contractAddress>'] = self._parse_contract_address()
+
+        tx_receipts[tx_hash] = receipt
+        return tx_receipts
+
+    def _parse_log_set(self) -> list:
+        """Parses the log set from the LOGSET_CELL."""
+        cell = self.cterm.cell('LOGSET_CELL')
+        assert type(cell) is KApply
+        return parse_kapply_list(cell)
+
+    def _parse_contract_address(self) -> int | None:
+        """Parses the contract address from the CONTRACTADDRESS_CELL."""
+        cell = self.cterm.cell('CONTRACTADDRESS_CELL')
+        if type(cell) is KToken:
+            return int(cell.token)
+        return None
 
 
 # ------------------------------------------------------
@@ -611,6 +637,11 @@ def tx_type_to_int(txtype: KLabel) -> int:
 
 
 def parse_kapply_list(kapply_list: KApply) -> list:
+    """Parses a KApply list of KTokens into a Python list by extracting the KToken values.
+
+    :param kapply_list:  The KApply structure representing the list.
+    :return:  A Python list containing the token values extracted from the KApply list.
+    """
     if kapply_list == list_empty():
         return []
     list_items = flatten_label('_List_', kapply_list)
