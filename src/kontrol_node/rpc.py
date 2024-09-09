@@ -172,13 +172,13 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         receipt: dict[str, Any] = {}
         receipt['type'] = hex(message_dict['<txType>'])
         receipt['status'] = hex(tx_receipt_dict['<txStatus>'])
-        receipt['cumulativeGasUsed'] = hex(tx_receipt_dict['<txCumulativeGasUsed>'])
+        receipt['cumulativeGasUsed'] = hex(tx_receipt_dict['<txCumulativeGas>'])
         receipt['logs'] = tx_receipt_dict['<logSet>']
         receipt['logsBloom'] = tx_receipt_dict['<bloomFilter>']
         receipt['transactionHash'] = tx_hash
         receipt['transactionIndex'] = hex(int(msg_id))
         receipt['blockNumber'] = hex(tx_receipt_dict['<txBlockNumber>'])
-        receipt['gasUsed'] = hex(tx_receipt_dict['<txCumulativeGasUsed>'])
+        receipt['gasUsed'] = hex(tx_receipt_dict['<txCumulativeGas>'])
         receipt['effectiveGasPrice'] = hex(message_dict['<txGasPrice>'])
         receipt['to'] = hex(message_dict['<to>']) if '<to>' in message_dict.keys() else None
         receipt['contractAddress'] = (
@@ -243,40 +243,21 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         if cell is None:
             # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
-            tx_receipts = self._build_first_tx_receipt()
+            return self._build_tx_receipt_from_subst()
         else:
             assert type(cell) is KApply
-            queue: deque[KInner] = deque(cell.args)
-            while len(queue) > 0:
-                tx_receipt_cell = queue.popleft()
-                if isinstance(tx_receipt_cell, KApply):
-                    if tx_receipt_cell.label.name == '<txReceipt>':
-                        tx_receipt_dict: dict[str, Any] = {}
-                        for args in tx_receipt_cell.args:
-                            assert type(args) is KApply
-                            cell_name = args.label.name
-                            if isinstance(args.args[0], KToken):
-                                value = None
-
-                                if args.args[0].token.isdecimal():
-                                    value = int(args.args[0].token)
-                                else:
-                                    value = '0x' + ast.literal_eval(args.args[0].token).hex()
-
-                                tx_receipt_dict[cell_name] = value
-
-                        tx_receipts[tx_receipt_dict['<txHash>']] = tx_receipt_dict
-                    elif 'txReceiptCellMap' in tx_receipt_cell.label.name:
-                        queue.extend(tx_receipt_cell.args)
-
+            kapply_receipts = flatten_label('_TxReceiptCellMap_', cell)
+            for r in kapply_receipts:
+                assert type(r) is KApply
+                receipt = self._build_tx_receipt_from_cell(r)
+                tx_receipts[receipt['<txHash>']] = receipt
         return tx_receipts
 
     def _get_last_message_tx_hash(self) -> str:
-        last_tx_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
-        tx_receipt = self._get_tx_receipt_by_msg_id(last_tx_id)
+        msg_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
+        tx_receipt = self._get_tx_receipt_by_msg_id(msg_id)
         assert tx_receipt is not None
-        last_tx_hash = tx_receipt['<txHash>']
-        return last_tx_hash
+        return tx_receipt['<txHash>']
 
     def _get_all_messages_dict(self) -> dict:
         messages_dict: dict[str, dict] = {}
@@ -448,8 +429,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         assert type(cell) is KToken
         return cell.token
 
-    def _build_first_tx_receipt(self) -> dict[str, Any]:
-        """Manually builds the first transaction receipt when no <txReceipts> cell is found.
+    def _build_tx_receipt_from_subst(self) -> dict[str, Any]:
+        """Manually builds the first transaction receipt when no <txReceipts> cell map is found.
 
         Returns:
             dict: The manually created transaction receipt.
@@ -459,20 +440,51 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         receipt: dict[str, Any] = {
             '<txHash>': tx_hash,
-            '<txCumulativeGasUsed>': int(self._parse_ktoken_cell('TXCUMULATIVEGAS_CELL')),
+            '<txCumulativeGas>': int(self._parse_ktoken_cell('TXCUMULATIVEGAS_CELL')),
+            '<logSet>': self._parse_log_set(),
             '<txNonce>': int(self._parse_ktoken_cell('TXNONCE_CELL')),
             '<bloomFilter>': '0x' + ast.literal_eval(self._parse_ktoken_cell('BLOOMFILTER_CELL')).hex(),
             '<txStatus>': int(self._parse_ktoken_cell('TXSTATUS_CELL')),
             '<txID>': int(self._parse_ktoken_cell('TXID_CELL')),
             '<sender>': int(self._parse_ktoken_cell('SENDER_CELL')),
             '<txBlockNumber>': int(self._parse_ktoken_cell('TXBLOCKNUMBER_CELL')),
+            '<contractAddress>': self._parse_contract_address(),
         }
-
-        receipt['<logSet>'] = self._parse_log_set()
-        receipt['<contractAddress>'] = self._parse_contract_address()
 
         tx_receipts[tx_hash] = receipt
         return tx_receipts
+
+    def _build_tx_receipt_from_cell(self, receipt: KApply) -> dict[str, Any]:
+        """Builds the transaction receipt from the given <txReceipt> cell.
+
+        :param receipt: The KApply object representing a transaction receipt.
+        :raises TypeError: Signals any receipt terms that are not handled.
+        :return: The transaction receipt data.
+        """
+        tx_receipt: dict[str, Any] = {}
+        for term in receipt.terms:
+            assert type(term) is KApply
+            key = term.label.name
+            value = single(term.args)
+            if key == '<logSet>':
+                assert type(value) is KApply
+                tx_receipt[key] = parse_kapply_list(value)
+                continue
+
+            if key == '<contractAddress>':
+                tx_receipt[key] = int(value.token) if type(value) is KToken else None
+                continue
+
+            assert type(value) is KToken
+            if key == '<txHash>':
+                tx_receipt[key] = '0x' + value.token[1:-1]
+            elif key == '<bloomFilter>':
+                tx_receipt[key] = '0x' + ast.literal_eval(value.token).hex()
+            elif key in ['<txCumulativeGas>', '<txNonce>', '<txStatus>', '<txID>', '<sender>', '<txBlockNumber>']:
+                tx_receipt[key] = int(value.token)
+            else:
+                raise TypeError(f'Unexpected key {key}.')
+        return tx_receipt
 
     def _parse_log_set(self) -> list:
         """Parses the log set from the LOGSET_CELL."""
