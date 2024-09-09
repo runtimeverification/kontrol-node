@@ -10,20 +10,20 @@ from typing import TYPE_CHECKING, Any
 from kevm_pyk.kevm import KEVM
 from kontrol.foundry import Foundry
 from pyk.cterm import CTerm
-from pyk.kast.inner import KApply, KSequence, KSort, KToken, Subst
+from pyk.kast.inner import KApply, KSequence, KToken, Subst, flatten_label
 from pyk.kast.manip import set_cell
 from pyk.kdist import kdist
 from pyk.ktool.krun import KRun
 from pyk.prelude.bytes import bytesToken
-from pyk.prelude.collections import map_empty
+from pyk.prelude.collections import list_empty, map_empty
 from pyk.prelude.k import GENERATED_TOP_CELL
 from pyk.prelude.kbool import TRUE
-from pyk.prelude.kint import intToken
-from pyk.prelude.string import stringToken
+from pyk.prelude.utils import token
 from pyk.rpc.rpc import JsonRpcServer
+from pyk.utils import single
 
 if TYPE_CHECKING:
-    from pyk.kast.inner import KInner
+    from pyk.kast.inner import KInner, KLabel
     from pyk.rpc.rpc import ServeRpcOptions
 
 _PPRINT = pprint.PrettyPrinter(width=41, compact=True)
@@ -61,24 +61,16 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
 
     def exec_get_chain_id(self) -> int:
-        cell = self.cterm.cell('CHAINID_CELL')
-        assert type(cell) is KToken
-        return int(cell.token)
+        return int(self._parse_ktoken_cell('CHAINID_CELL'))
 
     def exec_get_memory_used(self) -> int:
-        cell = self.cterm.cell('MEMORYUSED_CELL')
-        assert type(cell) is KToken
-        return int(cell.token)
+        return int(self._parse_ktoken_cell('MEMORYUSED_CELL'))
 
     def exec_get_gas_price(self) -> int:
-        cell = self.cterm.cell('GASPRICE_CELL')
-        assert type(cell) is KToken
-        return int(cell.token)
+        return int(self._parse_ktoken_cell('GASPRICE_CELL'))
 
     def exec_get_block_number(self) -> int:
-        cell = self.cterm.cell('NUMBER_CELL')
-        assert type(cell) is KToken
-        return int(cell.token)
+        return int(self._parse_ktoken_cell('NUMBER_CELL'))
 
     def exec_get_block_by_number(self, block_number: int) -> int:
         print(f'BLOCK NUMBER: {block_number}')
@@ -101,9 +93,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def exec_add_account(self, private_key: str, balance_hex: str) -> None:
         balance = int(balance_hex, 16)
         self.cterm = CTerm.from_kast(
-            set_cell(
-                self.cterm.config, 'K_CELL', KApply('acctFromPrivateKey', [stringToken(private_key), intToken(balance)])
-            )
+            set_cell(self.cterm.config, 'K_CELL', KApply('acctFromPrivateKey', [token(private_key), token(balance)]))
         )
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
@@ -178,17 +168,25 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         if msg_id not in messages_dict:
             return 'Transaction not found.'
+        message_dict = messages_dict[msg_id]
 
-        formatted_receipt_dict = _apply_format_to_message_cell_json_dict(tx_receipt_dict)
-        formatted_receipt_dict['to'] = messages_dict[msg_id]['<to>']
-        formatted_receipt_dict['transactionHash'] = formatted_receipt_dict['hash']
-        formatted_receipt_dict['from'] = formatted_receipt_dict['sender']
-        del formatted_receipt_dict['hash']
-        del formatted_receipt_dict['sender']
-        del formatted_receipt_dict['bloomFilter']
-        del formatted_receipt_dict['nonce']
-
-        return formatted_receipt_dict
+        receipt: dict[str, Any] = {}
+        receipt['type'] = hex(message_dict['<txType>'])
+        receipt['status'] = hex(tx_receipt_dict['<txStatus>'])
+        receipt['cumulativeGasUsed'] = hex(tx_receipt_dict['<txCumulativeGasUsed>'])
+        receipt['logs'] = tx_receipt_dict['<logSet>']
+        receipt['logsBloom'] = tx_receipt_dict['<bloomFilter>']
+        receipt['transactionHash'] = tx_hash
+        receipt['transactionIndex'] = hex(int(msg_id))
+        receipt['blockNumber'] = hex(tx_receipt_dict['<txBlockNumber>'])
+        receipt['gasUsed'] = hex(tx_receipt_dict['<txCumulativeGasUsed>'])
+        receipt['effectiveGasPrice'] = hex(message_dict['<txGasPrice>'])
+        receipt['to'] = hex(message_dict['<to>']) if '<to>' in message_dict.keys() else None
+        receipt['contractAddress'] = (
+            hex(tx_receipt_dict['<contractAddress>']) if '<contractAddress>' in tx_receipt_dict.keys() else None
+        )
+        receipt['root'] = hex(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL')))
+        return receipt
 
     # ------------------------------------------------------
     # VM data fetch helper functions
@@ -246,30 +244,25 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         if cell is None:
             # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
-            cell = self.cterm.cell('TXHASH_CELL')
-            assert type(cell) is KToken
-            tx_hash = cell.token
+            tx_hash = self._parse_ktoken_cell('TXHASH_CELL')[1:-1]
 
-            tx_receipts_dict[tx_hash] = {'<txHash>': '0x' + tx_hash[1:-1]}
+            tx_receipts_dict[tx_hash] = {'<txHash>': '0x' + tx_hash}
 
-            cell = self.cterm.cell('TXCUMULATIVEGAS_CELL')
-            assert type(cell) is KToken
-            tx_receipts_dict[tx_hash]['<txNonce>'] = int(cell.token)
-            cell = self.cterm.cell('BLOOMFILTER_CELL')
-            assert type(cell) is KToken
-            tx_receipts_dict[tx_hash]['<bloomFilter>'] = '0x' + ast.literal_eval(cell.token).hex()
-            cell = self.cterm.cell('TXSTATUS_CELL')
-            assert type(cell) is KToken
-            tx_receipts_dict[tx_hash]['<txStatus>'] = int(cell.token)
-            cell = self.cterm.cell('TXID_CELL')
-            assert type(cell) is KToken
-            tx_receipts_dict[tx_hash]['<txID>'] = int(cell.token)
-            cell = self.cterm.cell('SENDER_CELL')
-            assert type(cell) is KToken
-            tx_receipts_dict[tx_hash]['<sender>'] = int(cell.token)
-            cell = self.cterm.cell('TXBLOCKNUMBER_CELL')
-            assert type(cell) is KToken
-            tx_receipts_dict[tx_hash]['<txBlockNumber>'] = int(cell.token)
+            tx_receipts_dict[tx_hash]['<txCumulativeGasUsed>'] = int(self._parse_ktoken_cell('TXCUMULATIVEGAS_CELL'))
+            tx_receipts_dict[tx_hash]['<txNonce>'] = int(self._parse_ktoken_cell('TXNONCE_CELL'))
+            tx_receipts_dict[tx_hash]['<bloomFilter>'] = (
+                '0x' + ast.literal_eval(self._parse_ktoken_cell('BLOOMFILTER_CELL')).hex()
+            )
+            tx_receipts_dict[tx_hash]['<txStatus>'] = int(self._parse_ktoken_cell('TXSTATUS_CELL'))
+            tx_receipts_dict[tx_hash]['<txID>'] = int(self._parse_ktoken_cell('TXID_CELL'))
+            tx_receipts_dict[tx_hash]['<sender>'] = int(self._parse_ktoken_cell('SENDER_CELL'))
+            tx_receipts_dict[tx_hash]['<txBlockNumber>'] = int(self._parse_ktoken_cell('TXBLOCKNUMBER_CELL'))
+            cell = self.cterm.cell('LOGSET_CELL')
+            assert type(cell) is KApply
+            tx_receipts_dict[tx_hash]['<logSet>'] = parse_kapply_list(cell)
+            cell = self.cterm.cell('CONTRACTADDRESS_CELL')
+            if type(cell) is KToken:
+                tx_receipts_dict[tx_hash]['<contractAddress>'] = int(cell.token)
 
         else:
             assert type(cell) is KApply
@@ -299,68 +292,42 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         return tx_receipts_dict
 
     def _get_last_message_tx_hash(self) -> str:
-
-        cell = self.cterm.cell('CURRENTTXID_CELL')
-        assert type(cell) is KToken
-        last_tx_id = int(cell.token)
-
+        last_tx_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
         tx_receipt = self._get_tx_receipt_by_msg_id(last_tx_id)
-
         assert tx_receipt is not None
-
-        last_tx_hash = tx_receipt['<txHash>']  # _msg_id_to_tx_hash(last_tx_id)
-
+        last_tx_hash = tx_receipt['<txHash>']
         return last_tx_hash
 
     def _get_all_messages_dict(self) -> dict:
         messages_dict: dict[str, dict] = {}
 
-        cells = self.cterm.cells
-        cell = cells.get('MESSAGES_CELL', None)
+        cell = self.cterm.cells.get('MESSAGES_CELL', None)
 
         if cell is None:
             # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
-            cell = self.cterm.cell('MSGID_CELL')
-            assert type(cell) is KToken
-            msg_id = cell.token
+            msg_id = self._parse_ktoken_cell('TXNONCE_CELL')
             messages_dict[msg_id] = {}
 
-            cell = self.cterm.cell('TXNONCE_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<txNonce>'] = int(cell.token)
-            cell = self.cterm.cell('TXGASPRICE_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<txGasPrice>'] = int(cell.token)
-            cell = self.cterm.cell('TXGASLIMIT_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<txGasLimit>'] = int(cell.token)
-            cell = self.cterm.cell('TO_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<to>'] = _acct_id_to_address(int(cell.token))
-            cell = self.cterm.cell('VALUE_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<value>'] = int(cell.token)
-            cell = self.cterm.cell('SIGV_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<sigV>'] = int(cell.token)
-            cell = self.cterm.cell('SIGR_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<sigR>'] = ast.literal_eval(cell.token).hex()
-            cell = self.cterm.cell('SIGS_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<sigS>'] = ast.literal_eval(cell.token).hex()
-            cell = self.cterm.cell('DATA_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<data>'] = '0x' + ast.literal_eval(cell.token).hex()
-            cell = self.cterm.cell('TXCHAINID_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<txChainID>'] = int(cell.token)
-            cell = self.cterm.cell('TXPRIORITYFEE_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<txPriorityFee>'] = int(cell.token)
-            cell = self.cterm.cell('TXMAXFEE_CELL')
-            assert type(cell) is KToken
-            messages_dict[msg_id]['<txMaxFee>'] = int(cell.token)
+            messages_dict[msg_id]['<txNonce>'] = int(self._parse_ktoken_cell('TXNONCE_CELL'))
+            messages_dict[msg_id]['<txGasPrice>'] = int(self._parse_ktoken_cell('TXGASPRICE_CELL'))
+            messages_dict[msg_id]['<txGasLimit>'] = int(self._parse_ktoken_cell('TXGASLIMIT_CELL'))
+            messages_dict[msg_id]['<value>'] = int(self._parse_ktoken_cell('VALUE_CELL'))
+            messages_dict[msg_id]['<sigV>'] = int(self._parse_ktoken_cell('SIGV_CELL'))
+            messages_dict[msg_id]['<sigR>'] = ast.literal_eval(self._parse_ktoken_cell('SIGR_CELL')).hex()
+            messages_dict[msg_id]['<sigS>'] = ast.literal_eval(self._parse_ktoken_cell('SIGS_CELL')).hex()
+            messages_dict[msg_id]['<data>'] = '0x' + ast.literal_eval(self._parse_ktoken_cell('DATA_CELL')).hex()
+            messages_dict[msg_id]['<txChainID>'] = int(self._parse_ktoken_cell('TXCHAINID_CELL'))
+            messages_dict[msg_id]['<txPriorityFee>'] = int(self._parse_ktoken_cell('TXPRIORITYFEE_CELL'))
+            messages_dict[msg_id]['<txMaxFee>'] = int(self._parse_ktoken_cell('TXMAXFEE_CELL'))
+
+            _c = self.cterm.cell('TO_CELL')
+            if type(_c) is KToken:
+                messages_dict[msg_id]['<to>'] = _acct_id_to_address(int(_c.token))
+
+            _c = self.cterm.cell('TXTYPE_CELL')
+            assert type(_c) is KApply
+            messages_dict[msg_id]['<txType>'] = tx_type_to_int(_c.label)
+
         else:
             assert type(cell) is KApply
             queue: deque[KInner] = deque(cell.args)
@@ -434,7 +401,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         sequence_of_productions = []
 
         for private_key in private_keys:
-            sequence_of_productions.append(KApply('acctFromPrivateKey', [stringToken(private_key), intToken(balance)]))
+            sequence_of_productions.append(KApply('acctFromPrivateKey', [token(private_key), token(balance)]))
 
         sequence_of_kapplies = KSequence(sequence_of_productions)
         self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'K_CELL', sequence_of_kapplies))
@@ -450,13 +417,13 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         # Adding a zero address
         init_account_list.append(
             KEVM.account_cell(
-                intToken(0),
-                intToken(0),
+                token(0),
+                token(0),
                 bytesToken(b''),
                 map_empty(),
                 map_empty(),
                 map_empty(),
-                intToken(0),
+                token(0),
             )
         )
 
@@ -477,10 +444,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '$MODE': KApply('NORMAL'),
             '$SCHEDULE': KApply('SHANGHAI_EVM'),
             '$USEGAS': TRUE,
-            '$CHAINID': intToken(31337),
-            'BASEFEE_CELL': intToken(1000000000),
-            'GASLIMIT_CELL': intToken(30000000),
-            'TIMESTAMP_CELL': intToken(1725635810),
+            '$CHAINID': token(31337),
+            'BASEFEE_CELL': token(1000000000),
+            'GASLIMIT_CELL': token(30000000),
+            'TIMESTAMP_CELL': token(1725635810),
         }
 
         init_config = set_cell(init_config, 'ACCOUNTS_CELL', KEVM.accounts(init_accounts_list))
@@ -489,14 +456,15 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.cterm = CTerm.from_kast(init_term)
         self._add_initial_accounts()
 
+    def _parse_ktoken_cell(self, cell_name: str) -> str:
+        cell = self.cterm.cell(cell_name)
+        assert type(cell) is KToken
+        return cell.token
+
 
 # ------------------------------------------------------
 # Helpers
 # ------------------------------------------------------
-def _set_cell(cterm: CTerm, cell: str, value: Any, sort: str) -> None:
-    cterm = CTerm.from_kast(set_cell(cterm.config, cell, KToken(token=str(value), sort=KSort(name=sort))))
-
-
 def _acct_id_to_address(acct_id: int) -> str:
     hex_value = hex(acct_id).lower()[2:]
     target_length = 40
@@ -620,12 +588,36 @@ def eth_send_transaction(
         'eth_sendTransaction',
         [
             KApply(tx_type + '_EVM-TYPES_TxType'),
-            intToken(sender),
-            (intToken(to) if type(to) is int else KApply('.Account_EVM-TYPES_Account')),
-            intToken(gas_limit),
-            intToken(gas_price),
-            intToken(value),
-            intToken(nonce),
+            token(sender),
+            (token(to) if type(to) is int else dot_account()),
+            token(gas_limit),
+            token(gas_price),
+            token(value),
+            token(nonce),
             bytesToken(bytes.fromhex(data[2:])),
         ],
     )
+
+
+def dot_account() -> KApply:
+    return KApply('.Account_EVM-TYPES_Account')
+
+
+def tx_type_to_int(txtype: KLabel) -> int:
+    if txtype.name == 'Legacy_EVM-TYPES_TxType':
+        return 0
+    else:
+        raise ValueError(f'Unknown transaction type: {txtype.name}.')
+
+
+def parse_kapply_list(kapply_list: KApply) -> list:
+    if kapply_list == list_empty():
+        return []
+    list_items = flatten_label('_List_', kapply_list)
+    values = []
+    for list_item in list_items:
+        assert type(list_item) is KApply('ListItem')
+        t = single(list_item.terms)
+        assert type(t) is KToken
+        values.append(t.token)
+    return values

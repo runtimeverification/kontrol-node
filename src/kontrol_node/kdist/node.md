@@ -32,6 +32,7 @@ module KONTROL-NODE
                         <txID>            0          </txID>
                         <sender>          .Account   </sender>
                         <txBlockNumber>   0          </txBlockNumber>
+                        <contractAddress> .Account   </contractAddress>
                       </txReceipt>
                     </txReceipts>
                   </simbolikVM>
@@ -335,6 +336,9 @@ module KONTROL-NODE
                <txID>            TXID                           </txID>
                <sender>          ACCT                           </sender>
                <txBlockNumber>   BN                             </txBlockNumber>
+               <contractAddress>
+                 #if TT ==K .Account #then #newAddr(ACCT, TN) #else .Account #fi
+               </contractAddress>
              </txReceipt>
            )
            ...

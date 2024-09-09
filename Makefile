@@ -27,13 +27,13 @@ TEST_ARGS :=
 test: test-all
 
 test-all: poetry-install
-	$(POETRY_RUN) pytest src/tests --maxfail=1 --verbose --durations=0 --numprocesses=4 --dist=worksteal $(TEST_ARGS)
+	$(POETRY_RUN) pytest src/tests --maxfail=1 --verbose --durations=0 --numprocesses=6 --dist=worksteal $(TEST_ARGS)
 
 test-unit: poetry-install
 	$(POETRY_RUN) pytest src/tests/unit --maxfail=1 --verbose $(TEST_ARGS)
 
 test-integration: poetry-install
-	$(POETRY_RUN) pytest src/tests/integration --maxfail=1 --verbose --durations=0 --numprocesses=4 --dist=worksteal $(TEST_ARGS)
+	$(POETRY_RUN) pytest src/tests/integration --maxfail=1 --verbose --durations=0 --numprocesses=6 --dist=worksteal $(TEST_ARGS)
 
 
 # Coverage
