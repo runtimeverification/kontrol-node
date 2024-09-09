@@ -251,7 +251,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                 assert type(r) is KApply
                 receipt = self._build_tx_receipt_from_cell(r)
                 tx_receipts[receipt['<txHash>']] = receipt
-        return tx_receipts
+            return tx_receipts
 
     def _get_last_message_tx_hash(self) -> str:
         msg_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
