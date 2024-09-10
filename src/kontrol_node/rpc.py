@@ -76,6 +76,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         address = _address_to_acct_id(hex_address)
         return hex(self._get_account_balance(address))
 
+    def exec_get_transaction_count(self, hex_address: str, _block_number: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        return hex(self._get_account_nonce(address))
+
     def exec_accounts(self) -> list[str]:
         return [hex(address) for address in self._get_account_addresses()]
 
@@ -452,6 +456,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.register_method('eth_getCode', self.exec_get_code)
         self.register_method('eth_getStorageAt', self.exec_get_storage_at)
         self.register_method('eth_getTransactionByHash', self.exec_get_transaction_by_hash)
+        self.register_method('eth_getTransactionCount', self.exec_get_transaction_count)
         self.register_method('eth_getTransactionReceipt', self.exec_get_transaction_receipt)
         self.register_method('eth_memoryUsed', self.exec_get_memory_used)
         self.register_method('eth_sendTransaction', self.exec_send_transaction)
