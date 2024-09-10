@@ -2,5 +2,8 @@
   "jsonrpc": "2.0",
   "id": 0,
   "method": "eth_getBalance",
-  "params": ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"]
+  "params": [
+    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "latest"
+  ]
 }

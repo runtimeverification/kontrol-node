@@ -17,12 +17,18 @@
     "jsonrpc": "2.0",
     "id": 1,
     "method": "eth_getCode",
-    "params": ["0x5fbdb2315678afecb367f032d93f642f64180aa3"]
+    "params": [
+      "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "latest"
+    ]
   },
   {
     "jsonrpc": "2.0",
     "id": 2,
     "method": "eth_getCode",
-    "params": ["0x0000000000000000000000000000000000000000"]
+    "params": [
+      "0x0000000000000000000000000000000000000000",
+      "latest"
+    ]
   }
 ]
