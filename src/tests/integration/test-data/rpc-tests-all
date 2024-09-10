@@ -1,5 +1,6 @@
 eth_chainId_0
 eth_getBalance_0
+eth_getStorageAt_0
+eth_getTransactionReceipt
 eth_sendTransaction_deploy_counter
 kontrol_addAccount_0
-eth_getTransactionReceipt

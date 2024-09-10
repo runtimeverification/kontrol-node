@@ -46,6 +46,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.register_method('eth_sendTransaction', self.exec_send_transaction)
         self.register_method('eth_getTransactionByHash', self.exec_get_transaction_by_hash)
         self.register_method('eth_getTransactionReceipt', self.exec_get_transaction_receipt)
+        self.register_method('eth_getStorageAt', self.exec_get_storage_at)
         self.register_method('kontrol_requestValue', self.exec_request_value)
         self.register_method('kontrol_addAccount', self.exec_add_account)
 
@@ -71,6 +72,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def exec_get_block_number(self) -> int:
         return int(self._parse_ktoken_cell('NUMBER_CELL'))
+
+    def exec_get_storage_at(self, hex_address: str, hex_slot: str, _block_number: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        slot = int(hex_slot, base=16)
+        return hex(self._get_account_storage_slot(address, slot))
 
     def exec_get_block_by_number(self, block_number: int) -> int:
         print(f'BLOCK NUMBER: {block_number}')
@@ -112,11 +118,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
         assert sender is not None
-        sender_data = self._get_account_cell_by_address(sender)
+        sender_nonce = self._get_account_nonce(sender)
 
         destination: int | None = _get_address_from(transaction_json, 'to')
         tx_type: str = transaction_json.get('type', 'Legacy')
-        nonce: int = transaction_json.get('nonce', int(sender_data['<nonce>']))
+        nonce: int = transaction_json.get('nonce', sender_nonce)
         gas: int = int(transaction_json.get('gas', '0x15f90'), base=16)
         gas_price: int = int(transaction_json.get('gasPrice', '0x0'), base=16)
         value: int = int(transaction_json.get('value', '0x0'), base=16)
@@ -191,10 +197,47 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     # VM data fetch helper functions
     # ------------------------------------------------------
 
-    def _get_account_cell_by_address(self, address: int) -> dict:
-        accounts_dict = self._get_all_accounts_dict()
-        account_data = accounts_dict[str(address)] if str(address) in accounts_dict else None
-        return account_data
+    def _get_account_cell_by_address(self, address: int) -> KApply:
+        account_list = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        for account in account_list:
+            assert type(account) is KApply
+            acct_id = account.terms[0]
+            assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
+            _address = single(acct_id.terms)
+            assert type(_address) is KToken
+            if int(_address.token) == address:
+                return account
+        return account_empty()
+
+    def _get_account_nonce(self, address: int) -> int:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == account_empty():
+            return 0
+        nonce_cell = account_cell.terms[6]
+        assert type(nonce_cell) is KApply and nonce_cell.label.name == '<nonce>'
+        nonce = single(nonce_cell.terms)
+        assert type(nonce) is KToken
+        return int(nonce.token)
+
+    def _get_account_storage_slot(self, address: int, slot: int) -> int:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == account_empty():
+            return 0
+        storage_cell = account_cell.terms[3]
+        assert type(storage_cell) is KApply and storage_cell.label.name == '<storage>'
+        storage_map = single(storage_cell.terms)
+        if storage_map == map_empty():
+            return 0
+        storage_entries = flatten_label('_Map_', storage_map)
+
+        for entry in storage_entries:
+            assert type(entry) is KApply and entry.label.name == '_|->_'
+            key, value = entry.terms
+            assert type(key) is KToken
+            if int(key.token) == slot:
+                assert type(value) is KToken
+                return int(value.token)
+        return 0
 
     def _get_all_accounts_dict(self) -> dict:
         cells = self.cterm.cells
@@ -627,7 +670,7 @@ def eth_send_transaction(
         [
             KApply(tx_type + '_EVM-TYPES_TxType'),
             token(sender),
-            (token(to) if type(to) is int else dot_account()),
+            (token(to) if type(to) is int else account_empty()),
             token(gas_limit),
             token(gas_price),
             token(value),
@@ -637,7 +680,7 @@ def eth_send_transaction(
     )
 
 
-def dot_account() -> KApply:
+def account_empty() -> KApply:
     return KApply('.Account_EVM-TYPES_Account')
 
 
