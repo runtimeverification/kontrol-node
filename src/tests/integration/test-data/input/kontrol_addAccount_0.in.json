@@ -1,0 +1,23 @@
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 0,
+    "method": "eth_accounts",
+    "params": []
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "kontrol_addAccount",
+    "params": [
+      "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+      "0x56bc75e2d63100000"
+    ]
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "eth_accounts",
+    "params": []
+  }
+]
