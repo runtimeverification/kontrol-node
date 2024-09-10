@@ -3,9 +3,10 @@ from __future__ import annotations
 import ast
 import pprint
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from kevm_pyk.kevm import KEVM
 from kontrol.foundry import Foundry
