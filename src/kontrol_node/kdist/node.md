@@ -450,6 +450,7 @@ module KONTROL-NODE
  // ------------------------------------------------------------------------------
     rule <k> #acctFromPrivateKey KEYSTR BAL => #newAccount #addrFromPrivateKey(KEYSTR) ~> #setAcctBalance #addrFromPrivateKey(KEYSTR) BAL ... </k>
          <accountKeys> M => M[#addrFromPrivateKey(KEYSTR) <- #parseHexWord(KEYSTR)] </accountKeys>
+         <rpcResponse> _ => #addrFromPrivateKey(KEYSTR) </rpcResponse>
 
     syntax KItem ::= "#setAcctBalance" Int Int
  // ------------------------------------------
