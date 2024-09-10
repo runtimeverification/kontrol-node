@@ -36,27 +36,12 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def __init__(self, options: ServeRpcOptions) -> None:
         super().__init__(options)
 
-        self.register_method('eth_chainId', self.exec_get_chain_id)
-        self.register_method('eth_memoryUsed', self.exec_get_memory_used)
-        self.register_method('eth_gasPrice', self.exec_get_gas_price)
-        self.register_method('eth_blockNumber', self.exec_get_block_number)
-        self.register_method('eth_getBlockByNumber', self.exec_get_block_by_number)
-        self.register_method('eth_accounts', self.exec_accounts)
-        self.register_method('eth_getBalance', self.exec_get_balance)
-        self.register_method('eth_sendTransaction', self.exec_send_transaction)
-        self.register_method('eth_getTransactionByHash', self.exec_get_transaction_by_hash)
-        self.register_method('eth_getTransactionReceipt', self.exec_get_transaction_receipt)
-        self.register_method('eth_getStorageAt', self.exec_get_storage_at)
-        self.register_method('kontrol_requestValue', self.exec_request_value)
-        self.register_method('kontrol_addAccount', self.exec_add_account)
-
+        self._register_rpc_methods()
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
 
         start_time = datetime.now()
-
         self._init_cterm()
-
         end_time = datetime.now()
 
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
@@ -78,23 +63,21 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         slot = int(hex_slot, base=16)
         return hex(self._get_account_storage_slot(address, slot))
 
+    def exec_get_code(self, hex_address: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        return self._get_account_code(address)
+
     def exec_get_block_by_number(self, block_number: int) -> int:
         print(f'BLOCK NUMBER: {block_number}')
         self._get_all_block_storage_dict()
         return block_number
 
-    def exec_get_balance(self, address: str) -> str:
-        acct_id = _address_to_acct_id(address)
-        accounts_dict = self._get_all_accounts_dict()
-        return hex(int(accounts_dict[str(acct_id)]['<balance>'])).lower()
+    def exec_get_balance(self, hex_address: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        return hex(self._get_account_balance(address))
 
     def exec_accounts(self) -> list[str]:
-        accounts_list = []
-
-        for key in self._get_all_accounts_dict():
-            accounts_list.append(_acct_id_to_address(int(key)))
-
-        return accounts_list
+        return [hex(address) for address in self._get_account_addresses()]
 
     def exec_add_account(self, private_key: str, balance_hex: str) -> None:
         balance = int(balance_hex, 16)
@@ -105,15 +88,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
         return None
-
-    def exec_request_value(self) -> int:
-        self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'K_CELL', KApply('kontrol_requestValue', [])))
-        pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
-        output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
-        self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-        rpc_response_cell = self.cterm.cell('RPCRESPONSE_CELL')
-        _PPRINT.pprint(rpc_response_cell)
-        return 0
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
@@ -198,8 +172,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     # ------------------------------------------------------
 
     def _get_account_cell_by_address(self, address: int) -> KApply:
-        account_list = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
-        for account in account_list:
+        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        for account in accounts_cell:
             assert type(account) is KApply
             acct_id = account.terms[0]
             assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
@@ -239,30 +213,38 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                 return int(value.token)
         return 0
 
-    def _get_all_accounts_dict(self) -> dict:
-        cells = self.cterm.cells
-        cell = cells.get('ACCOUNTS_CELL', None)
-        assert type(cell) is KApply
+    def _get_account_code(self, address: int) -> str:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == account_empty():
+            return '0x'
+        code_cell = account_cell.terms[2]
+        assert type(code_cell) is KApply and code_cell.label.name == '<code>'
+        code = single(code_cell.terms)
+        assert type(code) is KToken
+        return '0x' + ast.literal_eval(code.token).hex()
 
-        accounts_dict = {}
+    def _get_account_balance(self, address: int) -> int:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == account_empty():
+            return 0
+        balance_cell = account_cell.terms[1]
+        assert type(balance_cell) is KApply and balance_cell.label.name == '<balance>'
+        balance = single(balance_cell.terms)
+        assert type(balance) is KToken
+        return int(balance.token)
 
-        queue: deque[KInner] = deque(cell.args)
-        while len(queue) > 0:
-            account_cell = queue.popleft()
-            if isinstance(account_cell, KApply):
-                if account_cell.label.name == '<account>':
-                    account_dict = {}
-                    for args in account_cell.args:
-                        assert type(args) is KApply
-                        cell_name = args.label.name
-                        if isinstance(args.args[0], KToken):
-                            account_dict[cell_name] = args.args[0].token
-
-                    accounts_dict[account_dict['<acctID>']] = account_dict
-                elif 'AccountCellMap' in account_cell.label.name:
-                    queue.extend(account_cell.args)
-
-        return accounts_dict
+    def _get_account_addresses(self) -> list[int]:
+        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        account_list = []
+        for account in accounts_cell:
+            assert type(account) is KApply
+            acct_id = account.terms[0]
+            assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
+            _address = single(acct_id.terms)
+            assert type(_address) is KToken
+            account_list.append(int(_address.token))
+        account_list.sort()
+        return account_list
 
     def _get_tx_receipt_by_msg_id(self, msg_id: int) -> dict | None:
         tx_receipts_dict = self._get_all_tx_receipts_dict()
@@ -459,6 +441,21 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
         self._add_initial_accounts()
+
+    def _register_rpc_methods(self) -> None:
+        self.register_method('eth_accounts', self.exec_accounts)
+        self.register_method('eth_blockNumber', self.exec_get_block_number)
+        self.register_method('eth_chainId', self.exec_get_chain_id)
+        self.register_method('eth_gasPrice', self.exec_get_gas_price)
+        self.register_method('eth_getBalance', self.exec_get_balance)
+        self.register_method('eth_getBlockByNumber', self.exec_get_block_by_number)
+        self.register_method('eth_getCode', self.exec_get_code)
+        self.register_method('eth_getStorageAt', self.exec_get_storage_at)
+        self.register_method('eth_getTransactionByHash', self.exec_get_transaction_by_hash)
+        self.register_method('eth_getTransactionReceipt', self.exec_get_transaction_receipt)
+        self.register_method('eth_memoryUsed', self.exec_get_memory_used)
+        self.register_method('eth_sendTransaction', self.exec_send_transaction)
+        self.register_method('kontrol_addAccount', self.exec_add_account)
 
     def _parse_ktoken_cell(self, cell_name: str) -> str:
         """Retrieves the value of a `KToken` inside a cell.
