@@ -94,9 +94,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
 
-        new_address = hex(int(self._parse_ktoken_cell('RPCRESPONSE_CELL')))
-        self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'RPCRESPONSE_CELL', KApply('.RPCResponse')))
-        return new_address
+        return self._get_rpc_response()
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
@@ -122,8 +120,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-
-        return self._get_last_message_tx_hash()
+        return self._get_rpc_response()
 
     def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
         tx_receipt = self._get_tx_receipt_by_hash(tx_hash)
@@ -179,6 +176,29 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     # ------------------------------------------------------
     # VM data fetch helper functions
     # ------------------------------------------------------
+
+    def _get_rpc_response(self) -> str:
+        """Parses and returns the RPC response from the 'RPCRESPONSE_CELL' in hexadecimal format.
+
+        The function processes the cell content:
+        - If the value is a decimal, it converts it to hexadecimal.
+        - If the value is a quoted string (e.g., `"value"`), it strips the quotes and prepends '0x'.
+        - It then updates the configuration by clearing the 'RPCRESPONSE_CELL' with an empty RPCResponse object.
+        - If the RPCRESPONSE_CELL has an empty RPCResponse value, then it throws an AssertionError and the function
+        returns an empty string.
+        :return: The RPC response as a hexadecimal string.
+        """
+        try:
+            response_value = self._parse_ktoken_cell('RPCRESPONSE_CELL')
+
+            if response_value.isdecimal():
+                response_value = hex(int(response_value))
+            elif response_value.startswith('"'):
+                response_value = '0x' + response_value[1:-1]
+            self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'RPCRESPONSE_CELL', KApply('EmptyRPCResponse')))
+        except AssertionError:
+            response_value = '0x'
+        return response_value
 
     def _get_account_cell_by_address(self, address: int) -> KApply:
         accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))

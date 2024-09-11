@@ -9,8 +9,9 @@ module KONTROL-NODE
     syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
  // -------------------------------------------------------------
 
-    syntax RPCResponse ::= ".RPCResponse" | String | Int | Bytes
- // ------------------------------------------------------------
+    syntax RPCResponse ::= String | Int
+                         | ".RPCResponse" [symbol(EmptyRPCResponse)]
+ // ----------------------------------------------------------------
 
     configuration <simbolikVM>
                     <foundry/>
@@ -325,6 +326,7 @@ module KONTROL-NODE
     syntax KItem ::= "#makeTxReceipt" Int
  // -------------------------------------
     rule <k> #makeTxReceipt TXID => .K ... </k>
+         <rpcResponse> _ =>  Keccak256(#rlpEncode( [ TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS ] )) </rpcResponse>
          <txReceipts>
            ( .Bag
           => <txReceipt>
