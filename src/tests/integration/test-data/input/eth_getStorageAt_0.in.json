@@ -15,10 +15,37 @@
   },
   {
     "jsonrpc": "2.0",
-    "id": 1,
-    "method": "eth_getTransactionReceipt",
+    "method": "eth_getStorageAt",
     "params": [
-      "0xa2a48bf94c47073aa235c34e3dfe9bd9687e7b6a6cce28a2380ed48138f51680"
-    ]
+      "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "0x0",
+      "latest"
+    ],
+    "id": 1
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "eth_sendTransaction",
+    "params": [
+      {
+        "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "gas": "0x1C9C37F",
+        "to": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        "gasPrice": "0x1d1a94a2000",
+        "value": "0",
+        "data": "0xd09de08a"
+      }
+    ],
+    "id": 2
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "eth_getStorageAt",
+    "params": [
+      "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "0x0",
+      "latest"
+    ],
+    "id": 3
   }
 ]

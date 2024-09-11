@@ -3,9 +3,10 @@ from __future__ import annotations
 import ast
 import pprint
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from kevm_pyk.kevm import KEVM
 from kontrol.foundry import Foundry
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from pyk.rpc.rpc import ServeRpcOptions
 
 _PPRINT = pprint.PrettyPrinter(width=41, compact=True)
+ACCOUNT_EMPTY: Final[KApply] = KApply('.Account_EVM-TYPES_Account')
 
 
 class StatefulKJsonRpcServer(JsonRpcServer):
@@ -36,26 +38,12 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def __init__(self, options: ServeRpcOptions) -> None:
         super().__init__(options)
 
-        self.register_method('eth_chainId', self.exec_get_chain_id)
-        self.register_method('eth_memoryUsed', self.exec_get_memory_used)
-        self.register_method('eth_gasPrice', self.exec_get_gas_price)
-        self.register_method('eth_blockNumber', self.exec_get_block_number)
-        self.register_method('eth_getBlockByNumber', self.exec_get_block_by_number)
-        self.register_method('eth_accounts', self.exec_accounts)
-        self.register_method('eth_getBalance', self.exec_get_balance)
-        self.register_method('eth_sendTransaction', self.exec_send_transaction)
-        self.register_method('eth_getTransactionByHash', self.exec_get_transaction_by_hash)
-        self.register_method('eth_getTransactionReceipt', self.exec_get_transaction_receipt)
-        self.register_method('kontrol_requestValue', self.exec_request_value)
-        self.register_method('kontrol_addAccount', self.exec_add_account)
-
+        self._register_rpc_methods()
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
 
         start_time = datetime.now()
-
         self._init_cterm()
-
         end_time = datetime.now()
 
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
@@ -72,25 +60,32 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def exec_get_block_number(self) -> int:
         return int(self._parse_ktoken_cell('NUMBER_CELL'))
 
+    def exec_get_storage_at(self, hex_address: str, hex_slot: str, _block_number: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        slot = int(hex_slot, base=16)
+        return hex(self._get_account_storage_slot(address, slot))
+
+    def exec_get_code(self, hex_address: str, _block_number: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        return self._get_account_code(address)
+
     def exec_get_block_by_number(self, block_number: int) -> int:
         print(f'BLOCK NUMBER: {block_number}')
         self._get_all_block_storage_dict()
         return block_number
 
-    def exec_get_balance(self, address: str) -> str:
-        acct_id = _address_to_acct_id(address)
-        accounts_dict = self._get_all_accounts_dict()
-        return hex(int(accounts_dict[str(acct_id)]['<balance>'])).lower()
+    def exec_get_balance(self, hex_address: str, _block_number: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        return hex(self._get_account_balance(address))
+
+    def exec_get_transaction_count(self, hex_address: str, _block_number: str) -> str:
+        address = _address_to_acct_id(hex_address)
+        return hex(self._get_account_nonce(address))
 
     def exec_accounts(self) -> list[str]:
-        accounts_list = []
+        return [hex(address) for address in self._get_account_addresses()]
 
-        for key in self._get_all_accounts_dict():
-            accounts_list.append(_acct_id_to_address(int(key)))
-
-        return accounts_list
-
-    def exec_add_account(self, private_key: str, balance_hex: str) -> None:
+    def exec_add_account(self, private_key: str, balance_hex: str) -> str:
         balance = int(balance_hex, 16)
         self.cterm = CTerm.from_kast(
             set_cell(self.cterm.config, 'K_CELL', KApply('acctFromPrivateKey', [token(private_key), token(balance)]))
@@ -98,25 +93,19 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-        return None
 
-    def exec_request_value(self) -> int:
-        self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'K_CELL', KApply('kontrol_requestValue', [])))
-        pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
-        output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
-        self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-        rpc_response_cell = self.cterm.cell('RPCRESPONSE_CELL')
-        _PPRINT.pprint(rpc_response_cell)
-        return 0
+        new_address = hex(int(self._parse_ktoken_cell('RPCRESPONSE_CELL')))
+        self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'RPCRESPONSE_CELL', KApply('.RPCResponse')))
+        return new_address
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
         assert sender is not None
-        sender_data = self._get_account_cell_by_address(sender)
+        sender_nonce = self._get_account_nonce(sender)
 
         destination: int | None = _get_address_from(transaction_json, 'to')
         tx_type: str = transaction_json.get('type', 'Legacy')
-        nonce: int = transaction_json.get('nonce', int(sender_data['<nonce>']))
+        nonce: int = transaction_json.get('nonce', sender_nonce)
         gas: int = int(transaction_json.get('gas', '0x15f90'), base=16)
         gas_price: int = int(transaction_json.get('gasPrice', '0x0'), base=16)
         value: int = int(transaction_json.get('value', '0x0'), base=16)
@@ -191,35 +180,80 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     # VM data fetch helper functions
     # ------------------------------------------------------
 
-    def _get_account_cell_by_address(self, address: int) -> dict:
-        accounts_dict = self._get_all_accounts_dict()
-        account_data = accounts_dict[str(address)] if str(address) in accounts_dict else None
-        return account_data
+    def _get_account_cell_by_address(self, address: int) -> KApply:
+        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        for account in accounts_cell:
+            assert type(account) is KApply
+            acct_id = account.terms[0]
+            assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
+            _address = single(acct_id.terms)
+            assert type(_address) is KToken
+            if int(_address.token) == address:
+                return account
+        return ACCOUNT_EMPTY
 
-    def _get_all_accounts_dict(self) -> dict:
-        cells = self.cterm.cells
-        cell = cells.get('ACCOUNTS_CELL', None)
-        assert type(cell) is KApply
+    def _get_account_nonce(self, address: int) -> int:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == ACCOUNT_EMPTY:
+            return 0
+        nonce_cell = account_cell.terms[6]
+        assert type(nonce_cell) is KApply and nonce_cell.label.name == '<nonce>'
+        nonce = single(nonce_cell.terms)
+        assert type(nonce) is KToken
+        return int(nonce.token)
 
-        accounts_dict = {}
+    def _get_account_storage_slot(self, address: int, slot: int) -> int:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == ACCOUNT_EMPTY:
+            return 0
+        storage_cell = account_cell.terms[3]
+        assert type(storage_cell) is KApply and storage_cell.label.name == '<storage>'
+        storage_map = single(storage_cell.terms)
+        if storage_map == map_empty():
+            return 0
+        storage_entries = flatten_label('_Map_', storage_map)
 
-        queue: deque[KInner] = deque(cell.args)
-        while len(queue) > 0:
-            account_cell = queue.popleft()
-            if isinstance(account_cell, KApply):
-                if account_cell.label.name == '<account>':
-                    account_dict = {}
-                    for args in account_cell.args:
-                        assert type(args) is KApply
-                        cell_name = args.label.name
-                        if isinstance(args.args[0], KToken):
-                            account_dict[cell_name] = args.args[0].token
+        for entry in storage_entries:
+            assert type(entry) is KApply and entry.label.name == '_|->_'
+            key, value = entry.terms
+            assert type(key) is KToken
+            if int(key.token) == slot:
+                assert type(value) is KToken
+                return int(value.token)
+        return 0
 
-                    accounts_dict[account_dict['<acctID>']] = account_dict
-                elif 'AccountCellMap' in account_cell.label.name:
-                    queue.extend(account_cell.args)
+    def _get_account_code(self, address: int) -> str:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == ACCOUNT_EMPTY:
+            return '0x'
+        code_cell = account_cell.terms[2]
+        assert type(code_cell) is KApply and code_cell.label.name == '<code>'
+        code = single(code_cell.terms)
+        assert type(code) is KToken
+        return '0x' + ast.literal_eval(code.token).hex()
 
-        return accounts_dict
+    def _get_account_balance(self, address: int) -> int:
+        account_cell = self._get_account_cell_by_address(address)
+        if account_cell == ACCOUNT_EMPTY:
+            return 0
+        balance_cell = account_cell.terms[1]
+        assert type(balance_cell) is KApply and balance_cell.label.name == '<balance>'
+        balance = single(balance_cell.terms)
+        assert type(balance) is KToken
+        return int(balance.token)
+
+    def _get_account_addresses(self) -> list[int]:
+        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        account_list = []
+        for account in accounts_cell:
+            assert type(account) is KApply
+            acct_id = account.terms[0]
+            assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
+            _address = single(acct_id.terms)
+            assert type(_address) is KToken
+            account_list.append(int(_address.token))
+        account_list.sort()
+        return account_list
 
     def _get_tx_receipt_by_msg_id(self, msg_id: int) -> dict | None:
         tx_receipts_dict = self._get_all_tx_receipts_dict()
@@ -416,6 +450,26 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
         self._add_initial_accounts()
+
+    def _register_rpc_methods(self) -> None:
+        rpc_methods: dict[str, Callable] = {
+            'eth_accounts': self.exec_accounts,
+            'eth_blockNumber': self.exec_get_block_number,
+            'eth_chainId': self.exec_get_chain_id,
+            'eth_gasPrice': self.exec_get_gas_price,
+            'eth_getBalance': self.exec_get_balance,
+            'eth_getBlockByNumber': self.exec_get_block_by_number,
+            'eth_getCode': self.exec_get_code,
+            'eth_getStorageAt': self.exec_get_storage_at,
+            'eth_getTransactionByHash': self.exec_get_transaction_by_hash,
+            'eth_getTransactionCount': self.exec_get_transaction_count,
+            'eth_getTransactionReceipt': self.exec_get_transaction_receipt,
+            'eth_memoryUsed': self.exec_get_memory_used,
+            'eth_sendTransaction': self.exec_send_transaction,
+            'kontrol_addAccount': self.exec_add_account,
+        }
+        for method_name, exec_function in rpc_methods.items():
+            self.register_method(method_name, exec_function)
 
     def _parse_ktoken_cell(self, cell_name: str) -> str:
         """Retrieves the value of a `KToken` inside a cell.
@@ -627,7 +681,7 @@ def eth_send_transaction(
         [
             KApply(tx_type + '_EVM-TYPES_TxType'),
             token(sender),
-            (token(to) if type(to) is int else dot_account()),
+            (token(to) if type(to) is int else ACCOUNT_EMPTY),
             token(gas_limit),
             token(gas_price),
             token(value),
@@ -635,10 +689,6 @@ def eth_send_transaction(
             bytesToken(bytes.fromhex(data[2:])),
         ],
     )
-
-
-def dot_account() -> KApply:
-    return KApply('.Account_EVM-TYPES_Account')
 
 
 def tx_type_to_int(txtype: KLabel) -> int:
