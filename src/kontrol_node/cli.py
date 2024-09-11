@@ -106,4 +106,10 @@ def _create_argument_parser() -> ArgumentParser:
         default=8081,
         help='port number',
     )
+    run.add_argument(
+        '--steps-tracing',
+        dest='steps_tracing',
+        default=False,
+        help='Enable steps tracing used for debug calls returning geth-style traces',
+    )
     return parser

@@ -20,12 +20,13 @@ from pyk.prelude.collections import list_empty, map_empty
 from pyk.prelude.k import GENERATED_TOP_CELL
 from pyk.prelude.kbool import TRUE
 from pyk.prelude.utils import token
-from pyk.rpc.rpc import JsonRpcServer
+from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
 from pyk.utils import single
 
 if TYPE_CHECKING:
     from pyk.kast.inner import KInner, KLabel
-    from pyk.rpc.rpc import ServeRpcOptions
+
+    from .cli import VMOptions
 
 _PPRINT = pprint.PrettyPrinter(width=41, compact=True)
 ACCOUNT_EMPTY: Final[KApply] = KApply('.Account_EVM-TYPES_Account')
@@ -35,8 +36,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
 
-    def __init__(self, options: ServeRpcOptions) -> None:
-        super().__init__(options)
+    def __init__(self, options: VMOptions) -> None:
+        super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
 
         self._register_rpc_methods()
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
@@ -449,11 +450,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def _init_cterm(self) -> None:
         self.krun.definition.empty_config(GENERATED_TOP_CELL)
-
         init_accounts_list = self._create_initial_account_list()
-
         init_config = self.krun.definition.init_config(GENERATED_TOP_CELL)
-
         init_subst = {
             '$PGM': KSequence([KEVM.sharp_execute()]),
             '$MODE': KApply('NORMAL'),
@@ -466,7 +464,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         }
 
         init_config = set_cell(init_config, 'ACCOUNTS_CELL', KEVM.accounts(init_accounts_list))
-
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
         self._add_initial_accounts()

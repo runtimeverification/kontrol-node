@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from kontrol.utils import _LOG_FORMAT, check_k_version, config_file_path, loglevel
 from pyk.cli.pyk import parse_toml_args
-from pyk.rpc.rpc import ServeRpcOptions
 from rich.highlighter import NullHighlighter
 from rich.logging import RichHandler
 
@@ -70,9 +69,7 @@ def exec_version(options: VersionOptions) -> None:
 
 
 def exec_run(options: VMOptions) -> None:
-    server = StatefulKJsonRpcServer(
-        ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host})
-    )
+    server = StatefulKJsonRpcServer(options)
     server.serve()
 
 
