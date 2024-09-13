@@ -110,6 +110,7 @@ def _create_argument_parser() -> ArgumentParser:
         '--steps-tracing',
         dest='steps_tracing',
         default=False,
+        action='store_true',
         help='Enable steps tracing used for debug calls returning geth-style traces',
     )
     return parser

@@ -30,11 +30,15 @@ if TYPE_CHECKING:
 
 _PPRINT = pprint.PrettyPrinter(width=41, compact=True)
 ACCOUNT_EMPTY: Final[KApply] = KApply('.Account_EVM-TYPES_Account')
+WORDSTACK_EMPTY: Final[KApply] = KApply('.WordStack_EVM-TYPES_WordStack')
+WORDSTACK_CONS: Final[str] = '_:__EVM-TYPES_WordStack_Int_WordStack'
+MAP_CONS: Final[str] = '_Map_'
 
 
 class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
+    traced_transactions: dict[str, Any]
 
     def __init__(self, options: VMOptions) -> None:
         super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
@@ -42,9 +46,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self._register_rpc_methods()
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
+        self.traced_transactions = {}
 
         start_time = datetime.now()
-        self._init_cterm()
+        self._init_cterm(options.steps_tracing)
         end_time = datetime.now()
 
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
@@ -121,7 +126,23 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-        return self._get_rpc_response()
+
+        transaction_hash = self._get_rpc_response()
+        if self.active_tracing:
+            self._collect_trace(transaction_hash)
+        return transaction_hash
+
+    def exec_trace_transaction(self, tx_hash: str) -> dict:
+        result: dict[str, Any] = {}
+        result['traceLogs'] = self.traced_transactions[tx_hash]
+        receipt = self._get_tx_receipt_by_hash(tx_hash)
+        if receipt is None:
+            return {}
+        if '<contractAddress>' in receipt.keys():
+            result['result'] = self._get_account_code(receipt['<contractAddress>'])
+        result['failed'] = not bool(receipt['<txStatus>'])
+        result['gasUsed'] = receipt['<txCumulativeGas>']
+        return result
 
     def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
         tx_receipt = self._get_tx_receipt_by_hash(tx_hash)
@@ -178,6 +199,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     # VM data fetch helper functions
     # ------------------------------------------------------
 
+    @property
+    def active_tracing(self) -> bool:
+        return self._parse_ktoken_cell('ACTIVETRACING_CELL') == 'true'
+
     def _get_rpc_response(self) -> str:
         """Parses and returns the RPC response from the 'RPCRESPONSE_CELL' in hexadecimal format.
 
@@ -232,7 +257,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         storage_map = single(storage_cell.terms)
         if storage_map == map_empty():
             return 0
-        storage_entries = flatten_label('_Map_', storage_map)
+        storage_entries = flatten_label(MAP_CONS, storage_map)
 
         for entry in storage_entries:
             assert type(entry) is KApply and entry.label.name == '_|->_'
@@ -275,6 +300,19 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             account_list.append(int(_address.token))
         account_list.sort()
         return account_list
+
+    def _collect_trace(self, transaction_hash: str) -> None:
+        parsed_trace: list[dict[str, Any]] = []
+        trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
+        trace_data = flatten_label('_List_', trace_data_cell)
+
+        for trace_list_item in trace_data:
+            assert type(trace_list_item) is KApply
+            trace_item = single(trace_list_item.terms)
+            assert type(trace_item) is KApply
+            parsed_trace.append(parse_trace_item(trace_item))
+
+        self.traced_transactions[transaction_hash] = parsed_trace
 
     def _get_tx_receipt_by_msg_id(self, msg_id: int) -> dict | None:
         tx_receipts_dict = self._get_all_tx_receipts_dict()
@@ -448,7 +486,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         return init_account_list
 
-    def _init_cterm(self) -> None:
+    def _init_cterm(self, steps_tracing: bool) -> None:
         self.krun.definition.empty_config(GENERATED_TOP_CELL)
         init_accounts_list = self._create_initial_account_list()
         init_config = self.krun.definition.init_config(GENERATED_TOP_CELL)
@@ -458,18 +496,22 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '$SCHEDULE': KApply('SHANGHAI_EVM'),
             '$USEGAS': TRUE,
             '$CHAINID': token(31337),
-            'BASEFEE_CELL': token(1000000000),
-            'GASLIMIT_CELL': token(30000000),
-            'TIMESTAMP_CELL': token(1725635810),
         }
 
         init_config = set_cell(init_config, 'ACCOUNTS_CELL', KEVM.accounts(init_accounts_list))
+        init_config = set_cell(init_config, 'BASEFEE_CELL', token(1000000000))
+        init_config = set_cell(init_config, 'GASLIMIT_CELL', token(30000000))
+        init_config = set_cell(init_config, 'TIMESTAMP_CELL', token(1725635810))
+        init_config = set_cell(init_config, 'ACTIVETRACING_CELL', token(steps_tracing))
+        init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
+
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
         self._add_initial_accounts()
 
     def _register_rpc_methods(self) -> None:
         rpc_methods: dict[str, Callable] = {
+            'debug_traceTransaction': self.exec_trace_transaction,
             'eth_accounts': self.exec_accounts,
             'eth_blockNumber': self.exec_get_block_number,
             'eth_chainId': self.exec_get_chain_id,
@@ -731,3 +773,38 @@ def parse_kapply_list(kapply_list: KApply) -> list:
         assert type(t) is KToken
         values.append(t.token)
     return values
+
+
+def parse_trace_item(trace_item: KApply) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    # program counter
+    program_counter_token = trace_item.terms[0]
+    assert type(program_counter_token) is KToken
+    result['pc'] = int(program_counter_token.token)
+    # opcode
+    opcode_kapply = trace_item.terms[1]
+    assert type(opcode_kapply) is KApply
+    opcode_size = ''
+    if len(opcode_kapply.terms) > 0:
+        opcode_token = single(opcode_kapply.terms)
+        assert type(opcode_token) is KToken
+        opcode_size = opcode_token.token
+    result['op'] = opcode_kapply.label.name.split('_')[0] + opcode_size
+    # wordstack
+    wordstack_kapply = trace_item.terms[2]
+    assert type(wordstack_kapply) is KApply
+    if wordstack_kapply == WORDSTACK_EMPTY:
+        wordstack = []
+    else:
+        wordstack = [hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, wordstack_kapply) if type(e) is KToken]
+    result['stack'] = wordstack
+    # call depth
+    call_depth_token = trace_item.terms[5]
+    assert type(call_depth_token) is KToken
+    result['depth'] = int(call_depth_token.token)
+    # gas available
+    gas_token = trace_item.terms[6]
+    assert type(gas_token) is KToken
+    result['gas'] = int(gas_token.token)
+    result['gasCost'] = 0
+    return result

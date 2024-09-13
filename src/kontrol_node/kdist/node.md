@@ -99,7 +99,41 @@ module KONTROL-NODE
     rule #getNumberAtBlock (X:Int  , _           , _     ) => X
     rule #getNumberAtBlock (BLOCKID, BLOCKSTORAGE, BLOCK ) => #getNumberFromBlockchainItem(#getBlockByNumber(BLOCKID, BLOCKSTORAGE, BLOCK)) [owise]
 ```
+  Transaction debugging
+  ---------------------
+  Once debug_traceTransaction get up and running in a PR, these changes below should be moved to Kontrol:trace.md.
 
+```k
+    syntax TraceItem ::= "{" Int "|" OpCode "|" WordStack "|" Bytes "|" Map "|" Int "|" Int "}" [symbol(traceItem)]
+ // ---------------------------------------------------------------------------------------------------------------
+    rule <k> #next [ OPC ] ... </k>
+         <activeTracing>  true          </activeTracing>
+         <traceStorage>   DSTG          </traceStorage>
+         <traceWordStack> DSTK          </traceWordStack>
+         <traceMemory>    DMEM          </traceMemory>
+         <recordedTrace>  false => true </recordedTrace>
+         <pc>             PCOUNT        </pc>
+         <wordStack>      WS            </wordStack>
+         <callDepth>      CD            </callDepth>
+         <localMem>       MEM           </localMem>
+         <id>             ACCT          </id>
+         <gas>            GA            </gas>
+         <account>
+           <acctID>  ACCT    </acctID>
+           <storage> STORAGE </storage>
+           ...
+         </account>
+         <traceData>
+           ...
+           .List => ListItem({ PCOUNT
+                             | OPC
+                             | #if DSTK ==K true #then WS      #else .WordStack #fi
+                             | #if DMEM ==K true #then MEM     #else .Bytes     #fi
+                             | #if DSTG ==K true #then STORAGE #else .Map       #fi
+                             | CD | GA
+                             })
+         </traceData> [priority(24)]
+```
   Transaction Signing and execution
   ---------------------------------
 
