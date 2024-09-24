@@ -504,6 +504,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'TIMESTAMP_CELL', token(1725635810))
         init_config = set_cell(init_config, 'ACTIVETRACING_CELL', token(steps_tracing))
         init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACEMEMORY_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
