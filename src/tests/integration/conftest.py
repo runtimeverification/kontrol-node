@@ -5,8 +5,8 @@ import time
 from typing import TYPE_CHECKING
 
 import pytest
-from pyk.rpc.rpc import ServeRpcOptions
 
+from kontrol_node.cli import VMOptions
 from kontrol_node.rpc import StatefulKJsonRpcServer
 
 if TYPE_CHECKING:
@@ -27,7 +27,9 @@ def server() -> Iterator[StatefulKJsonRpcServer]:
     :yield: A `StatefulKJsonRpcServer` instance.
     """
 
-    server = StatefulKJsonRpcServer(ServeRpcOptions({'definition_dir': None, 'port': 0, 'host': SERVER_HOST}))
+    server = StatefulKJsonRpcServer(
+        VMOptions({'definition_dir': None, 'port': 0, 'host': SERVER_HOST, 'steps_tracing': True})
+    )
 
     server_thread = threading.Thread(target=server.serve)
     server_thread.start()
