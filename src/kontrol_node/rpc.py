@@ -798,6 +798,12 @@ def parse_trace_item(trace_item: KApply) -> dict[str, Any]:
     else:
         wordstack = [hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, wordstack_kapply) if type(e) is KToken]
     result['stack'] = wordstack
+    # local memory
+    local_mem_token = trace_item.terms[3]
+    assert type(local_mem_token) is KToken
+    local_mem = '0x' + ast.literal_eval(local_mem_token.token).hex()
+    if local_mem[2:].strip('0') != '':
+        result['memory'] = local_mem
     # call depth
     call_depth_token = trace_item.terms[5]
     assert type(call_depth_token) is KToken
