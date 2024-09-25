@@ -104,7 +104,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
-        assert sender is not None
+        if sender is None:
+            sender = self._get_account_addresses()[0]
         sender_nonce = self._get_account_nonce(sender)
 
         destination: int | None = _get_address_from(transaction_json, 'to')
@@ -306,6 +307,9 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
         trace_data = flatten_label('_List_', trace_data_cell)
 
+        if len(trace_data) == 1 and trace_data[0] == list_empty():
+            return
+
         for trace_list_item in trace_data:
             assert type(trace_list_item) is KApply
             trace_item = single(trace_list_item.terms)
@@ -448,9 +452,16 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         balance = 10**20
 
         private_keys = [
-            '0xcdeac0dd5ec7c04072af48f2a4451e102a80ca5bb441a7b4d72c176cea61866e',
-            '0xafdfd9c3d2095ef696594f6cedcae59e72dcd697e2a7521b1578140422a4f890',
             '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+            '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
+            '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a',
+            '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
+            '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a',
+            '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba',
+            '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e',
+            '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356',
+            '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97',
+            '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6',
         ]
         sequence_of_productions = []
 
@@ -467,19 +478,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def _create_initial_account_list(self) -> list[KInner]:
         init_account_list: list[KInner] = []
-
-        # Adding a zero address
-        init_account_list.append(
-            KEVM.account_cell(
-                token(0),
-                token(0),
-                bytesToken(b''),
-                map_empty(),
-                map_empty(),
-                map_empty(),
-                token(0),
-            )
-        )
 
         # Adding the Foundry cheatcode address
         init_account_list.append(Foundry.account_CHEATCODE_ADDRESS(map_empty()))
