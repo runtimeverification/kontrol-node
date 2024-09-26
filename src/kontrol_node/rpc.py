@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import gzip
+import json
 import pprint
 from collections import deque
 from collections.abc import Callable
@@ -101,6 +103,15 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
 
         return self._get_rpc_response()
+
+    def exec_dump_state(self) -> str:
+        dump: dict[str, Any] = {}
+        dump['accounts'] = self._dump_accounts()
+        dump_bytes = json.dumps(dump).encode('utf-8')
+        result = '0x' + gzip.compress(dump_bytes).hex()
+        _PPRINT.pprint(result)
+        _PPRINT.pprint(json.loads(gzip.decompress(bytes.fromhex(result[2:]))))
+        return result
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
@@ -231,11 +242,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
         for account in accounts_cell:
             assert type(account) is KApply
-            acct_id = account.terms[0]
-            assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
-            _address = single(acct_id.terms)
-            assert type(_address) is KToken
-            if int(_address.token) == address:
+            if extract_address(account) == address:
                 return account
         return ACCOUNT_EMPTY
 
@@ -243,11 +250,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         account_cell = self._get_account_cell_by_address(address)
         if account_cell == ACCOUNT_EMPTY:
             return 0
-        nonce_cell = account_cell.terms[6]
-        assert type(nonce_cell) is KApply and nonce_cell.label.name == '<nonce>'
-        nonce = single(nonce_cell.terms)
-        assert type(nonce) is KToken
-        return int(nonce.token)
+        return extract_nonce(account_cell)
 
     def _get_account_storage_slot(self, address: int, slot: int) -> int:
         account_cell = self._get_account_cell_by_address(address)
@@ -273,21 +276,13 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         account_cell = self._get_account_cell_by_address(address)
         if account_cell == ACCOUNT_EMPTY:
             return '0x'
-        code_cell = account_cell.terms[2]
-        assert type(code_cell) is KApply and code_cell.label.name == '<code>'
-        code = single(code_cell.terms)
-        assert type(code) is KToken
-        return '0x' + ast.literal_eval(code.token).hex()
+        return extract_code(account_cell)
 
     def _get_account_balance(self, address: int) -> int:
         account_cell = self._get_account_cell_by_address(address)
         if account_cell == ACCOUNT_EMPTY:
             return 0
-        balance_cell = account_cell.terms[1]
-        assert type(balance_cell) is KApply and balance_cell.label.name == '<balance>'
-        balance = single(balance_cell.terms)
-        assert type(balance) is KToken
-        return int(balance.token)
+        return extract_balance(account_cell)
 
     def _get_account_addresses(self) -> list[int]:
         accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
@@ -301,6 +296,19 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             account_list.append(int(_address.token))
         account_list.sort()
         return account_list
+
+    def _dump_accounts(self) -> dict:
+        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        account_dict = {}
+        for account in accounts_cell:
+            assert type(account) is KApply
+            address = hex(extract_address(account))
+            balance = hex(extract_balance(account))
+            code = extract_code(account)
+            storage = extract_storage(account)
+            nonce = extract_nonce(account)
+            account_dict[address] = {'nonce': nonce, 'balance': balance, 'code': code, 'storage': storage}
+        return account_dict
 
     def _collect_trace(self, transaction_hash: str) -> None:
         parsed_trace: list[dict[str, Any]] = []
@@ -510,6 +518,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def _register_rpc_methods(self) -> None:
         rpc_methods: dict[str, Callable] = {
+            'anvil_dumpState': self.exec_dump_state,
             'debug_traceTransaction': self.exec_trace_transaction,
             'eth_accounts': self.exec_accounts,
             'eth_blockNumber': self.exec_get_block_number,
@@ -813,3 +822,55 @@ def parse_trace_item(trace_item: KApply) -> dict[str, Any]:
     result['gas'] = int(gas_token.token)
     result['gasCost'] = 0
     return result
+
+
+def extract_address(account_cell: KApply) -> int:
+    assert type(account_cell) is KApply
+    acct_id = account_cell.terms[0]
+    assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
+    _address = single(acct_id.terms)
+    assert type(_address) is KToken
+    return int(_address.token)
+
+
+def extract_nonce(account_cell: KApply) -> int:
+    nonce_cell = account_cell.terms[6]
+    assert type(nonce_cell) is KApply and nonce_cell.label.name == '<nonce>'
+    nonce = single(nonce_cell.terms)
+    assert type(nonce) is KToken
+    return int(nonce.token)
+
+
+def extract_code(account_cell: KApply) -> str:
+    code_cell = account_cell.terms[2]
+    assert type(code_cell) is KApply and code_cell.label.name == '<code>'
+    code = single(code_cell.terms)
+    assert type(code) is KToken
+    return '0x' + ast.literal_eval(code.token).hex()
+
+
+def extract_balance(account_cell: KApply) -> int:
+    balance_cell = account_cell.terms[1]
+    assert type(balance_cell) is KApply and balance_cell.label.name == '<balance>'
+    balance = single(balance_cell.terms)
+    assert type(balance) is KToken
+    return int(balance.token)
+
+
+def extract_storage(account_cell: KApply) -> dict[str, str]:
+    storage_cell = account_cell.terms[3]
+    storage_dict: dict[str, str] = {}
+
+    assert type(storage_cell) is KApply and storage_cell.label.name == '<storage>'
+    storage_map = single(storage_cell.terms)
+    if storage_map == map_empty():
+        return {}
+
+    storage_entries = flatten_label(MAP_CONS, storage_map)
+    for entry in storage_entries:
+        assert type(entry) is KApply and entry.label.name == '_|->_'
+        key, value = entry.terms
+        assert type(key) is KToken
+        assert type(value) is KToken
+        storage_dict[hex(int(key.token))] = hex(int(value.token))
+    return storage_dict
