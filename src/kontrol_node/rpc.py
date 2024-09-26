@@ -109,8 +109,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         dump['accounts'] = self._dump_accounts()
         dump_bytes = json.dumps(dump).encode('utf-8')
         result = '0x' + gzip.compress(dump_bytes).hex()
-        _PPRINT.pprint(result)
-        _PPRINT.pprint(json.loads(gzip.decompress(bytes.fromhex(result[2:]))))
         return result
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
