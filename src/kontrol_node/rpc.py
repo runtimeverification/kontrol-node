@@ -41,6 +41,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
     traced_transactions: dict[str, Any]
+    default_sender_address: Final[int]
 
     def __init__(self, options: VMOptions) -> None:
         super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
@@ -52,6 +53,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         start_time = datetime.now()
         self._init_cterm(options.steps_tracing)
+        self.default_sender_address = self._get_account_addresses()[0]
         end_time = datetime.now()
 
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
@@ -114,7 +116,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
         if sender is None:
-            sender = self._get_account_addresses()[0]
+            sender = self.default_sender_address
         sender_nonce = self._get_account_nonce(sender)
 
         destination: int | None = _get_address_from(transaction_json, 'to')
