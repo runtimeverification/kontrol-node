@@ -667,6 +667,17 @@ classify-imports = "*"
 flake8 = "*"
 
 [[package]]
+name = "future"
+version = "1.0.0"
+description = "Clean single-source support for Python 3 and 2"
+optional = false
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
+files = [
+    {file = "future-1.0.0-py3-none-any.whl", hash = "sha256:929292d34f5872e70396626ef385ec22355a1fae8ad29e1a734c3e43f9fbc216"},
+    {file = "future-1.0.0.tar.gz", hash = "sha256:bd2968309307861edae1458a4f8a4f3598c03be43b97521076aebf5d94c07b05"},
+]
+
+[[package]]
 name = "graphviz"
 version = "0.20.3"
 description = "Simple Python interface for Graphviz"
@@ -793,7 +804,7 @@ colors = ["colorama (>=0.4.6)"]
 
 [[package]]
 name = "kevm-pyk"
-version = "1.0.707"
+version = "1.0.732"
 description = ""
 optional = false
 python-versions = "^3.10"
@@ -801,26 +812,26 @@ files = []
 develop = false
 
 [package.dependencies]
-kframework = "7.1.131"
+kframework = "7.1.151"
 pathos = "*"
 tomlkit = "^0.11.6"
 
 [package.source]
 type = "git"
 url = "https://github.com/runtimeverification/evm-semantics.git"
-reference = "v1.0.707"
-resolved_reference = "6be9c545754b61169be827da056cfb8623de02a3"
+reference = "v1.0.732"
+resolved_reference = "c0ae8d32e0a547b91b9aee2ba195dbffd7a4603c"
 subdirectory = "kevm-pyk"
 
 [[package]]
 name = "kframework"
-version = "7.1.131"
+version = "7.1.151"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "kframework-7.1.131-py3-none-any.whl", hash = "sha256:b16de689e8b4c70f6484b5b399b09a9dbe35ffbc847fce719d7c17de53d2ee9f"},
-    {file = "kframework-7.1.131.tar.gz", hash = "sha256:2052038a3c8627f3127a3efb5de41d8fce462c3119f91d47a958d2c8e8687553"},
+    {file = "kframework-7.1.151-py3-none-any.whl", hash = "sha256:8ac212711a7b9e0ae8953884b779a0b215ef7c4145816dbd588342f5c3b00268"},
+    {file = "kframework-7.1.151.tar.gz", hash = "sha256:057025b23bbdb0903c9abf5fcd57bddd667643b23d22fa9fd1b1b0d2786011de"},
 ]
 
 [package.dependencies]
@@ -838,7 +849,7 @@ xdg-base-dirs = ">=6.0.1,<7.0.0"
 
 [[package]]
 name = "kontrol"
-version = "1.0.17"
+version = "1.0.37"
 description = "Foundry integration for KEVM"
 optional = false
 python-versions = "^3.10"
@@ -847,14 +858,15 @@ develop = false
 
 [package.dependencies]
 eth-utils = "^4.1.1"
-kevm-pyk = {git = "https://github.com/runtimeverification/evm-semantics.git", tag = "v1.0.707", subdirectory = "kevm-pyk"}
+kevm-pyk = {git = "https://github.com/runtimeverification/evm-semantics.git", tag = "v1.0.732", subdirectory = "kevm-pyk"}
 pycryptodome = "^3.20.0"
+pyevmasm = "^0.2.3"
 
 [package.source]
 type = "git"
 url = "https://github.com/runtimeverification/kontrol"
-reference = "v1.0.17"
-resolved_reference = "0ca0c6274e46c2bfb9594ba56105367b31d19e5a"
+reference = "v1.0.37"
+resolved_reference = "1f860fb8ffaa627c1a5f433dcb05a9e4e4602147"
 
 [[package]]
 name = "linkify-it-py"
@@ -1233,6 +1245,24 @@ files = [
 ]
 
 [[package]]
+name = "pyevmasm"
+version = "0.2.3"
+description = "Ethereum Virtual Machine (EVM) assembler and disassembler"
+optional = false
+python-versions = ">2.7"
+files = [
+    {file = "pyevmasm-0.2.3-py2-none-any.whl", hash = "sha256:6dbc96f7251a5287cc2af868c96c760c2343c882afe99d01996f8133a5769355"},
+    {file = "pyevmasm-0.2.3-py3-none-any.whl", hash = "sha256:57eeb2b8482a56b215402780e97c175ba11b34584d2ad0914deab146b37be540"},
+    {file = "pyevmasm-0.2.3.tar.gz", hash = "sha256:1b3334e2d25bfbc4fac5e14a5d7b814999256c12dbc4c34796b9982dad73fcf6"},
+]
+
+[package.dependencies]
+future = "*"
+
+[package.extras]
+dev = ["coverage", "flake8", "nose"]
+
+[[package]]
 name = "pyflakes"
 version = "3.2.0"
 description = "passive checker of Python programs"
@@ -1606,4 +1636,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "f8ea6a0e868437aa6259a8f0c764d1d28ea089293cbf92448d33b3f14f99db94"
+content-hash = "86da4be5ec7a91902bebcd224c7f0253fced4ef42179a6f54a225fd1e75f34cd"
