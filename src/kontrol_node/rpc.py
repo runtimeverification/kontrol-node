@@ -144,14 +144,14 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             self._collect_trace(transaction_hash)
         return transaction_hash
 
-    def exec_trace_transaction(self, tx_hash: str) -> dict:
+    def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict:
         result: dict[str, Any] = {}
-        result['traceLogs'] = self.traced_transactions[tx_hash]
+        result['structLogs'] = self.traced_transactions[tx_hash]
         receipt = self._get_tx_receipt_by_hash(tx_hash)
         if receipt is None:
             return {}
         if '<contractAddress>' in receipt.keys():
-            result['result'] = self._get_account_code(receipt['<contractAddress>'])
+            result['returnValue'] = self._get_account_code(receipt['<contractAddress>'])
         result['failed'] = not bool(receipt['<txStatus>'])
         result['gasUsed'] = receipt['<txCumulativeGas>']
         return result
