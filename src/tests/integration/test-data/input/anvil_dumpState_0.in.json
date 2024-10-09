@@ -1,0 +1,8 @@
+[
+  {
+    "jsonrpc": "2.0",
+    "method": "anvil_dumpState",
+    "params": [],
+    "id": 0
+  }
+]
