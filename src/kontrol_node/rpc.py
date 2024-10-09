@@ -532,11 +532,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         return {tx_hash: receipt}
 
-    def _build_message_from_subst(self) -> dict[str, Any]:
+    def _build_message_from_subst(self) -> dict[int, Any]:
         """Manually builds the first message when no <messages> cell map is found.
 
         Returns:
-            str: The uid of the message.
             dict: The manually created message.
         """
         msg_id = int(self._parse_ktoken_cell('MSGID_CELL'))

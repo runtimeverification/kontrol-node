@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Final
 
 import pytest
-from pyk.kast.inner import KApply, KLabel, KSort, KToken
+from pyk.kast.inner import KApply, KSort, KToken
 
 from kontrol_node.rpc import extract_message, extract_receipt
 
@@ -11,10 +11,10 @@ EXTRACT_RECEIPT_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
     (
         'extract_receipt_0',
         KApply(
-            KLabel('<txReceipt>'),
+            '<txReceipt>',
             (
                 KApply(
-                    KLabel('<txHash>'),
+                    '<txHash>',
                     (
                         KToken(
                             '"518e6dfceddd624113d2fe12891b0732f268b2fe6626de61aac123e8d884aaa1"',
@@ -22,10 +22,10 @@ EXTRACT_RECEIPT_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                         ),
                     ),
                 ),
-                KApply(KLabel('<txCumulativeGas>'), (KToken('160321', KSort('Int')),)),
-                KApply(KLabel('<logSet>'), (KApply(KLabel('.List'), ()),)),
+                KApply('<txCumulativeGas>', (KToken('160321', KSort('Int')))),
+                KApply('<logSet>', (KApply('.List', ()))),
                 KApply(
-                    KLabel('<bloomFilter>'),
+                    '<bloomFilter>',
                     (
                         KToken(
                             'b"\\x00\\x00"',
@@ -33,16 +33,16 @@ EXTRACT_RECEIPT_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                         ),
                     ),
                 ),
-                KApply(KLabel('<txStatus>'), (KToken('1', KSort('Int')),)),
-                KApply(KLabel('<txID>'), (KToken('0', KSort('Int')),)),
+                KApply('<txStatus>', (KToken('1', KSort('Int')))),
+                KApply('<txID>', (KToken('0', KSort('Int')))),
                 KApply(
-                    KLabel('<sender>'),
-                    (KToken('119096571092301921719253721560231391405901977941', KSort('Int')),),
+                    '<sender>',
+                    (KToken('119096571092301921719253721560231391405901977941', KSort('Int'))),
                 ),
-                KApply(KLabel('<txBlockNumber>'), (KToken('0', KSort('Int')),)),
+                KApply('<txBlockNumber>', (KToken('0', KSort('Int')))),
                 KApply(
-                    KLabel('<contractAddress>'),
-                    (KToken('1364846179604156837468707468773843663978916111562', KSort('Int')),),
+                    '<contractAddress>',
+                    (KToken('1364846179604156837468707468773843663978916111562', KSort('Int'))),
                 ),
             ),
         ),
@@ -76,63 +76,42 @@ EXTRACT_MESSAGE_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
     (
         'extract_message_0',
         KApply(
-            KLabel(
-                '<message>',
-            ),
+            '<message>',
             (
                 KApply(
-                    KLabel(
-                        '<msgID>',
-                    ),
-                    (KToken('1', KSort('Int')),),
+                    '<msgID>',
+                    (KToken('1', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<txNonce>',
-                    ),
-                    (KToken('1', KSort('Int')),),
+                    '<txNonce>',
+                    (KToken('1', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<txGasPrice>',
-                    ),
-                    (KToken('0', KSort('Int')),),
+                    '<txGasPrice>',
+                    (KToken('0', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<txGasLimit>',
-                    ),
-                    (KToken('30000000', KSort('Int')),),
+                    '<txGasLimit>',
+                    (KToken('30000000', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<to>',
-                    ),
+                    '<to>',
                     (
                         KApply(
-                            KLabel(
-                                '.Account_EVM-TYPES_Account',
-                            ),
-                            (),
+                            '.Account_EVM-TYPES_Account',
                         ),
                     ),
                 ),
                 KApply(
-                    KLabel(
-                        '<value>',
-                    ),
-                    (KToken('0', KSort('Int')),),
+                    '<value>',
+                    (KToken('0', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<sigV>',
-                    ),
-                    (KToken('62710', KSort('Int')),),
+                    '<sigV>',
+                    (KToken('62710', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<sigR>',
-                    ),
+                    '<sigR>',
                     (
                         KToken(
                             'b"\\x97\\xa3\\r\\xfa\\x90_K\\x9b\\xe9\\x15\\xc4F\\x81 \\xb2;\\xb4\\x03_&n&X\\xf4;R\\xabLb<\\xca\\xc2"',
@@ -141,9 +120,7 @@ EXTRACT_MESSAGE_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                     ),
                 ),
                 KApply(
-                    KLabel(
-                        '<sigS>',
-                    ),
+                    '<sigS>',
                     (
                         KToken(
                             'b"\\x0b\\x88\\x8f\\x15\\xa4O\\x19\\xf4\\xfb_\\x8a@U\\xe0e\\xd68\\x02\\x11\\xfb\\x89}K\\xf5?\\xc0\\xa54\\x07\\xa0\\x06\\x14"',
@@ -152,9 +129,7 @@ EXTRACT_MESSAGE_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                     ),
                 ),
                 KApply(
-                    KLabel(
-                        '<data>',
-                    ),
+                    '<data>',
                     (
                         KToken(
                             'b"`\\x80`@"',
@@ -163,53 +138,35 @@ EXTRACT_MESSAGE_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                     ),
                 ),
                 KApply(
-                    KLabel(
-                        '<txAccess>',
-                    ),
+                    '<txAccess>',
                     (
                         KApply(
-                            KLabel(
-                                'JSONList',
-                            ),
+                            'JSONList',
                             (
                                 KApply(
-                                    KLabel(
-                                        '.List{"JSONs"}',
-                                    ),
-                                    (),
+                                    '.List{"JSONs"}',
                                 ),
                             ),
                         ),
                     ),
                 ),
                 KApply(
-                    KLabel(
-                        '<txChainID>',
-                    ),
-                    (KToken('31337', KSort('Int')),),
+                    '<txChainID>',
+                    (KToken('31337', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<txPriorityFee>',
-                    ),
-                    (KToken('0', KSort('Int')),),
+                    '<txPriorityFee>',
+                    (KToken('0', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<txMaxFee>',
-                    ),
-                    (KToken('0', KSort('Int')),),
+                    '<txMaxFee>',
+                    (KToken('0', KSort('Int'))),
                 ),
                 KApply(
-                    KLabel(
-                        '<txType>',
-                    ),
+                    '<txType>',
                     (
                         KApply(
-                            KLabel(
-                                'Legacy_EVM-TYPES_TxType',
-                            ),
-                            (),
+                            'Legacy_EVM-TYPES_TxType',
                         ),
                     ),
                 ),
