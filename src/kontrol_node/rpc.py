@@ -162,7 +162,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         if tx_receipt is None:
             return 'Transaction receipt not found'
 
-        msg_id = str(tx_receipt['<txID>'])
+        msg_id = tx_receipt['<txID>']
         messages_dict = self._get_all_messages_dict()
 
         if msg_id not in messages_dict:
