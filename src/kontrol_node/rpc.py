@@ -539,7 +539,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             str: The uid of the message.
             dict: The manually created message.
         """
-        msg_id = self._parse_ktoken_cell('MSGID_CELL')
+        msg_id = int(self._parse_ktoken_cell('MSGID_CELL'))
 
         message: dict[str, Any] = {
             '<txNonce>': int(self._parse_ktoken_cell('TXNONCE_CELL')),
