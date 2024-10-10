@@ -6,7 +6,8 @@ eth_getBalance_0
 eth_getCode_0
 eth_getStorageAt_0
 eth_getTransactionCount_0
-eth_getTransactionReceipt
+eth_getTransactionReceipt_0
+eth_getTransactionReceipt_1
 eth_sendTransaction_deploy_counter
 eth_sendTransaction_no_sender
 kontrol_addAccount_0

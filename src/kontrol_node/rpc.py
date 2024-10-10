@@ -162,7 +162,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         if tx_receipt is None:
             return 'Transaction receipt not found'
 
-        msg_id = str(tx_receipt['<txID>'])
+        msg_id = tx_receipt['<txID>']
         messages_dict = self._get_all_messages_dict()
 
         if msg_id not in messages_dict:
@@ -182,7 +182,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         if tx_receipt_dict is None:
             return 'Transaction receipt not found'
 
-        msg_id = str(tx_receipt_dict['<txID>'])
+        msg_id = tx_receipt_dict['<txID>']
         messages_dict = self._get_all_messages_dict()
 
         if msg_id not in messages_dict:
@@ -354,7 +354,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             kapply_receipts = flatten_label('_TxReceiptCellMap_', cell)
             for r in kapply_receipts:
                 assert type(r) is KApply
-                receipt = self._build_tx_receipt_from_cell(r)
+                receipt = extract_receipt(r)
                 tx_receipts[receipt['<txHash>']] = receipt
             return tx_receipts
 
@@ -371,57 +371,15 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         if cell is None:
             # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
-            msg_id = self._parse_ktoken_cell('TXNONCE_CELL')
-            messages_dict[msg_id] = {}
-
-            messages_dict[msg_id]['<txNonce>'] = int(self._parse_ktoken_cell('TXNONCE_CELL'))
-            messages_dict[msg_id]['<txGasPrice>'] = int(self._parse_ktoken_cell('TXGASPRICE_CELL'))
-            messages_dict[msg_id]['<txGasLimit>'] = int(self._parse_ktoken_cell('TXGASLIMIT_CELL'))
-            messages_dict[msg_id]['<value>'] = int(self._parse_ktoken_cell('VALUE_CELL'))
-            messages_dict[msg_id]['<sigV>'] = int(self._parse_ktoken_cell('SIGV_CELL'))
-            messages_dict[msg_id]['<sigR>'] = ast.literal_eval(self._parse_ktoken_cell('SIGR_CELL')).hex()
-            messages_dict[msg_id]['<sigS>'] = ast.literal_eval(self._parse_ktoken_cell('SIGS_CELL')).hex()
-            messages_dict[msg_id]['<data>'] = '0x' + ast.literal_eval(self._parse_ktoken_cell('DATA_CELL')).hex()
-            messages_dict[msg_id]['<txChainID>'] = int(self._parse_ktoken_cell('TXCHAINID_CELL'))
-            messages_dict[msg_id]['<txPriorityFee>'] = int(self._parse_ktoken_cell('TXPRIORITYFEE_CELL'))
-            messages_dict[msg_id]['<txMaxFee>'] = int(self._parse_ktoken_cell('TXMAXFEE_CELL'))
-
-            _c = self.cterm.cell('TO_CELL')
-            if type(_c) is KToken:
-                messages_dict[msg_id]['<to>'] = _acct_id_to_address(int(_c.token))
-
-            _c = self.cterm.cell('TXTYPE_CELL')
-            assert type(_c) is KApply
-            messages_dict[msg_id]['<txType>'] = tx_type_to_int(_c.label)
-
+            return self._build_message_from_subst()
         else:
             assert type(cell) is KApply
-            queue: deque[KInner] = deque(cell.args)
-            while len(queue) > 0:
-                message_cell = queue.popleft()
-                if isinstance(message_cell, KApply):
-                    if message_cell.label.name == '<message>':
-                        message_dict = {}
-                        for args in message_cell.args:
-                            assert type(args) is KApply
-                            cell_name = str(args.label.name)
-                            if isinstance(args.args[0], KToken):
-
-                                value = None
-
-                                if args.args[0].token.isdecimal():
-                                    value = int(args.args[0].token)
-                                else:
-                                    value = '0x' + ast.literal_eval(args.args[0].token).hex()
-
-                                message_dict[cell_name] = value
-
-                        msg_id = str(message_dict['<msgID>'])
-                        messages_dict[msg_id] = message_dict
-                    elif 'MessageCellMap' in message_cell.label.name:
-                        queue.extend(message_cell.args)
-
-        return messages_dict
+            kapply_messages = flatten_label('_MessageCellMap_', cell)
+            for r in kapply_messages:
+                assert type(r) is KApply
+                message = extract_message(r)
+                messages_dict[message['<msgID>']] = message
+            return messages_dict
 
     def _get_all_block_storage_dict(self) -> dict:
         block_storage_dict = {}
@@ -554,9 +512,9 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         """Manually builds the first transaction receipt when no <txReceipts> cell map is found.
 
         Returns:
+            str: The uid (tx_hash) of the transaction receipt.
             dict: The manually created transaction receipt.
         """
-        tx_receipts: dict[str, Any] = {}
         tx_hash = '0x' + self._parse_ktoken_cell('TXHASH_CELL')[1:-1]
 
         receipt: dict[str, Any] = {
@@ -572,40 +530,39 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '<contractAddress>': self._parse_contract_address(),
         }
 
-        tx_receipts[tx_hash] = receipt
-        return tx_receipts
+        return {tx_hash: receipt}
 
-    def _build_tx_receipt_from_cell(self, receipt: KApply) -> dict[str, Any]:
-        """Builds the transaction receipt from the given <txReceipt> cell.
+    def _build_message_from_subst(self) -> dict[int, Any]:
+        """Manually builds the first message when no <messages> cell map is found.
 
-        :param receipt: The KApply object representing a transaction receipt.
-        :raises TypeError: Signals any receipt terms that are not handled.
-        :return: The transaction receipt data.
+        Returns:
+            dict: The manually created message.
         """
-        tx_receipt: dict[str, Any] = {}
-        for term in receipt.terms:
-            assert type(term) is KApply
-            key = term.label.name
-            value = single(term.args)
-            if key == '<logSet>':
-                assert type(value) is KApply
-                tx_receipt[key] = parse_kapply_list(value)
-                continue
+        msg_id = int(self._parse_ktoken_cell('MSGID_CELL'))
 
-            if key == '<contractAddress>':
-                tx_receipt[key] = int(value.token) if type(value) is KToken else None
-                continue
+        message: dict[str, Any] = {
+            '<txNonce>': int(self._parse_ktoken_cell('TXNONCE_CELL')),
+            '<txGasPrice>': int(self._parse_ktoken_cell('TXGASPRICE_CELL')),
+            '<txGasLimit>': int(self._parse_ktoken_cell('TXGASLIMIT_CELL')),
+            '<value>': int(self._parse_ktoken_cell('VALUE_CELL')),
+            '<sigV>': int(self._parse_ktoken_cell('SIGV_CELL')),
+            '<sigR>': '0x' + ast.literal_eval(self._parse_ktoken_cell('SIGR_CELL')).hex(),
+            '<sigS>': '0x' + ast.literal_eval(self._parse_ktoken_cell('SIGS_CELL')).hex(),
+            '<data>': '0x' + ast.literal_eval(self._parse_ktoken_cell('DATA_CELL')).hex(),
+            '<txChainID>': int(self._parse_ktoken_cell('TXCHAINID_CELL')),
+            '<txPriorityFee>': int(self._parse_ktoken_cell('TXPRIORITYFEE_CELL')),
+            '<txMaxFee>': int(self._parse_ktoken_cell('TXMAXFEE_CELL')),
+            '<msgID>': msg_id,
+        }
+        _c = self.cterm.cell('TO_CELL')
+        if type(_c) is KToken:
+            message['<to>'] = _acct_id_to_address(int(_c.token))
 
-            assert type(value) is KToken
-            if key == '<txHash>':
-                tx_receipt[key] = '0x' + value.token[1:-1]
-            elif key == '<bloomFilter>':
-                tx_receipt[key] = '0x' + ast.literal_eval(value.token).hex()
-            elif key in ['<txCumulativeGas>', '<txNonce>', '<txStatus>', '<txID>', '<sender>', '<txBlockNumber>']:
-                tx_receipt[key] = int(value.token)
-            else:
-                raise TypeError(f'Unexpected key {key}.')
-        return tx_receipt
+        _c = self.cterm.cell('TXTYPE_CELL')
+        assert type(_c) is KApply
+        message['<txType>'] = tx_type_to_int(_c.label)
+
+        return {msg_id: message}
 
     def _parse_log_set(self) -> list:
         """Parses the log set from the LOGSET_CELL."""
@@ -874,3 +831,78 @@ def extract_storage(account_cell: KApply) -> dict[str, str]:
         assert type(value) is KToken
         storage_dict[hex(int(key.token))] = hex(int(value.token))
     return storage_dict
+
+
+def extract_receipt(receipt_cell: KApply) -> dict[str, Any]:
+    """Builds the transaction receipt from the given <txReceipt> cell.
+
+    :param receipt: The KApply object representing a transaction receipt.
+    :raises TypeError: Signals any receipt terms that are not handled.
+    :return: The transaction receipt data.
+    """
+    tx_receipt: dict[str, Any] = {}
+    for term in receipt_cell.terms:
+        assert type(term) is KApply
+        key = term.label.name
+        value = single(term.args)
+        if key == '<logSet>':
+            assert type(value) is KApply
+            tx_receipt[key] = parse_kapply_list(value)
+            continue
+
+        if key == '<contractAddress>':
+            tx_receipt[key] = int(value.token) if type(value) is KToken else None
+            continue
+
+        assert type(value) is KToken
+        if key == '<txHash>':
+            tx_receipt[key] = '0x' + value.token[1:-1]
+        elif key == '<bloomFilter>':
+            tx_receipt[key] = '0x' + ast.literal_eval(value.token).hex()
+        elif key in ['<txCumulativeGas>', '<txNonce>', '<txStatus>', '<txID>', '<sender>', '<txBlockNumber>']:
+            tx_receipt[key] = int(value.token)
+        else:
+            raise TypeError(f'Unexpected key {key}.')
+    return tx_receipt
+
+
+def extract_message(message_cell: KApply) -> dict[str, Any]:
+    """Builds the message from the given <message> cell.
+
+    :param receipt: The KApply object representing a message.
+    :raises TypeError: Signals any receipt terms that are not handled.
+    :return: The message data.
+    """
+    msg_dict: dict[str, Any] = {}
+    for term in message_cell.terms:
+        assert type(term) is KApply
+        key = term.label.name
+        value = single(term.args)
+        if key == '<txAccess>':
+            continue
+        if key == '<to>':
+            if type(value) is KToken:
+                msg_dict[key] = _acct_id_to_address(int(value.token))
+            continue
+        if key == '<txType>':
+            assert type(value) is KApply
+            msg_dict[key] = tx_type_to_int(value.label)
+            continue
+        assert type(value) is KToken
+        if key in ['<sigR>', '<sigS>', '<data>']:
+            msg_dict[key] = '0x' + ast.literal_eval(value.token).hex()
+        elif key in [
+            '<msgID>',
+            '<txNonce>',
+            '<txGasPrice>',
+            '<txGasLimit>',
+            '<value>',
+            '<sigV>',
+            '<txChainID>',
+            '<txPriorityFee>',
+            '<txMaxFee>',
+        ]:
+            msg_dict[key] = int(value.token)
+        else:
+            raise TypeError(f'Unexpected key {key}.')
+    return msg_dict
