@@ -3,9 +3,83 @@ from __future__ import annotations
 from typing import Any, Final
 
 import pytest
-from pyk.kast.inner import KApply, KSort, KToken
+from pyk.kast.inner import KApply, KLabel, KSort, KToken
 
-from kontrol_node.rpc import extract_message, extract_receipt
+from kontrol_node.rpc import extract_message, extract_receipt, extract_trace_item
+
+EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = [
+    (
+        'extract_trace_item_0',
+        KApply(
+            'traceItem',
+            (
+                KToken(token='0', sort=KSort(name='Int')),
+                KApply(label=KLabel(name='PUSH', params=()), args=(KToken(token='1', sort=KSort(name='Int')),)),
+                KApply(label=KLabel(name='.WordStack_EVM-TYPES_WordStack', params=()), args=()),
+                KToken(token='b""', sort=KSort(name='Bytes')),
+                KApply(label=KLabel(name='.Map', params=()), args=()),
+                KToken(token='0', sort=KSort(name='Int')),
+                KToken(token='29940483', sort=KSort(name='Int')),
+            ),
+        ),
+        '0x60806040',
+        {
+            'pc': 0,
+            'op': 'PUSH1',
+            'gas': 29940483,
+            'gasCost': 0,
+            'depth': 1,
+            'stack': [],
+            'returnData': '0x60806040',
+            'memory': [],
+        },
+    ),
+    (
+        'extract_trace_item_1',
+        KApply(
+            label=KLabel(name='traceItem', params=()),
+            args=(
+                KToken(token='5', sort=KSort(name='Int')),
+                KApply(label=KLabel(name='CALLVALUE_EVM_NullStackOp', params=()), args=()),
+                KApply(label=KLabel(name='.WordStack_EVM-TYPES_WordStack', params=()), args=()),
+                KToken(
+                    token='b"\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80"',
+                    sort=KSort(name='Bytes'),
+                ),
+                KApply(label=KLabel(name='.Map', params=()), args=()),
+                KToken(token='0', sort=KSort(name='Int')),
+                KToken(token='29940465', sort=KSort(name='Int')),
+            ),
+        ),
+        '0x60806040',
+        {
+            'pc': 5,
+            'op': 'CALLVALUE',
+            'gas': 29940465,
+            'gasCost': 0,
+            'depth': 1,
+            'stack': [],
+            'returnData': '0x60806040',
+            'memory': [
+                '0000000000000000000000000000000000000000000000000000000000000000',
+                '0000000000000000000000000000000000000000000000000000000000000000',
+                '0000000000000000000000000000000000000000000000000000000000000080',
+            ],
+        },
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    'test_id,input,input_2,expected', EXTRACT_TRACE_ITEM_DATA, ids=[test_id for test_id, *_ in EXTRACT_TRACE_ITEM_DATA]
+)
+def test_extract_test_item(test_id: str, input: KApply, input_2: str, expected: dict[str, Any]) -> None:
+    # When
+    actual = extract_trace_item(input, input_2)
+
+    # Then
+    assert actual == expected
+
 
 EXTRACT_RECEIPT_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
     (
