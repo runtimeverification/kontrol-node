@@ -35,12 +35,14 @@ ACCOUNT_EMPTY: Final[KApply] = KApply('.Account_EVM-TYPES_Account')
 WORDSTACK_EMPTY: Final[KApply] = KApply('.WordStack_EVM-TYPES_WordStack')
 WORDSTACK_CONS: Final[str] = '_:__EVM-TYPES_WordStack_Int_WordStack'
 MAP_CONS: Final[str] = '_Map_'
+CHUNK_SIZE: Final[int] = 64
 
 
 class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
     traced_transactions: dict[str, Any]
+    transaction_return_data: dict[str, str]
     default_sender_address: Final[int]
 
     def __init__(self, options: VMOptions) -> None:
@@ -50,7 +52,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
         self.traced_transactions = {}
-
+        self.transaction_return_data = {}
         start_time = datetime.now()
         self._init_cterm(options.steps_tracing)
         self.default_sender_address = self._get_account_addresses()[0]
@@ -151,9 +153,9 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         if receipt is None:
             return {}
         if '<contractAddress>' in receipt.keys():
-            result['returnValue'] = self._get_account_code(receipt['<contractAddress>'])
+            result['returnValue'] = self.transaction_return_data[tx_hash]
         result['failed'] = not bool(receipt['<txStatus>'])
-        result['gasUsed'] = receipt['<txCumulativeGas>']
+        result['gas'] = receipt['<txCumulativeGas>']
         return result
 
     def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
@@ -200,9 +202,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         receipt['blockNumber'] = hex(tx_receipt_dict['<txBlockNumber>'])
         receipt['gasUsed'] = hex(tx_receipt_dict['<txCumulativeGas>'])
         receipt['effectiveGasPrice'] = hex(message_dict['<txGasPrice>'])
-        receipt['to'] = hex(message_dict['<to>']) if '<to>' in message_dict.keys() else None
+
+        receipt['to'] = message_dict['<to>'] if '<to>' in message_dict.keys() else None
+        _PPRINT.pprint(tx_receipt_dict)
         receipt['contractAddress'] = (
-            hex(tx_receipt_dict['<contractAddress>']) if '<contractAddress>' in tx_receipt_dict.keys() else None
+            hex(tx_receipt_dict['<contractAddress>']) if tx_receipt_dict['<contractAddress>'] is not None else None
         )
         receipt['root'] = hex(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL')))
         return receipt
@@ -314,7 +318,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         parsed_trace: list[dict[str, Any]] = []
         trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
         trace_data = flatten_label('_List_', trace_data_cell)
-
+        return_data = '0x' + ast.literal_eval(self._parse_ktoken_cell('OUTPUT_CELL')).hex()
         if len(trace_data) == 1 and trace_data[0] == list_empty():
             return
 
@@ -322,9 +326,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             assert type(trace_list_item) is KApply
             trace_item = single(trace_list_item.terms)
             assert type(trace_item) is KApply
-            parsed_trace.append(parse_trace_item(trace_item))
+            parsed_trace.append(extract_trace_item(trace_item, return_data))
 
         self.traced_transactions[transaction_hash] = parsed_trace
+        self.transaction_return_data[transaction_hash] = return_data[2:]
 
     def _get_tx_receipt_by_msg_id(self, msg_id: int) -> dict | None:
         tx_receipts_dict = self._get_all_tx_receipts_dict()
@@ -740,8 +745,9 @@ def parse_kapply_list(kapply_list: KApply) -> list:
     return values
 
 
-def parse_trace_item(trace_item: KApply) -> dict[str, Any]:
+def extract_trace_item(trace_item: KApply, return_data: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    result['returnData'] = return_data
     # program counter
     program_counter_token = trace_item.terms[0]
     assert type(program_counter_token) is KToken
@@ -762,17 +768,20 @@ def parse_trace_item(trace_item: KApply) -> dict[str, Any]:
         wordstack = []
     else:
         wordstack = [hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, wordstack_kapply) if type(e) is KToken]
+        wordstack.reverse()
     result['stack'] = wordstack
     # local memory
     local_mem_token = trace_item.terms[3]
     assert type(local_mem_token) is KToken
-    local_mem = '0x' + ast.literal_eval(local_mem_token.token).hex()
-    if local_mem[2:].strip('0') != '':
-        result['memory'] = local_mem
+    local_mem = ast.literal_eval(local_mem_token.token).hex()
+    memory_chunks = [
+        (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
+    ]
+    result['memory'] = memory_chunks
     # call depth
     call_depth_token = trace_item.terms[5]
     assert type(call_depth_token) is KToken
-    result['depth'] = int(call_depth_token.token)
+    result['depth'] = int(call_depth_token.token) + 1
     # gas available
     gas_token = trace_item.terms[6]
     assert type(gas_token) is KToken
