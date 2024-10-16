@@ -76,7 +76,7 @@ module KONTROL-NODE
 
   The next block of K code contains the set of functions used to implement `eth_sendTransaction`.
   The information send with the request is used to load a new `<message>` cell, sign, validate, and execute it.
-  Once these steps are performed, a block is mined.
+  Once these steps are performed, a receipt is generated.
 
 ```k
     syntax RPCRequest ::= "#eth_sendTransaction" TxType Account Account Int Int Int Int Bytes [symbol(eth_sendTransaction)]
@@ -85,7 +85,8 @@ module KONTROL-NODE
           => mkTX !TXID
           ~> #loadTransaction !TXID TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
           ~> #runTransaction !TXID ACCTFROM
-          ~> #mineBlock
+          ~> #makeTxReceipt !TXID
+          // ~> #mineBlock
           ... </k>
 
     syntax KItem ::= "#loadTransaction" Int TxType Account Account Int Int Int Int Bytes
@@ -213,16 +214,7 @@ module KONTROL-NODE
 
     syntax KItem ::= "#updateTimestamp"
  // -----------------------------------
-    rule <k> #updateTimestamp => .K ... </k>
-         <timestamp> _ => #time(TIMEFREEZE) +Int TIMEDIFF </timestamp>
-         <timeFreeze> TIMEFREEZE </timeFreeze>
-         <timeDiff>   TIMEDIFF   </timeDiff>
-
-
-    syntax Int ::= #time( Bool ) [function]
- // ---------------------------------------
-    rule #time(false) => 0 // TODO: Originally this was #time. Should represent the current time of the VM.
-    rule #time(true)  => 0
+    rule <k> #updateTimestamp => .K ... </k> <timestamp> TS => TS +Int TD </timestamp> <timeDiff> TD </timeDiff>
 
     syntax KItem ::= "#executeTx" Int
  // ---------------------------------
@@ -287,13 +279,6 @@ module KONTROL-NODE
          </account>
       requires ACCTTO =/=K .Account
 
-    syntax KItem ::= "#makeTxReceipts"
-                   | "#makeTxReceiptsAux" List
- // ------------------------------------------
-    rule <k> #makeTxReceipts => #makeTxReceiptsAux TXLIST ... </k> <txOrder> TXLIST </txOrder>
-    rule <k> #makeTxReceiptsAux .List => .K ... </k>
-    rule <k> #makeTxReceiptsAux (ListItem(TXID) TXLIST) => #makeTxReceipt TXID ~> #makeTxReceiptsAux TXLIST ... </k>
-
     syntax KItem ::= "#makeTxReceipt" Int
  // -------------------------------------
     rule <k> #makeTxReceipt TXID => .K ... </k>
@@ -339,7 +324,7 @@ module KONTROL-NODE
   Block Mining
   ------------
 
-  The productions below are used to perform the mining of blocks, advancing the blockchain state as well as storing it.
+  The productions below are used to perform the mining of blocks, advancing the blockchain state.
 
 ```k
     syntax KItem ::= "#mineBlock"
@@ -347,22 +332,25 @@ module KONTROL-NODE
     rule <k> #mineBlock
           => #finalizeBlock
           ~> #updateParentHash
-          ~> #makeTxReceipts
       //  ~> #updateStateTrie
       //  ~> #updateTrieRoots
-        // ~> #startBlock
-        // ~> #cleanTxLists
-        // ~> #clearGas
+          ~> #incrementBlockNumber
+          ~> #startBlock
+          ~> #cleanTxLists
+          ~> #clearGas
           ...
          </k>
 
     syntax KItem ::= "#updateParentHash"
+                   | "#incrementBlockNumber"
               //   | "#updateTrieRoots"
               //   | "#updateStateRoot"
               //   | "#updateTransactionsRoot"
               //   | "#updateReceiptsRoot"
               //   | "#initStateTrie"
               //   | "#updateStateTrie"
+                   | "#cleanTxLists"
+                   | "#clearGas"
                    | #updateStateTrie ( JSONs )
  // -------------------------------------------
 
@@ -383,13 +371,13 @@ module KONTROL-NODE
          <mixHash>          HM </mixHash>
          <blockNonce>       HN </blockNonce>
 
-    // rule <k> #incrementBlockNumber => .K ... </k> <number> BN => BN +Int 1 </number>
+    rule <k> #incrementBlockNumber => .K ... </k> <number> BN => BN +Int 1 </number>
 
-    // rule <k> #cleanTxLists => .K ... </k>
-    //      <txPending> _ => .List </txPending>
-    //      <txOrder>   _ => .List </txOrder>
+    rule <k> #cleanTxLists => .K ... </k>
+         <txPending> _ => .List </txPending>
+         <txOrder>   _ => .List </txOrder>
 
-    // rule <k> #clearGas => .K ... </k> <gas> _ => 0 </gas>
+    rule <k> #clearGas => .K ... </k> <gas> _ => 0 </gas>
 ```
 
   Helper Funcs
