@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "kontrol-node"
-version = "0.1.17"
+version = "0.1.18"
 description = "A local testnet node powered by KEVM"
 authors = [
     "Runtime Verification, Inc. <contact@runtimeverification.com>",
@@ -18,7 +18,7 @@ kontrol-node = "kontrol_node.kdist.plugin"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v1.0.17" }
+kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v1.0.51" }
 
 [tool.poetry.group.dev.dependencies]
 autoflake = "*"
