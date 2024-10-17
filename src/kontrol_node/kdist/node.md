@@ -20,6 +20,7 @@ module KONTROL-NODE
                     <timeFreeze> true </timeFreeze>
                     <timeDiff> 0 </timeDiff>
                     <currentTxID> 0 </currentTxID>
+                    <currentBlockHash> 0 </currentBlockHash>
                     <txReceipts>
                       <txReceipt multiplicity ="*" type="Map">
                         <txHash>          "":String  </txHash>
@@ -82,12 +83,15 @@ module KONTROL-NODE
     syntax RPCRequest ::= "#eth_sendTransaction" TxType Account Account Int Int Int Int Bytes [symbol(eth_sendTransaction)]
  // -----------------------------------------------------------------------------------------------------------------------
     rule <k> #eth_sendTransaction TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
-          => mkTX !TXID
+          => #updateBlockHeader
+          ~> mkTX !TXID
           ~> #loadTransaction !TXID TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
           ~> #runTransaction !TXID ACCTFROM
           ~> #makeTxReceipt !TXID
-          // ~> #mineBlock
+          ~> #finalizeBlock
+          ~> #computeHeaderHash
           ... </k>
+          <traceData> _ => .List </traceData>
 
     syntax KItem ::= "#loadTransaction" Int TxType Account Account Int Int Int Int Bytes
  // ------------------------------------------------------------------------------------
@@ -327,35 +331,41 @@ module KONTROL-NODE
   The productions below are used to perform the mining of blocks, advancing the blockchain state.
 
 ```k
-    syntax KItem ::= "#mineBlock"
- // -----------------------------
-    rule <k> #mineBlock
-          => #finalizeBlock
-          ~> #updateParentHash
-      //  ~> #updateStateTrie
-      //  ~> #updateTrieRoots
-          ~> #incrementBlockNumber
-          ~> #startBlock
-          ~> #cleanTxLists
-          ~> #clearGas
-          ...
-         </k>
-
     syntax KItem ::= "#updateParentHash"
                    | "#incrementBlockNumber"
+                   | "#clearGas"
+                   | "#clearTxLists"
               //   | "#updateTrieRoots"
               //   | "#updateStateRoot"
               //   | "#updateTransactionsRoot"
               //   | "#updateReceiptsRoot"
               //   | "#initStateTrie"
               //   | "#updateStateTrie"
-                   | "#cleanTxLists"
-                   | "#clearGas"
-                   | #updateStateTrie ( JSONs )
+              //   | #updateStateTrie ( JSONs )
  // -------------------------------------------
 
     rule <k> #updateParentHash => .K ... </k>
-         <previousHash> HP => #blockHeaderHash(HP, HO, HC, HR, HT, HE, HB, HD, HI, HL, HG, HS, HX, HM, HN) </previousHash>
+         <previousHash> _ => HP </previousHash>
+         <currentBlockHash> HP </currentBlockHash>
+
+    rule <k> #incrementBlockNumber => .K ... </k> <number> BN => BN +Int 1 </number>
+
+    rule <k> #clearTxLists => .K ... </k>
+         <txPending> _ => .List </txPending>
+         <txOrder>   _ => .List </txOrder>
+
+    rule <k> #clearGas => .K ... </k> <gas> _ => 0 </gas>
+```
+
+  Helper Funcs
+  ------------
+
+```k
+    syntax KItem ::= "#computeHeaderHash" [symbol(computeHeaderHash)]
+ // -----------------------------------------------------------------
+    rule <k> #computeHeaderHash => .K ... </k>
+         <currentBlockHash> _ => #blockHeaderHash(HP, HO, HC, HR, HT, HE, HB, HD, HI, HL, HG, HS, HX, HM, HN) </currentBlockHash>
+         <previousHash>     HP </previousHash>
          <ommersHash>       HO </ommersHash>
          <coinbase>         HC </coinbase>
          <stateRoot>        HR </stateRoot>
@@ -371,19 +381,15 @@ module KONTROL-NODE
          <mixHash>          HM </mixHash>
          <blockNonce>       HN </blockNonce>
 
-    rule <k> #incrementBlockNumber => .K ... </k> <number> BN => BN +Int 1 </number>
+    syntax KItem ::= "#updateBlockHeader" [symbol(updateBlockHeader)]
+ // -----------------------------------------------------------------
+    rule <k> #updateBlockHeader
+          => #updateParentHash
+          ~> #startBlock
+          ~> #incrementBlockNumber
+          ~> #clearTxLists
+          ~> #clearGas ... </k>
 
-    rule <k> #cleanTxLists => .K ... </k>
-         <txPending> _ => .List </txPending>
-         <txOrder>   _ => .List </txOrder>
-
-    rule <k> #clearGas => .K ... </k> <gas> _ => 0 </gas>
-```
-
-  Helper Funcs
-  ------------
-
-```k
     syntax KItem ::= "#acctFromPrivateKey" String Int [symbol(acctFromPrivateKey)]
  // ------------------------------------------------------------------------------
     rule <k> #acctFromPrivateKey KEYSTR BAL => #newAccount #addrFromPrivateKey(KEYSTR) ~> #setAcctBalance #addrFromPrivateKey(KEYSTR) BAL ... </k>
