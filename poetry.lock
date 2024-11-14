@@ -232,13 +232,13 @@ colorama = {version = "*", markers = "platform_system == \"Windows\""}
 
 [[package]]
 name = "cmd2"
-version = "2.5.4"
+version = "2.5.6"
 description = "cmd2 - quickly build feature-rich and user-friendly interactive command line applications in Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "cmd2-2.5.4-py3-none-any.whl", hash = "sha256:287793e494faaa66d0f9e2549e79c1b923209b5a2261013eb282eb3b35d31691"},
-    {file = "cmd2-2.5.4.tar.gz", hash = "sha256:405016f6cee5d4155534a39c8089ebedcfffbb3e24c37150a2b61df32ec90122"},
+    {file = "cmd2-2.5.6-py3-none-any.whl", hash = "sha256:768511d3a496f2e1c20b275362edce8c0f937a0bb05116cf554961d7fb18b59c"},
+    {file = "cmd2-2.5.6.tar.gz", hash = "sha256:ab0ff178784ca087d886081b2ca384724c90b9b25eb982c57c6925ca17479f52"},
 ]
 
 [package.dependencies]
@@ -1478,13 +1478,13 @@ jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
 name = "setuptools"
-version = "75.4.0"
+version = "75.5.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "setuptools-75.4.0-py3-none-any.whl", hash = "sha256:b3c5d862f98500b06ffdf7cc4499b48c46c317d8d56cb30b5c8bce4d88f5c216"},
-    {file = "setuptools-75.4.0.tar.gz", hash = "sha256:1dc484f5cf56fd3fe7216d7b8df820802e7246cfb534a1db2aa64f14fcb9cdcb"},
+    {file = "setuptools-75.5.0-py3-none-any.whl", hash = "sha256:87cb777c3b96d638ca02031192d40390e0ad97737e27b6b4fa831bea86f2f829"},
+    {file = "setuptools-75.5.0.tar.gz", hash = "sha256:5c4ccb41111392671f02bb5f8436dfc5a9a7185e80500531b133f5775c4163ef"},
 ]
 
 [package.extras]
