@@ -158,6 +158,21 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         result = '0x' + gzip.compress(dump_bytes).hex()
         return result
 
+    def exec_set_balance(self, address: str, value: str) -> None:
+        balance = int(value, 0)
+        account_id = _address_to_acct_id(address)
+        account = self._get_account_cell_by_address(account_id)
+        new_account = KEVM.account_cell(
+            id=token(account_id),
+            balance=token(balance),
+            code=token(b'') if account is ACCOUNT_EMPTY else account.args[2],
+            storage=map_empty() if account is ACCOUNT_EMPTY else account.args[3],
+            orig_storage=map_empty() if account is ACCOUNT_EMPTY else account.args[4],
+            transient_storage=map_empty() if account is ACCOUNT_EMPTY else account.args[5],
+            nonce=token(0) if account is ACCOUNT_EMPTY else account.args[6],
+        )
+        self._add_or_update_account(new_account)
+
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
         if sender is None:
@@ -345,6 +360,42 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             account_list.append(int(_address.token))
         account_list.sort()
         return account_list
+
+    def _add_or_update_account(self, new_account: KApply) -> None:
+        """Add a new account or update an existing one in the ACCOUNTS_CELL.
+
+        This function updates self.cterm to reflect the modified accounts list.
+        :param new_account: The account to add or update.
+        """
+
+        all_accounts = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        new_account_list: list[KInner] = []
+        account_found = False
+
+        # Iterate through the accounts, modifying or retaining them as needed
+        for account in all_accounts:
+            assert type(account) is KApply
+            if account.args[0] == new_account.args[0]:
+                # Replace the existing account with the new one
+                new_account_list.append(new_account)
+                account_found = True
+            else:
+                # Retain other accounts as they are
+                new_account_list.append(account)
+
+        # If the account was not found, append the new account
+        if not account_found:
+            new_account_list.append(new_account)
+
+        # Update the ACCOUNTS_CELL with the new list
+        self.cterm = CTerm.from_kast(
+            set_cell(
+                self.cterm.config,
+                'ACCOUNTS_CELL',
+                KEVM.accounts(new_account_list),
+            )
+        )
+        self._krun_cterm()
 
     def _dump_accounts(self) -> dict:
         accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
@@ -535,6 +586,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def _register_rpc_methods(self) -> None:
         rpc_methods: dict[str, Callable] = {
             'anvil_dumpState': self.exec_dump_state,
+            'anvil_setBalance': self.exec_set_balance,
             'debug_traceTransaction': self.exec_trace_transaction,
             'eth_accounts': self.exec_accounts,
             'eth_blockNumber': self.exec_get_block_number,
