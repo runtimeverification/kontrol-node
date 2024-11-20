@@ -1,0 +1,26 @@
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 0,
+    "method": "eth_getBalance",
+    "params": [
+      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92200",
+      "latest"
+    ]
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "anvil_setBalance",
+    "params": ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92200", "300"],
+    "id": 0
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 0,
+    "method": "eth_getBalance",
+    "params": [
+      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92200",
+      "latest"
+    ]
+  }
+]
