@@ -4,7 +4,6 @@ import ast
 import gzip
 import json
 import pprint
-from collections import deque
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +42,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     cterm: CTerm
     traced_transactions: dict[str, Any]
     transaction_return_data: dict[str, str]
+    transaction_hashes: dict[int, str]
     default_sender_address: Final[int]
 
     def __init__(self, options: VMOptions) -> None:
@@ -53,6 +53,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.krun = KRun(dir_path)
         self.traced_transactions = {}
         self.transaction_return_data = {}
+        self.transaction_hashes = {}
         start_time = datetime.now()
         self._init_cterm(options.steps_tracing)
         self.default_sender_address = self._get_account_addresses()[0]
@@ -81,10 +82,38 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         address = _address_to_acct_id(hex_address)
         return self._get_account_code(address)
 
-    def exec_get_block_by_number(self, block_number: int) -> int:
-        print(f'BLOCK NUMBER: {block_number}')
-        self._get_all_block_storage_dict()
-        return block_number
+    def exec_get_block_by_number(self, hex_number: str, transaction_detail: bool = False) -> dict:
+        number = int(hex_number, base=16)
+        assert number == self.block_number
+        header = self._get_block_header()
+        transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
+        result = {
+            'hash': header['<currentBlockHash>'],
+            'parentHash': header['<previousHash>'],
+            'sha3Uncles': header['<ommersHash>'],
+            'miner': header['<coinbase>'],
+            'stateRoot': header['<stateRoot>'],
+            'transactionsRoot': header['<transactionsRoot>'],
+            'receiptsRoot': header['<receiptsRoot>'],
+            'logsBloom': header['<logsBloom>'],
+            'difficulty': header['<difficulty>'],
+            'number': header['<number>'],
+            'gasLimit': header['<gasLimit>'],
+            'gasUsed': header['<gasUsed>'],
+            'timestamp': header['<timestamp>'],
+            'totalDifficulty': header['<difficulty>'],
+            'extraData': header['<extraData>'],
+            'mixHash': header['<mixHash>'],
+            'nonce': header['<blockNonce>'],
+            'baseFeePerGas': header['<baseFee>'],
+            'blobGasUsed': header['<blobGasUsed>'],
+            'excessBlobGas': header['<excessBlobGas>'],
+            'uncles': header['<ommerBlockHeaders>'],
+            'transactions': [self.transaction_hashes[transaction_id]] if number != 0 else [],
+            'size': '0x3e8',
+        }
+
+        return result
 
     def exec_get_balance(self, hex_address: str, _block_number: str) -> str:
         address = _address_to_acct_id(hex_address)
@@ -102,15 +131,29 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.cterm = CTerm.from_kast(
             set_cell(self.cterm.config, 'K_CELL', KApply('acctFromPrivateKey', [token(private_key), token(balance)]))
         )
-        pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
-        output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
-        self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
+        self._krun_cterm()
 
         return self._get_rpc_response()
 
     def exec_dump_state(self) -> str:
         dump: dict[str, Any] = {}
         dump['accounts'] = self._dump_accounts()
+        dump['best_block_number'] = hex(self.block_number)
+        header = self._get_block_header()
+        block = {
+            'number': header['<number>'],
+            'coinbase': header['<coinbase>'],
+            'timestamp': header['<timestamp>'],
+            'gas_limit': header['<gasLimit>'],
+            'basefee': header['<baseFee>'],
+            'difficulty': header['<difficulty>'],
+            'prevrandao': '0x4049e9c3939dad98110354500dc0bebd598bad807233a6b7055ae794bfac22d9',
+            'blob_excess_gas_and_price': {
+                'excess_blob_gas': int(header['<excessBlobGas>'], base=16),
+                'blob_gasprice': int(header['<blobGasUsed>'], base=16),
+            },
+        }
+        dump['block'] = block
         dump_bytes = json.dumps(dump).encode('utf-8')
         result = '0x' + gzip.compress(dump_bytes).hex()
         return result
@@ -137,11 +180,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             )
         )
 
-        pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
-        output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
-        self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-
+        self._krun_cterm()
         transaction_hash = self._get_rpc_response()
+        transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
+        self.transaction_hashes[transaction_id] = transaction_hash
         if self.active_tracing:
             self._collect_trace(transaction_hash)
         return transaction_hash
@@ -204,7 +246,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         receipt['effectiveGasPrice'] = hex(message_dict['<txGasPrice>'])
 
         receipt['to'] = message_dict['<to>'] if '<to>' in message_dict.keys() else None
-        _PPRINT.pprint(tx_receipt_dict)
         receipt['contractAddress'] = (
             hex(tx_receipt_dict['<contractAddress>']) if tx_receipt_dict['<contractAddress>'] is not None else None
         )
@@ -218,6 +259,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     @property
     def active_tracing(self) -> bool:
         return self._parse_ktoken_cell('ACTIVETRACING_CELL') == 'true'
+
+    @property
+    def block_number(self) -> int:
+        return int(self._parse_ktoken_cell('NUMBER_CELL'))
 
     def _get_rpc_response(self) -> str:
         """Parses and returns the RPC response from the 'RPCRESPONSE_CELL' in hexadecimal format.
@@ -386,34 +431,31 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                 messages_dict[message['<msgID>']] = message
             return messages_dict
 
-    def _get_all_block_storage_dict(self) -> dict:
-        block_storage_dict = {}
-
-        cell = self.cterm.cell('BLOCKSTORAGE_CELL')
-        assert type(cell) is KApply
-
-        queue: deque[KInner] = deque(cell.args)
-        while len(queue) > 0:
-            cell = queue.popleft()
-            if isinstance(cell, KApply):
-                # print(cell.label.name)
-                if 'BlockchainItem' in cell.label.name:
-                    item_dict = {}
-                    for args in cell.args:
-                        assert type(args) is KApply
-                        cell_dict = _extract_cell_data(args)
-                        assert type(cell_dict) is dict
-                        item_dict[args.label.name] = cell_dict
-
-                    # msg_id = str(message_dict['<network>'])
-                    block_storage_dict[item_dict['<block>']['<number>']] = item_dict
-                # elif 'Map' in cell.label.name:# or
-                elif '_|->_' in cell.label.name:
-                    queue.extend(cell.args)
-                # else:
-                #     print(cell.label.name)
-
-        return block_storage_dict
+    def _get_block_header(self) -> dict:
+        return {
+            '<currentBlockHash>': hex(int(self._parse_ktoken_cell('CURRENTBLOCKHASH_CELL'))),
+            '<previousHash>': hex(int(self._parse_ktoken_cell('PREVIOUSHASH_CELL'))),
+            '<ommersHash>': hex(int(self._parse_ktoken_cell('OMMERSHASH_CELL'))).ljust(64, '0'),
+            '<coinbase>': _acct_id_to_address(int(self._parse_ktoken_cell('COINBASE_CELL'))),
+            '<stateRoot>': hex(int(self._parse_ktoken_cell('STATEROOT_CELL'))).ljust(64, '0'),
+            '<transactionsRoot>': hex(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL'))).ljust(64, '0'),
+            '<receiptsRoot>': hex(int(self._parse_ktoken_cell('RECEIPTSROOT_CELL'))).ljust(64, '0'),
+            '<logsBloom>': '0x' + ast.literal_eval(self._parse_ktoken_cell('LOGSBLOOM_CELL')).hex(),
+            '<difficulty>': hex(int(self._parse_ktoken_cell('DIFFICULTY_CELL'))),
+            '<number>': hex(int(self._parse_ktoken_cell('NUMBER_CELL'))),
+            '<gasLimit>': hex(int(self._parse_ktoken_cell('GASLIMIT_CELL'))),
+            '<gasUsed>': hex(int(self._parse_ktoken_cell('GASUSED_CELL'))),
+            '<timestamp>': hex(int(self._parse_ktoken_cell('TIMESTAMP_CELL'))),
+            '<extraData>': '0x' + ast.literal_eval(self._parse_ktoken_cell('EXTRADATA_CELL')).hex(),
+            '<mixHash>': hex(int(self._parse_ktoken_cell('MIXHASH_CELL'))).ljust(64, '0'),
+            '<blockNonce>': hex(int(self._parse_ktoken_cell('BLOCKNONCE_CELL'))),
+            '<baseFee>': hex(int(self._parse_ktoken_cell('BASEFEE_CELL'))),
+            '<withdrawalsRoot>': hex(int(self._parse_ktoken_cell('WITHDRAWALSROOT_CELL'))),
+            '<blobGasUsed>': hex(int(self._parse_ktoken_cell('BLOBGASUSED_CELL'))),
+            '<excessBlobGas>': hex(int(self._parse_ktoken_cell('EXCESSBLOBGAS_CELL'))),
+            '<beaconRoot>': hex(int(self._parse_ktoken_cell('BEACONROOT_CELL'))),
+            '<ommerBlockHeaders>': [],
+        }
 
     # ------------------------------------------------------
     # VM setup functions
@@ -441,11 +483,12 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         sequence_of_kapplies = KSequence(sequence_of_productions)
         self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'K_CELL', sequence_of_kapplies))
+        self._krun_cterm()
+
+    def _krun_cterm(self) -> None:
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-
-        return None
 
     def _create_initial_account_list(self) -> list[KInner]:
         init_account_list: list[KInner] = []
@@ -471,6 +514,16 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'BASEFEE_CELL', token(1000000000))
         init_config = set_cell(init_config, 'GASLIMIT_CELL', token(30000000))
         init_config = set_cell(init_config, 'TIMESTAMP_CELL', token(1725635810))
+        init_config = set_cell(
+            init_config,
+            'OMMERSHASH_CELL',
+            token(13478047122767188135818125966132228187941283477090363246179690878162135454535),
+        )
+        init_config = set_cell(
+            init_config,
+            'TRANSACTIONSROOT_CELL',
+            token(39309028074332508661983559455579427211983204215636056653337583610388178777121),
+        )
         init_config = set_cell(init_config, 'ACTIVETRACING_CELL', token(steps_tracing))
         init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEMEMORY_CELL', TRUE)
