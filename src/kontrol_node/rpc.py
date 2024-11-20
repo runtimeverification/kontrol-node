@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Final
 from kevm_pyk.kevm import KEVM
 from kontrol.foundry import Foundry
 from pyk.cterm import CTerm
-from pyk.kast.inner import KApply, KSequence, KToken, Subst, flatten_label
+from pyk.kast.inner import KApply, KLabel, KSequence, KToken, Subst, build_assoc, flatten_label
 from pyk.kast.manip import set_cell
 from pyk.kdist import kdist
 from pyk.ktool.krun import KRun
@@ -25,7 +25,7 @@ from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
 from pyk.utils import single
 
 if TYPE_CHECKING:
-    from pyk.kast.inner import KInner, KLabel
+    from pyk.kast.inner import KInner
 
     from .cli import VMOptions
 
@@ -388,14 +388,14 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             new_account_list.append(new_account)
 
         # Update the ACCOUNTS_CELL with the new list
+        new_accounts_cell = build_assoc(KApply('.AccountCellMap'), KLabel('_AccountCellMap_'), new_account_list)
         self.cterm = CTerm.from_kast(
             set_cell(
                 self.cterm.config,
                 'ACCOUNTS_CELL',
-                KEVM.accounts(new_account_list),
+                new_accounts_cell,
             )
         )
-        self._krun_cterm()
 
     def _dump_accounts(self) -> dict:
         accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
