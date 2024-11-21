@@ -5,7 +5,7 @@ from typing import Any, Final
 import pytest
 from pyk.kast.inner import KApply, KLabel, KSort, KToken
 
-from kontrol_node.rpc import extract_message, extract_receipt, extract_trace_item
+from kontrol_node.rpc import extract_message, extract_receipt, extract_trace_item, get_address_from_private_key
 
 EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = [
     (
@@ -271,6 +271,26 @@ EXTRACT_MESSAGE_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
 def test_extract_message(test_id: str, input: KApply, expected: dict[str, Any]) -> None:
     # When
     actual = extract_message(input)
+
+    # Then
+    assert actual == expected
+
+
+PRIVATE_KEY_TO_ADDRESS_DATA: Final[list[tuple[str, str, str]]] = [
+    (
+        'address-from-pk-0',
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+        '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    )
+]
+
+
+@pytest.mark.parametrize(
+    'test_id,input,expected', PRIVATE_KEY_TO_ADDRESS_DATA, ids=[test_id for test_id, *_ in PRIVATE_KEY_TO_ADDRESS_DATA]
+)
+def test_private_key_to_address(test_id: str, input: str, expected: str) -> None:
+    # When
+    actual = get_address_from_private_key(input)
 
     # Then
     assert actual == expected
