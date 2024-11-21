@@ -593,6 +593,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                 )
             )
             private_key_pairs.append(KApply('_|->_', [token(account_id), token(int(private_key, 0))]))
+        account_list.append(Foundry.account_CHEATCODE_ADDRESS(map_empty()))
         self._add_or_update_accounts(account_list)
         self._add_or_update_private_keys(private_key_pairs)
 
@@ -601,17 +602,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
 
-    def _create_initial_account_list(self) -> list[KInner]:
-        init_account_list: list[KInner] = []
-
-        # Adding the Foundry cheatcode address
-        init_account_list.append(Foundry.account_CHEATCODE_ADDRESS(map_empty()))
-
-        return init_account_list
-
     def _init_cterm(self, steps_tracing: bool) -> None:
         self.krun.definition.empty_config(GENERATED_TOP_CELL)
-        init_accounts_list = self._create_initial_account_list()
         init_config = self.krun.definition.init_config(GENERATED_TOP_CELL)
         init_subst = {
             '$PGM': KSequence([KEVM.sharp_execute()]),
@@ -621,12 +613,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '$CHAINID': token(31337),
         }
 
-        # init_config = set_cell(
-        #     init_config,
-        #     'ACCOUNTS_CELL',
-        #     build_assoc(KApply('.AccountCellMap'), KLabel('_AccountCellMap_'), init_accounts_list),
-        # )
-        init_config = set_cell(init_config, 'ACCOUNTS_CELL', KEVM.accounts(init_accounts_list))
         init_config = set_cell(init_config, 'BASEFEE_CELL', token(1000000000))
         init_config = set_cell(init_config, 'GASLIMIT_CELL', token(30000000))
         init_config = set_cell(init_config, 'TIMESTAMP_CELL', token(1725635810))
