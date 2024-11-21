@@ -140,7 +140,9 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             transient_storage=map_empty(),
             nonce=token(0),
         )
+        new_pair = KApply('_|->_', [token(account_id), token(int(private_key, 16))])
         self._add_or_update_accounts([new_account])
+        self._add_or_update_private_keys([new_pair])
 
     def exec_dump_state(self) -> str:
         dump: dict[str, Any] = {}
@@ -369,39 +371,76 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         return account_list
 
     def _add_or_update_accounts(self, new_accounts: list[KApply]) -> None:
-        """Add new accounts or update existing ones in the ACCOUNTS_CELL.
+        self._add_or_update_cell(
+            cell_name='ACCOUNTS_CELL',
+            flatten_label_name='_AccountCellMap_',
+            empty_value=KApply('.AccountCellMap'),
+            assoc_unit=KApply('.AccountCellMap'),
+            assoc_label=KLabel('_AccountCellMap_'),
+            new_items=new_accounts,
+        )
 
-        This function updates self.cterm to reflect the modified accounts list.
-        :param new_accounts: The list of accounts to add or update.
+    def _add_or_update_private_keys(self, new_keys: list[KApply]) -> None:
+        self._add_or_update_cell(
+            cell_name='ACCOUNTKEYS_CELL',
+            flatten_label_name='_Map_',
+            empty_value=map_empty(),
+            assoc_unit=KApply('.Map'),
+            assoc_label=KLabel('_Map_'),
+            new_items=new_keys,
+        )
+
+    def _add_or_update_cell(
+        self,
+        cell_name: str,
+        flatten_label_name: str,
+        empty_value: KInner,
+        assoc_unit: KApply,
+        assoc_label: KLabel,
+        new_items: list[KApply],
+    ) -> None:
         """
-        # Extract the existing accounts from ACCOUNTS_CELL
-        all_accounts = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
+        Add new items or update existing ones in a specified cell.
 
-        # Create a mapping from account IDs to accounts for quick lookup
-        existing_accounts_dict: dict[KInner, KApply] = {}
-        for account in all_accounts:
-            assert type(account) is KApply
-            account_id = account.args[0]
-            existing_accounts_dict[account_id] = account
+        This function updates self.cterm to reflect the modified items list.
 
-        # Update existing accounts or add new ones
-        for new_account in new_accounts:
-            assert type(new_account) is KApply
-            # Replace or add the new account in the dictionary
-            existing_accounts_dict[new_account.args[0]] = new_account
+        Args:
+        :param cell_name: The name of the cell to update.
+        :param flatten_label_name: The label name used in flatten_label.
+        :param empty_value: The empty value to compare against.
+        :param assoc_unit: The unit value for the associative operator in build_assoc.
+        :param assoc_label: The label for the associative operator in build_assoc.
+        :param new_items: The list of items to add or update.
+        """
+        # Extract the existing items from the specified cell
+        all_items = flatten_label(flatten_label_name, self.cterm.cell(cell_name))
 
-        # Build the updated accounts list from the dictionary values
-        updated_account_list = list(existing_accounts_dict.values())
+        # Create a mapping from item IDs to items for quick lookup
+        items_dict: dict[KInner, KApply] = {}
+        if all_items != [empty_value]:
+            for item in all_items:
+                assert type(item) is KApply
+                item_id = item.args[0]
+                items_dict[item_id] = item
 
-        # Reconstruct the ACCOUNTS_CELL with the updated accounts
-        new_accounts_cell = build_assoc(KApply('.AccountCellMap'), KLabel('_AccountCellMap_'), updated_account_list)
+        # Update existing items or add new ones
+        for new_item in new_items:
+            assert type(new_item) is KApply
+            item_id = new_item.args[0]
+            items_dict[item_id] = new_item
 
-        # Update self.cterm with the new ACCOUNTS_CELL
+        # Build the updated items list from the dictionary values
+        updated_items_list = list(items_dict.values())
+
+        # Reconstruct the cell with the updated items
+        new_cell_contents = build_assoc(assoc_unit, assoc_label, updated_items_list)
+
+        # Update self.cterm with the new cell contents
         self.cterm = CTerm.from_kast(
             set_cell(
                 self.cterm.config,
-                'ACCOUNTS_CELL',
-                new_accounts_cell,
+                cell_name,
+                new_cell_contents,
             )
         )
 
@@ -535,22 +574,25 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97',
             '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6',
         ]
-        sequence_of_productions = []
         account_list: list[KApply] = []
+        private_key_pairs: list[KApply] = []
         for private_key in private_keys:
             address = get_address_from_private_key(private_key)
             account_id = _address_to_acct_id(address)
-            new_account = KEVM.account_cell(
-                id=token(account_id),
-                balance=token(balance),
-                code=token(b''),
-                storage=map_empty(),
-                orig_storage=map_empty(),
-                transient_storage=map_empty(),
-                nonce=token(0),
+            account_list.append(
+                KEVM.account_cell(
+                    id=token(account_id),
+                    balance=token(balance),
+                    code=token(b''),
+                    storage=map_empty(),
+                    orig_storage=map_empty(),
+                    transient_storage=map_empty(),
+                    nonce=token(0),
+                )
             )
-            account_list.append(new_account)
-            self._add_or_update_accounts(account_list)
+            private_key_pairs.append(KApply('_|->_', [token(account_id), token(int(private_key, 0))]))
+        self._add_or_update_accounts(account_list)
+        self._add_or_update_private_keys(private_key_pairs)
 
     def _krun_cterm(self) -> None:
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
@@ -577,6 +619,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '$CHAINID': token(31337),
         }
 
+        # init_config = set_cell(
+        #     init_config,
+        #     'ACCOUNTS_CELL',
+        #     build_assoc(KApply('.AccountCellMap'), KLabel('_AccountCellMap_'), init_accounts_list),
+        # )
         init_config = set_cell(init_config, 'ACCOUNTS_CELL', KEVM.accounts(init_accounts_list))
         init_config = set_cell(init_config, 'BASEFEE_CELL', token(1000000000))
         init_config = set_cell(init_config, 'GASLIMIT_CELL', token(30000000))
