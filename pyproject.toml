@@ -38,6 +38,8 @@ pytest-xdist = "*"
 pyupgrade = "*"
 requests = "*"
 types-requests = "*"
+eth-keys = "*"
+eth-utils = "*"
 
 [tool.isort]
 profile = "black"

@@ -1,13 +1,13 @@
 [
   {
     "jsonrpc": "2.0",
-    "result": "0xa2a48bf94c47073aa235c34e3dfe9bd9687e7b6a6cce28a2380ed48138f51680",
+    "result": "-1",
     "id": 0
   },
   {
     "jsonrpc": "2.0",
     "result": {
-      "hash": "0xd6518c85743a88460deafd6e5ddd98b8145ccb0fc9990110e9e09b672245efaf",
+      "hash": "0x0",
       "parentHash": "0x0",
       "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
       "miner": "0x0000000000000000000000000000000000000000",
@@ -18,7 +18,7 @@
       "difficulty": "0x0",
       "number": "0x1",
       "gasLimit": "0x1c9c380",
-      "gasUsed": "0x1a0e1",
+      "gasUsed": "0x0",
       "timestamp": "0x66db1ce2",
       "totalDifficulty": "0x0",
       "extraData": "0x",
@@ -29,7 +29,7 @@
       "excessBlobGas": "0x0",
       "uncles": [],
       "transactions": [
-        "0xa2a48bf94c47073aa235c34e3dfe9bd9687e7b6a6cce28a2380ed48138f51680"
+        "-1"
       ],
       "size": "0x3e8"
     },

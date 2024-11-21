@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from eth_keys import keys
 from kevm_pyk.kevm import KEVM
 from kontrol.foundry import Foundry
 from pyk.cterm import CTerm
@@ -126,14 +127,20 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def exec_accounts(self) -> list[str]:
         return [hex(address) for address in self._get_account_addresses()]
 
-    def exec_add_account(self, private_key: str, balance_hex: str) -> str:
-        balance = int(balance_hex, 16)
-        self.cterm = CTerm.from_kast(
-            set_cell(self.cterm.config, 'K_CELL', KApply('acctFromPrivateKey', [token(private_key), token(balance)]))
+    def exec_add_account(self, private_key: str, value: str) -> None:
+        balance = int(value, 0)
+        address = get_address_from_private_key(private_key)
+        account_id = _address_to_acct_id(address)
+        new_account = KEVM.account_cell(
+            id=token(account_id),
+            balance=token(balance),
+            code=token(b''),
+            storage=map_empty(),
+            orig_storage=map_empty(),
+            transient_storage=map_empty(),
+            nonce=token(0),
         )
-        self._krun_cterm()
-
-        return self._get_rpc_response()
+        self._add_or_update_accounts([new_account])
 
     def exec_dump_state(self) -> str:
         dump: dict[str, Any] = {}
@@ -171,7 +178,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             transient_storage=map_empty() if account is ACCOUNT_EMPTY else account.args[5],
             nonce=token(0) if account is ACCOUNT_EMPTY else account.args[6],
         )
-        self._add_or_update_account(new_account)
+        self._add_or_update_accounts([new_account])
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         sender: int | None = _get_address_from(transaction_json, 'from')
@@ -361,34 +368,35 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         account_list.sort()
         return account_list
 
-    def _add_or_update_account(self, new_account: KApply) -> None:
-        """Add a new account or update an existing one in the ACCOUNTS_CELL.
+    def _add_or_update_accounts(self, new_accounts: list[KApply]) -> None:
+        """Add new accounts or update existing ones in the ACCOUNTS_CELL.
 
         This function updates self.cterm to reflect the modified accounts list.
-        :param new_account: The account to add or update.
+        :param new_accounts: The list of accounts to add or update.
         """
-
+        # Extract the existing accounts from ACCOUNTS_CELL
         all_accounts = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
-        new_account_list: list[KInner] = []
-        account_found = False
 
-        # Iterate through the accounts, modifying or retaining them as needed
+        # Create a mapping from account IDs to accounts for quick lookup
+        existing_accounts_dict: dict[KInner, KApply] = {}
         for account in all_accounts:
             assert type(account) is KApply
-            if account.args[0] == new_account.args[0]:
-                # Replace the existing account with the new one
-                new_account_list.append(new_account)
-                account_found = True
-            else:
-                # Retain other accounts as they are
-                new_account_list.append(account)
+            account_id = account.args[0]
+            existing_accounts_dict[account_id] = account
 
-        # If the account was not found, append the new account
-        if not account_found:
-            new_account_list.append(new_account)
+        # Update existing accounts or add new ones
+        for new_account in new_accounts:
+            assert type(new_account) is KApply
+            # Replace or add the new account in the dictionary
+            existing_accounts_dict[new_account.args[0]] = new_account
 
-        # Update the ACCOUNTS_CELL with the new list
-        new_accounts_cell = build_assoc(KApply('.AccountCellMap'), KLabel('_AccountCellMap_'), new_account_list)
+        # Build the updated accounts list from the dictionary values
+        updated_account_list = list(existing_accounts_dict.values())
+
+        # Reconstruct the ACCOUNTS_CELL with the updated accounts
+        new_accounts_cell = build_assoc(KApply('.AccountCellMap'), KLabel('_AccountCellMap_'), updated_account_list)
+
+        # Update self.cterm with the new ACCOUNTS_CELL
         self.cterm = CTerm.from_kast(
             set_cell(
                 self.cterm.config,
@@ -528,13 +536,21 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6',
         ]
         sequence_of_productions = []
-
+        account_list: list[KApply] = []
         for private_key in private_keys:
-            sequence_of_productions.append(KApply('acctFromPrivateKey', [token(private_key), token(balance)]))
-
-        sequence_of_kapplies = KSequence(sequence_of_productions)
-        self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'K_CELL', sequence_of_kapplies))
-        self._krun_cterm()
+            address = get_address_from_private_key(private_key)
+            account_id = _address_to_acct_id(address)
+            new_account = KEVM.account_cell(
+                id=token(account_id),
+                balance=token(balance),
+                code=token(b''),
+                storage=map_empty(),
+                orig_storage=map_empty(),
+                transient_storage=map_empty(),
+                nonce=token(0),
+            )
+            account_list.append(new_account)
+            self._add_or_update_accounts(account_list)
 
     def _krun_cterm(self) -> None:
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
@@ -1020,3 +1036,11 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
         else:
             raise TypeError(f'Unexpected key {key}.')
     return msg_dict
+
+
+def get_address_from_private_key(private_key: str) -> str:
+    private_key_bytes = bytes.fromhex(private_key[2:])  # Convert hex string to bytes
+    private_key_obj = keys.PrivateKey(private_key_bytes)
+    public_key = private_key_obj.public_key
+    address = public_key.to_checksum_address()  # Convert to checksummed Ethereum address
+    return address
