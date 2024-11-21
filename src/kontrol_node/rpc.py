@@ -127,7 +127,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def exec_accounts(self) -> list[str]:
         return [hex(address) for address in self._get_account_addresses()]
 
-    def exec_add_account(self, private_key: str, value: str) -> None:
+    def exec_add_account(self, private_key: str, value: str) -> str:
         balance = int(value, 0)
         address = get_address_from_private_key(private_key)
         account_id = _address_to_acct_id(address)
@@ -143,6 +143,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         new_pair = KApply('_|->_', [token(account_id), token(int(private_key, 16))])
         self._add_or_update_accounts([new_account])
         self._add_or_update_private_keys([new_pair])
+        return address.lower()
 
     def exec_dump_state(self) -> str:
         dump: dict[str, Any] = {}
