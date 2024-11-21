@@ -1077,5 +1077,5 @@ def get_address_from_private_key(private_key: str) -> str:
     private_key_bytes = bytes.fromhex(private_key[2:])
     private_key_obj = keys.PrivateKey(private_key_bytes)
     public_key: PublicKey = private_key_obj.public_key
-    address = public_key.to_checksum_address()  # Convert to checksummed Ethereum address
+    address = public_key.to_checksum_address()
     return address
