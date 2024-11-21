@@ -26,6 +26,7 @@ from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
 from pyk.utils import single
 
 if TYPE_CHECKING:
+    from eth_keys.datatypes import PublicKey
     from pyk.kast.inner import KInner
 
     from .cli import VMOptions
@@ -1087,8 +1088,8 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
 
 
 def get_address_from_private_key(private_key: str) -> str:
-    private_key_bytes = bytes.fromhex(private_key[2:])  # Convert hex string to bytes
+    private_key_bytes = bytes.fromhex(private_key[2:])
     private_key_obj = keys.PrivateKey(private_key_bytes)
-    public_key = private_key_obj.public_key
+    public_key: PublicKey = private_key_obj.public_key
     address = public_key.to_checksum_address()  # Convert to checksummed Ethereum address
     return address
