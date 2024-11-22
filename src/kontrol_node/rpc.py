@@ -25,6 +25,8 @@ from pyk.prelude.utils import token
 from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
 from pyk.utils import single
 
+from .blockstore import BlockStore
+
 if TYPE_CHECKING:
     from eth_keys.datatypes import PublicKey
     from pyk.kast.inner import KInner
@@ -46,6 +48,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     transaction_return_data: dict[str, str]
     transaction_hashes: dict[int, str]
     default_sender_address: Final[int]
+    block_storage: BlockStore
 
     def __init__(self, options: VMOptions) -> None:
         super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
@@ -60,6 +63,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self._init_cterm(options.steps_tracing)
         self.default_sender_address = self._get_account_addresses()[0]
         end_time = datetime.now()
+        self.block_storage = BlockStore()
 
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
 
@@ -84,38 +88,14 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         address = _address_to_acct_id(hex_address)
         return self._get_account_code(address)
 
-    def exec_get_block_by_number(self, hex_number: str, transaction_detail: bool = False) -> dict:
-        number = int(hex_number, base=16)
-        assert number == self.block_number
-        header = self._get_block_header()
-        transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
-        result = {
-            'hash': header['<currentBlockHash>'],
-            'parentHash': header['<previousHash>'],
-            'sha3Uncles': header['<ommersHash>'],
-            'miner': header['<coinbase>'],
-            'stateRoot': header['<stateRoot>'],
-            'transactionsRoot': header['<transactionsRoot>'],
-            'receiptsRoot': header['<receiptsRoot>'],
-            'logsBloom': header['<logsBloom>'],
-            'difficulty': header['<difficulty>'],
-            'number': header['<number>'],
-            'gasLimit': header['<gasLimit>'],
-            'gasUsed': header['<gasUsed>'],
-            'timestamp': header['<timestamp>'],
-            'totalDifficulty': header['<difficulty>'],
-            'extraData': header['<extraData>'],
-            'mixHash': header['<mixHash>'],
-            'nonce': header['<blockNonce>'],
-            'baseFeePerGas': header['<baseFee>'],
-            'blobGasUsed': header['<blobGasUsed>'],
-            'excessBlobGas': header['<excessBlobGas>'],
-            'uncles': header['<ommerBlockHeaders>'],
-            'transactions': [self.transaction_hashes[transaction_id]] if number != 0 else [],
-            'size': '0x3e8',
-        }
+    def exec_get_block_by_hash(self, hash: str, transaction_detail: bool = False) -> dict | None:
+        block_hash = int(hash, base=0)
+        return self.block_storage.get_block_by_hash(block_hash)
 
-        return result
+    def exec_get_block_by_number(self, number: str, transaction_detail: bool = False) -> dict | None:
+        block_number = int(number, base=0)
+        return self.block_storage.get_block_by_number(block_number)
+
 
     def exec_get_balance(self, hex_address: str, _block_number: str) -> str:
         address = _address_to_acct_id(hex_address)
@@ -212,6 +192,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.transaction_hashes[transaction_id] = transaction_hash
         if self.active_tracing:
             self._collect_trace(transaction_hash)
+        self._save_block()
         return transaction_hash
 
     def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict:
@@ -312,6 +293,36 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         except AssertionError:
             response_value = '0x'
         return response_value
+
+    def _save_block(self) -> None:
+        header = self._get_block_header()
+        transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
+        block = {
+            'hash': header['<currentBlockHash>'],
+            'parentHash': header['<previousHash>'],
+            'sha3Uncles': header['<ommersHash>'],
+            'miner': header['<coinbase>'],
+            'stateRoot': header['<stateRoot>'],
+            'transactionsRoot': header['<transactionsRoot>'],
+            'receiptsRoot': header['<receiptsRoot>'],
+            'logsBloom': header['<logsBloom>'],
+            'difficulty': header['<difficulty>'],
+            'number': header['<number>'],
+            'gasLimit': header['<gasLimit>'],
+            'gasUsed': header['<gasUsed>'],
+            'timestamp': header['<timestamp>'],
+            'totalDifficulty': header['<difficulty>'],
+            'extraData': header['<extraData>'],
+            'mixHash': header['<mixHash>'],
+            'nonce': header['<blockNonce>'],
+            'baseFeePerGas': header['<baseFee>'],
+            'blobGasUsed': header['<blobGasUsed>'],
+            'excessBlobGas': header['<excessBlobGas>'],
+            'uncles': header['<ommerBlockHeaders>'],
+            'transactions': [self.transaction_hashes[transaction_id]] if header['<number>'] != 0 else [],
+            'size': '0x3e8',
+        }
+        self.block_storage.add_block(block)
 
     def _get_account_cell_by_address(self, address: int) -> KApply:
         accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
@@ -644,6 +655,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             'eth_chainId': self.exec_get_chain_id,
             'eth_gasPrice': self.exec_get_gas_price,
             'eth_getBalance': self.exec_get_balance,
+            'eth_getBlockByHash': self.exec_get_block_by_hash,
             'eth_getBlockByNumber': self.exec_get_block_by_number,
             'eth_getCode': self.exec_get_code,
             'eth_getStorageAt': self.exec_get_storage_at,

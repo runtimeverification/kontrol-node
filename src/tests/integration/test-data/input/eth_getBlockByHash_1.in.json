@@ -1,0 +1,11 @@
+[
+  {
+    "jsonrpc": "2.0",
+    "method": "eth_getBlockByHash",
+    "params": [
+      "0xd6518c85743a88460deafd6e5ddd98b8145ccb0fc9990110e9e09b672245efaf",
+      false
+    ],
+    "id": 0
+  }
+]
