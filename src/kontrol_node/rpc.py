@@ -96,7 +96,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         block_number = int(number, base=0)
         return self.block_storage.get_block_by_number(block_number)
 
-
     def exec_get_balance(self, hex_address: str, _block_number: str) -> str:
         address = _address_to_acct_id(hex_address)
         return hex(self._get_account_balance(address))
