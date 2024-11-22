@@ -390,12 +390,6 @@ module KONTROL-NODE
           ~> #clearTxLists
           ~> #clearGas ... </k>
 
-    syntax KItem ::= "#acctFromPrivateKey" String Int [symbol(acctFromPrivateKey)]
- // ------------------------------------------------------------------------------
-    rule <k> #acctFromPrivateKey KEYSTR BAL => #newAccount #addrFromPrivateKey(KEYSTR) ~> #setAcctBalance #addrFromPrivateKey(KEYSTR) BAL ... </k>
-         <accountKeys> M => M[#addrFromPrivateKey(KEYSTR) <- #parseHexWord(KEYSTR)] </accountKeys>
-         <rpcResponse> _ => #addrFromPrivateKey(KEYSTR) </rpcResponse>
-
     syntax KItem ::= "#setAcctBalance" Int Int
  // ------------------------------------------
     rule <k> #setAcctBalance KEY BAL => .K ... </k>
