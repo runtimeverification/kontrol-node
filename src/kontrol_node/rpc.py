@@ -149,17 +149,21 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         return result
 
     def exec_set_balance(self, address: str, value: str) -> None:
+        def _extract_kapply(field: KInner) -> KInner:
+            assert type(field) is KApply
+            return single(field.args)
+
         balance = int(value, 0)
         account_id = _address_to_acct_id(address)
         account = self._get_account_cell_by_address(account_id)
         new_account = KEVM.account_cell(
             id=token(account_id),
             balance=token(balance),
-            code=token(b'') if account is ACCOUNT_EMPTY else account.args[2],
-            storage=map_empty() if account is ACCOUNT_EMPTY else account.args[3],
-            orig_storage=map_empty() if account is ACCOUNT_EMPTY else account.args[4],
-            transient_storage=map_empty() if account is ACCOUNT_EMPTY else account.args[5],
-            nonce=token(0) if account is ACCOUNT_EMPTY else account.args[6],
+            code=token(b'') if account is ACCOUNT_EMPTY else _extract_kapply(account.args[2]),
+            storage=map_empty() if account is ACCOUNT_EMPTY else _extract_kapply(account.args[3]),
+            orig_storage=map_empty() if account is ACCOUNT_EMPTY else _extract_kapply(account.args[4]),
+            transient_storage=map_empty() if account is ACCOUNT_EMPTY else _extract_kapply(account.args[5]),
+            nonce=token(0) if account is ACCOUNT_EMPTY else _extract_kapply(account.args[6]),
         )
         self._add_or_update_accounts([new_account])
 
@@ -397,7 +401,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             cell_name='ACCOUNTKEYS_CELL',
             flatten_label_name='_Map_',
             empty_value=map_empty(),
-            assoc_unit=KApply('.Map'),
+            assoc_unit=map_empty(),
             assoc_label=KLabel('_Map_'),
             new_items=new_keys,
         )
@@ -407,7 +411,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         cell_name: str,
         flatten_label_name: str,
         empty_value: KInner,
-        assoc_unit: KApply,
+        assoc_unit: KInner,
         assoc_label: KLabel,
         new_items: list[KApply],
     ) -> None:
