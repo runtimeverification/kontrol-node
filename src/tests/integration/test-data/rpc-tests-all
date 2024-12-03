@@ -5,7 +5,10 @@ anvil_setBalance_1
 debug_traceTransaction_0
 eth_chainId_0
 eth_getBalance_0
+eth_getBlockByHash_0
+eth_getBlockByHash_1
 eth_getBlockByNumber_0
+eth_getBlockByNumber_1
 eth_getCode_0
 eth_getStorageAt_0
 eth_getTransactionCount_0
