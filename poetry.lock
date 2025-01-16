@@ -512,14 +512,14 @@ test = ["pytest (>=7.0.0)", "pytest-xdist (>=2.4.0)"]
 
 [[package]]
 name = "eth-keys"
-version = "0.6.0"
+version = "0.6.1"
 description = "eth-keys: Common API for Ethereum key operations"
 optional = false
 python-versions = "<4,>=3.8"
 groups = ["dev"]
 files = [
-    {file = "eth_keys-0.6.0-py3-none-any.whl", hash = "sha256:b396fdfe048a5bba3ef3990739aec64901eb99901c03921caa774be668b1db6e"},
-    {file = "eth_keys-0.6.0.tar.gz", hash = "sha256:ba33230f851d02c894e83989185b21d76152c49b37e35b61b1d8a6d9f1d20430"},
+    {file = "eth_keys-0.6.1-py3-none-any.whl", hash = "sha256:7deae4cd56e862e099ec58b78176232b931c4ea5ecded2f50c7b1ccbc10c24cf"},
+    {file = "eth_keys-0.6.1.tar.gz", hash = "sha256:a43e263cbcabfd62fa769168efc6c27b1f5603040e4de22bb84d12567e4fd962"},
 ]
 
 [package.dependencies]
@@ -528,8 +528,8 @@ eth-utils = ">=2"
 
 [package.extras]
 coincurve = ["coincurve (>=12.0.0)"]
-dev = ["asn1tools (>=0.146.2)", "build (>=0.9.0)", "bumpversion (>=0.5.3)", "coincurve (>=12.0.0)", "eth-hash[pysha3]", "factory-boy (>=3.0.1)", "hypothesis (>=5.10.3)", "ipython", "pre-commit (>=3.4.0)", "pyasn1 (>=0.4.5)", "pytest (>=7.0.0)", "towncrier (>=21,<22)", "tox (>=4.0.0)", "twine", "wheel"]
-docs = ["towncrier (>=21,<22)"]
+dev = ["asn1tools (>=0.146.2)", "build (>=0.9.0)", "bump_my_version (>=0.19.0)", "coincurve (>=12.0.0)", "eth-hash[pysha3]", "factory-boy (>=3.0.1)", "hypothesis (>=5.10.3)", "ipython", "mypy (==1.10.0)", "pre-commit (>=3.4.0)", "pyasn1 (>=0.4.5)", "pytest (>=7.0.0)", "towncrier (>=24,<25)", "tox (>=4.0.0)", "twine", "wheel"]
+docs = ["towncrier (>=24,<25)"]
 test = ["asn1tools (>=0.146.2)", "eth-hash[pysha3]", "factory-boy (>=3.0.1)", "hypothesis (>=5.10.3)", "pyasn1 (>=0.4.5)", "pytest (>=7.0.0)"]
 
 [[package]]
@@ -792,14 +792,14 @@ pyreadline3 = {version = "*", markers = "sys_platform == \"win32\" and python_ve
 
 [[package]]
 name = "hypothesis"
-version = "6.123.17"
+version = "6.124.0"
 description = "A library for property-based testing"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "hypothesis-6.123.17-py3-none-any.whl", hash = "sha256:5c949fb44935e32c61c64abfcc3975eec41f8205ade2223073ba074c1e078ead"},
-    {file = "hypothesis-6.123.17.tar.gz", hash = "sha256:5850893975b4f08e893ddc10f1d468bc7e011d59703f70fe06a10161e426e602"},
+    {file = "hypothesis-6.124.0-py3-none-any.whl", hash = "sha256:8d642bee278f933c2b3c41db69cbb001f89a7eed03c6a9cc37f6c59396b30815"},
+    {file = "hypothesis-6.124.0.tar.gz", hash = "sha256:397a740af269646d87915c59d4299f58ef68ba89c213653d899aa533df76a03a"},
 ]
 
 [package.dependencies]
