@@ -15,13 +15,13 @@ from kontrol.foundry import Foundry
 from pyk.cterm import CTerm
 from pyk.kast.inner import KApply, KLabel, KSequence, KToken, Subst, build_assoc, flatten_label
 from pyk.kast.manip import set_cell
-from pyk.kdist import kdist
-from pyk.ktool.krun import KRun
 from pyk.kast.prelude.bytes import bytesToken
 from pyk.kast.prelude.collections import list_empty, map_empty
 from pyk.kast.prelude.k import GENERATED_TOP_CELL
 from pyk.kast.prelude.kbool import TRUE
 from pyk.kast.prelude.utils import token
+from pyk.kdist import kdist
+from pyk.ktool.krun import KRun
 from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
 from pyk.utils import single
 
@@ -1030,7 +1030,7 @@ def extract_receipt(receipt_cell: KApply) -> dict[str, Any]:
         value = single(term.args)
         if key == '<logSet>':
             assert type(value) is KApply
-            tx_receipt[key] = [] # TODO
+            tx_receipt[key] = []  # TODO
             continue
 
         if key == '<contractAddress>':
@@ -1072,7 +1072,7 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
             msg_dict[key] = tx_type_to_int(value.label)
             continue
         if key == '<txVersionedHashes>':
-            continue # TODO
+            continue  # TODO
         assert type(value) is KToken
         if key in ['<sigR>', '<sigS>', '<data>']:
             msg_dict[key] = '0x' + ast.literal_eval(value.token).hex()
@@ -1086,7 +1086,7 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
             '<txChainID>',
             '<txPriorityFee>',
             '<txMaxFee>',
-            '<txMaxBlobFee>'
+            '<txMaxBlobFee>',
         ]:
             msg_dict[key] = int(value.token)
         else:
