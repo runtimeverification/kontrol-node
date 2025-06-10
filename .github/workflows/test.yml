@@ -35,16 +35,27 @@ jobs:
   code-quality-checks:
     needs: version-bump
     name: 'Code Quality Checks'
-    runs-on: [self-hosted, linux, flyweight]
+    runs-on: [self-hosted, linux, normal]
+    env:
+      CONTAINER: kontrol-node-code-quality-${{ github.sha }}
     steps:
       - name: 'Check out code'
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          container-name: ${CONTAINER}
       - name: 'Run code quality checks'
-        run: make check
+        run: docker exec --user user ${CONTAINER} make check
       - name: 'Run pyupgrade'
-        run: make pyupgrade
+        run: docker exec --user user ${CONTAINER} make pyupgrade
       - name: 'Run unit tests'
-        run: make test-unit
+        run: docker exec --user user ${CONTAINER} make test-unit
+      - name: 'Tear down Docker'
+        if: always()
+        run: docker stop --time=0 ${CONTAINER}
 
   integration-tests:
     needs: code-quality-checks
