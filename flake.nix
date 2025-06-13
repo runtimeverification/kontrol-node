@@ -3,10 +3,11 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    k-framework.url = "github:runtimeverification/k/v7.1.267";
-    k-framework.inputs.flake-utils.follows = "flake-utils";
+    kontrol.url = "github:runtimeverification/kontrol/v1.0.163";
+    kevm.follows = "kontrol/kevm";
+    k-framework.follows = "kevm/k-framework";
   };
-  outputs = { self, nixpkgs, flake-utils, k-framework }:
+  outputs = { self, nixpkgs, flake-utils, kontrol, kevm, k-framework }:
     flake-utils.lib.eachSystem [
       "x86_64-linux"
       "x86_64-darwin"
