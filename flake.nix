@@ -1,41 +1,43 @@
 {
   description = "kontrol-node - A local testnet node powered by KEVM";
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-22.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    poetry2nix.url = "github:nix-community/poetry2nix";
+    k-framework.url = "github:runtimeverification/k/v7.1.267";
+    k-framework.inputs.flake-utils.follows = "flake-utils";
   };
-  outputs = { self, nixpkgs, flake-utils, poetry2nix }:
-    let
-      allOverlays = [
-        poetry2nix.overlay
-        (final: prev: {
-          kontrol-node = prev.poetry2nix.mkPoetryApplication {
-            python = prev.python310;
-            projectDir = ./.;
-            groups = [];
-            # We remove `dev` from `checkGroups`, so that poetry2nix does not try to resolve dev dependencies.
-            checkGroups = [];
-           };
-        })
-      ];
-    in flake-utils.lib.eachSystem [
+  outputs = { self, nixpkgs, flake-utils, k-framework }:
+    flake-utils.lib.eachSystem [
       "x86_64-linux"
       "x86_64-darwin"
       "aarch64-linux"
       "aarch64-darwin"
     ] (system:
       let
+        kOverlay = final: prev: {
+          k = k-framework.packages.${system}.k;
+        };
         pkgs = import nixpkgs {
           inherit system;
-          overlays = allOverlays;
+          overlays = [
+            kOverlay
+          ];
         };
-      in {
-        packages = rec {
-          inherit (pkgs) kontrol-node;
-          default = kontrol-node;
+      in rec {
+        devShells.default = pkgs.mkShell {
+          name = "poetry develop shell";
+          packages = with pkgs; [
+            poetry
+            python310
+            k.openssl.secp256k1
+            openssl.dev
+            secp256k1
+            pkg-config
+            mpfr
+            cmake
+            boost
+          ];
         };
-      }) // {
-        overlay = nixpkgs.lib.composeManyExtensions allOverlays;
-      };
+      }
+    );
 }
