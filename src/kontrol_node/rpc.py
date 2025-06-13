@@ -93,6 +93,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         return self.block_storage.get_block_by_hash(block_hash)
 
     def exec_get_block_by_number(self, number: str, transaction_detail: bool = False) -> dict | None:
+        if number == 'latest':
+            return self.block_storage.get_latest_block()
         block_number = int(number, base=0)
         return self.block_storage.get_block_by_number(block_number)
 
@@ -909,7 +911,8 @@ def parse_kapply_list(kapply_list: KApply) -> list:
     list_items = flatten_label('_List_', kapply_list)
     values = []
     for list_item in list_items:
-        assert type(list_item) is KApply('ListItem')
+        assert type(list_item) is KApply
+        assert list_item.label.name == 'ListItem'
         t = single(list_item.terms)
         assert type(t) is KToken
         values.append(t.token)
@@ -1027,7 +1030,7 @@ def extract_receipt(receipt_cell: KApply) -> dict[str, Any]:
         value = single(term.args)
         if key == '<logSet>':
             assert type(value) is KApply
-            tx_receipt[key] = parse_kapply_list(value)
+            tx_receipt[key] = [] # TODO
             continue
 
         if key == '<contractAddress>':
@@ -1068,6 +1071,8 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
             assert type(value) is KApply
             msg_dict[key] = tx_type_to_int(value.label)
             continue
+        if key == '<txVersionedHashes>':
+            continue  # TODO
         assert type(value) is KToken
         if key in ['<sigR>', '<sigS>', '<data>']:
             msg_dict[key] = '0x' + ast.literal_eval(value.token).hex()
@@ -1081,6 +1086,7 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
             '<txChainID>',
             '<txPriorityFee>',
             '<txMaxFee>',
+            '<txMaxBlobFee>',
         ]:
             msg_dict[key] = int(value.token)
         else:
