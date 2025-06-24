@@ -1030,7 +1030,7 @@ def extract_receipt(receipt_cell: KApply) -> dict[str, Any]:
         value = single(term.args)
         if key == '<logSet>':
             assert type(value) is KApply
-            tx_receipt[key] = [] # TODO
+            tx_receipt[key] = []  # TODO
             continue
 
         if key == '<contractAddress>':
