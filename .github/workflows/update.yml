@@ -31,7 +31,7 @@ jobs:
       - name: 'Update Poetry files'
         run: |
           KONTROL_VERSION="$(cat deps/kontrol_release)"
-          sed -i 's!kontrol = { git = "https://github.com/runtimeverification/kontrol.git", tag = "[v0-9\.]*" }!kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v'${KONTROL_VERSION}'" }!' pyproject.toml
+          sed -i 's!kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "[v0-9\.]*" }!kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v'${KONTROL_VERSION}'" }!' pyproject.toml
           poetry update
           git add . && git commit -m "Sync Poetry files: kontrol ${KONTROL_VERSION}" || true
       - name: 'Update K release'

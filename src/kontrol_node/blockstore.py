@@ -36,3 +36,8 @@ class BlockStore:
         if index is not None:
             return self._blocks[index]
         return None
+
+    def get_latest_block(self) -> dict | None:
+        if self._blocks:
+            return self._blocks[-1]
+        return None
