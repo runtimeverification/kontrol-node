@@ -1021,7 +1021,7 @@ xdg-base-dirs = ">=6.0.1,<7.0.0"
 
 [[package]]
 name = "kontrol"
-version = "1.0.164"
+version = "1.0.165"
 description = "Foundry integration for KEVM"
 optional = false
 python-versions = "~=3.10"
@@ -1038,8 +1038,8 @@ pyevmasm = ">=0.2.3,<0.3"
 [package.source]
 type = "git"
 url = "https://github.com/runtimeverification/kontrol"
-reference = "v1.0.164"
-resolved_reference = "9f63734cb9a96aae9bc434b22fd105414520fe97"
+reference = "v1.0.165"
+resolved_reference = "36fa5580bfdd45b62d3d2ed1981ba5d33820b390"
 
 [[package]]
 name = "linkify-it-py"
@@ -2110,4 +2110,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "ab103d9dc06f28d70acaba0cf58cbce82132fd63902db97ef0dbcf106550cf64"
+content-hash = "a18f34e40822b5160381611eec2006e60ca690d62d5c849620f019e022970e20"
