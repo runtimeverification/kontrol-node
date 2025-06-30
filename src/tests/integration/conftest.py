@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -26,6 +27,7 @@ def server() -> Iterator[StatefulKJsonRpcServer]:
 
     :yield: A `StatefulKJsonRpcServer` instance.
     """
+    sys.setrecursionlimit(15000000)
 
     server = StatefulKJsonRpcServer(
         VMOptions({'definition_dir': None, 'port': 0, 'host': SERVER_HOST, 'steps_tracing': True})
