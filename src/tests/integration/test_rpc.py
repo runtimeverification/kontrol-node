@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import gzip
 import json
 from typing import TYPE_CHECKING, Final
 
 import pytest
 import requests
-import gzip
 
 from .conftest import SERVER_HOST
 from .utils import INPUT_FILES, OUTPUT_FILES, TEST_DATA_DIR, assert_or_update_output
@@ -46,12 +46,12 @@ def test_rpc_file(
 
                 # method `anvil_dumpState` compresses `result` with gzip, whose output is flaky
                 # therefore decompress the result prior to comparing with saved output, whose result was also decompressed
-                if request["method"]=='anvil_dumpState':
-                    result = request_result["result"][2:]
+                if request['method'] == 'anvil_dumpState':
+                    result = request_result['result'][2:]
                     result = bytes.fromhex(result)
                     result = gzip.decompress(result).hex()
                     request_result['result'] = '0x' + result
-                
+
                 response_list.append(request_result)
             result = json.dumps(response_list, indent=2)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
