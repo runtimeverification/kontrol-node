@@ -1,10 +1,12 @@
 ```k
 requires "foundry.md"
 requires "driver.md"
+requires "no_code_size_checks.md"
 
 module KONTROL-NODE
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
+    imports NO-CODE-SIZE-CHECKS
 
     syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
  // -------------------------------------------------------------
