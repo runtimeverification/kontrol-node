@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 from typing import TYPE_CHECKING, Final
 
@@ -36,11 +37,21 @@ def test_rpc_file(
     with open(INPUT_FILES / f'{test_id}.in.json') as test_file:
         payload = json.loads(test_file.read())
         if type(payload) is dict:
-            result = execute_json_rpc(server.port(), payload)
+            payload = [payload]
         if type(payload) is list:
             response_list = []
             for request in payload:
                 request_result = execute_json_rpc(server.port(), request)
-                response_list.append(json.loads(request_result))
+                request_result = json.loads(request_result)
+
+                # method `anvil_dumpState` compresses `result` with gzip, whose output is flaky
+                # therefore decompress the result prior to comparing with saved output, whose result was also decompressed
+                if request['method'] == 'anvil_dumpState':
+                    result = request_result['result'][2:]
+                    result = bytes.fromhex(result)
+                    result = gzip.decompress(result).hex()
+                    request_result['result'] = '0x' + result
+
+                response_list.append(request_result)
             result = json.dumps(response_list, indent=2)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
