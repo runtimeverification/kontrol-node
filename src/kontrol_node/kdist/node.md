@@ -259,7 +259,7 @@ module KONTROL-NODE
           ~> #loadAccessList(TA)
           ~> #call ACCTFROM ACCTTO ACCTTO VALUE VALUE DATA false
           ~> #finishTx
-          ~> #finalizeTx(false, Ctxfloor(SCHED, CODE))
+          ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
          ...
          </k>
          <schedule> SCHED </schedule>
