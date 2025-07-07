@@ -588,16 +588,16 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1749482908,
-        "narHash": "sha256-XdoPd2yCcb95hG7nDP19XgWXx656FNfccJhG/YAhzQ4=",
+        "lastModified": 1750795329,
+        "narHash": "sha256-P2dEw411H6l107/8B+ZowRsYcdo8ElGSibFKFddJSUQ=",
         "owner": "runtimeverification",
         "repo": "kontrol",
-        "rev": "000a83a4cb606065d5de30dcfaba1d431a714845",
+        "rev": "3e58174a1f883ef2aa1484b4d50e2c3e8d4326d8",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v1.0.163",
+        "ref": "v1.0.166",
         "repo": "kontrol",
         "type": "github"
       }
@@ -753,11 +753,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1749794982,
-        "narHash": "sha256-Kh9K4taXbVuaLC0IL+9HcfvxsSUx8dPB5s5weJcc9pc=",
+        "lastModified": 1751792365,
+        "narHash": "sha256-J1kI6oAj25IG4EdVlg2hQz8NZTBNYvIS0l4wpr9KcUo=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "ee930f9755f58096ac6e8ca94a1887e0534e2d81",
+        "rev": "1fd8bada0b6117e6c7eb54aad5813023eed37ccb",
         "type": "github"
       },
       "original": {
@@ -1115,11 +1115,11 @@
         "solc-macos-amd64-list-json": "solc-macos-amd64-list-json"
       },
       "locked": {
-        "lastModified": 1748780655,
-        "narHash": "sha256-mradCdMvjXwKd7kVFACB/d1CP2LLCyEgUu4vJCSzNLU=",
+        "lastModified": 1742758229,
+        "narHash": "sha256-FrU9rhab/0vOjjeFoQF+Ej43zRLv3enUIYjgLrH3Gd8=",
         "owner": "hellwolf",
         "repo": "solc.nix",
-        "rev": "3b6f3223ace5a7bc400b01a434d86bb1cb2593fb",
+        "rev": "6885b61bac89da19a6e3c70b89fdd592e2cef884",
         "type": "github"
       },
       "original": {
@@ -1131,13 +1131,13 @@
     "solc-macos-amd64-list-json": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-AvITkfpNYgCypXuLJyqco0li+unVw39BAfdOZvd/SPE=",
+        "narHash": "sha256-U5ckttxwKO13gIKggel6iybG5oTDbSidPR5nH3Gs+kY=",
         "type": "file",
-        "url": "https://github.com/ethereum/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
+        "url": "https://github.com/ethereum/solc-bin/raw/30a3695/macosx-amd64/list.json"
       },
       "original": {
         "type": "file",
-        "url": "https://github.com/ethereum/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
+        "url": "https://github.com/ethereum/solc-bin/raw/30a3695/macosx-amd64/list.json"
       }
     },
     "some-cabal-hashes-lib": {
