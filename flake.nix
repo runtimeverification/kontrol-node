@@ -1,41 +1,52 @@
 {
   description = "kontrol-node - A local testnet node powered by KEVM";
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-22.05";
+    rv-nix-tools.url = "github:runtimeverification/rv-nix-tools/854d4f05ea78547d46e807b414faad64cea10ae4";
+    nixpkgs.follows = "rv-nix-tools/nixpkgs";
+
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+
     flake-utils.url = "github:numtide/flake-utils";
-    poetry2nix.url = "github:nix-community/poetry2nix";
+
+    kontrol.url = "github:runtimeverification/kontrol/v1.0.163";
+    kontrol.inputs.nixpkgs.follows = "nixpkgs";
+    k-framework.follows = "kontrol/k-framework";
   };
-  outputs = { self, nixpkgs, flake-utils, poetry2nix }:
-    let
-      allOverlays = [
-        poetry2nix.overlay
-        (final: prev: {
-          kontrol-node = prev.poetry2nix.mkPoetryApplication {
-            python = prev.python310;
-            projectDir = ./.;
-            groups = [];
-            # We remove `dev` from `checkGroups`, so that poetry2nix does not try to resolve dev dependencies.
-            checkGroups = [];
-           };
-        })
-      ];
-    in flake-utils.lib.eachSystem [
+  outputs = { self, rv-nix-tools, nixpkgs, nixpkgs-unstable, flake-utils, kontrol, k-framework }:
+    flake-utils.lib.eachSystem [
       "x86_64-linux"
       "x86_64-darwin"
       "aarch64-linux"
       "aarch64-darwin"
     ] (system:
       let
+        pkgs-unstable = import nixpkgs-unstable {
+          inherit system;
+        };
+        kOverlay = final: prev: {
+          k = k-framework.packages.${system}.k;
+        };
         pkgs = import nixpkgs {
           inherit system;
-          overlays = allOverlays;
+          overlays = [
+            kOverlay
+          ];
         };
-      in {
-        packages = rec {
-          inherit (pkgs) kontrol-node;
-          default = kontrol-node;
+      in rec {
+        devShells.default = pkgs.mkShell {
+          name = "poetry develop shell";
+          packages = with pkgs; [
+            pkgs-unstable.poetry
+            python310
+            k.openssl.secp256k1
+            openssl.dev
+            secp256k1
+            pkg-config
+            mpfr
+            cmake
+            boost
+          ];
         };
-      }) // {
-        overlay = nixpkgs.lib.composeManyExtensions allOverlays;
-      };
+      }
+    );
 }

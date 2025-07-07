@@ -131,7 +131,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         dump: dict[str, Any] = {}
         dump['accounts'] = self._dump_accounts()
         dump['best_block_number'] = hex(self.block_number)
-        header = self._get_block_header()
+        header = self._get_partial_block_header()
         block = {
             'number': header['<number>'],
             'coinbase': header['<coinbase>'],
@@ -552,25 +552,29 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             '<currentBlockHash>': hex(int(self._parse_ktoken_cell('CURRENTBLOCKHASH_CELL'))),
             '<previousHash>': hex(int(self._parse_ktoken_cell('PREVIOUSHASH_CELL'))),
             '<ommersHash>': hex(int(self._parse_ktoken_cell('OMMERSHASH_CELL'))).ljust(64, '0'),
-            '<coinbase>': _acct_id_to_address(int(self._parse_ktoken_cell('COINBASE_CELL'))),
             '<stateRoot>': hex(int(self._parse_ktoken_cell('STATEROOT_CELL'))).ljust(64, '0'),
             '<transactionsRoot>': hex(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL'))).ljust(64, '0'),
             '<receiptsRoot>': hex(int(self._parse_ktoken_cell('RECEIPTSROOT_CELL'))).ljust(64, '0'),
             '<logsBloom>': '0x' + ast.literal_eval(self._parse_ktoken_cell('LOGSBLOOM_CELL')).hex(),
-            '<difficulty>': hex(int(self._parse_ktoken_cell('DIFFICULTY_CELL'))),
-            '<number>': hex(int(self._parse_ktoken_cell('NUMBER_CELL'))),
-            '<gasLimit>': hex(int(self._parse_ktoken_cell('GASLIMIT_CELL'))),
             '<gasUsed>': hex(int(self._parse_ktoken_cell('GASUSED_CELL'))),
-            '<timestamp>': hex(int(self._parse_ktoken_cell('TIMESTAMP_CELL'))),
             '<extraData>': '0x' + ast.literal_eval(self._parse_ktoken_cell('EXTRADATA_CELL')).hex(),
             '<mixHash>': hex(int(self._parse_ktoken_cell('MIXHASH_CELL'))).ljust(64, '0'),
             '<blockNonce>': hex(int(self._parse_ktoken_cell('BLOCKNONCE_CELL'))),
-            '<baseFee>': hex(int(self._parse_ktoken_cell('BASEFEE_CELL'))),
             '<withdrawalsRoot>': hex(int(self._parse_ktoken_cell('WITHDRAWALSROOT_CELL'))),
-            '<blobGasUsed>': hex(int(self._parse_ktoken_cell('BLOBGASUSED_CELL'))),
-            '<excessBlobGas>': hex(int(self._parse_ktoken_cell('EXCESSBLOBGAS_CELL'))),
             '<beaconRoot>': hex(int(self._parse_ktoken_cell('BEACONROOT_CELL'))),
             '<ommerBlockHeaders>': [],
+        } | self._get_partial_block_header()
+
+    def _get_partial_block_header(self) -> dict:
+        return {
+            '<coinbase>': _acct_id_to_address(int(self._parse_ktoken_cell('COINBASE_CELL'))),
+            '<difficulty>': hex(int(self._parse_ktoken_cell('DIFFICULTY_CELL'))),
+            '<number>': hex(int(self._parse_ktoken_cell('NUMBER_CELL'))),
+            '<gasLimit>': hex(int(self._parse_ktoken_cell('GASLIMIT_CELL'))),
+            '<timestamp>': hex(int(self._parse_ktoken_cell('TIMESTAMP_CELL'))),
+            '<baseFee>': hex(int(self._parse_ktoken_cell('BASEFEE_CELL'))),
+            '<blobGasUsed>': hex(int(self._parse_ktoken_cell('BLOBGASUSED_CELL'))),
+            '<excessBlobGas>': hex(int(self._parse_ktoken_cell('EXCESSBLOBGAS_CELL'))),
         }
 
     # ------------------------------------------------------
