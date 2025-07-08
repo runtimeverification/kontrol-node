@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
+from dataclasses import dataclass
 
 from eth_keys import keys
 from kevm_pyk.kevm import KEVM
@@ -38,6 +39,7 @@ ACCOUNT_EMPTY: Final[KApply] = KApply('.Account_EVM-TYPES_Account')
 WORDSTACK_EMPTY: Final[KApply] = KApply('.WordStack_EVM-TYPES_WordStack')
 WORDSTACK_CONS: Final[str] = '_:__EVM-TYPES_WordStack_Int_WordStack'
 MAP_CONS: Final[str] = '_Map_'
+STATUS_CODE_EMPTY: Final[KApply] = KApply('.StatusCode_NETWORK_StatusCode')
 CHUNK_SIZE: Final[int] = 64
 
 
@@ -878,6 +880,17 @@ def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
 
     return cell_dict
 
+def _from_statuscode_to_str(status_code_kapply: KApply):
+    if status_code_kapply == STATUS_CODE_EMPTY:
+        return 'empty'
+    status_code = status_code_kapply.label.name \
+        .replace('_NETWORK', '')                \
+        .replace('_StatusCode', '')             \
+        .replace('_ExceptionalStatusCode', '')  \
+        .replace('_EndStatusCode', '')
+    return status_code
+    
+
 
 def eth_send_transaction(
     tx_type: str, sender: int, to: int | None, gas_limit: int, gas_price: int, value: int, nonce: int, data: str
@@ -923,48 +936,113 @@ def parse_kapply_list(kapply_list: KApply) -> list:
     return values
 
 
-def extract_trace_item(trace_item: KApply, return_data: str) -> dict[str, Any]:
+@dataclass
+class TraceItem:
+    program_counter_token: KToken
+    opcode_kapply: KApply
+    wordstack_kapply: KApply
+    local_mem_token: KToken
+    call_depth_token: KToken
+    gas_token: KToken
+    coinbase_token: KToken
+    gas_price_token: KToken
+    difficulty_token: KToken
+    block_number_token: KToken
+    block_timestamp_token: KToken
+    target_address_token: KToken
+    message_sender_token: KToken
+    message_value_token: KToken
+    transaction_origin_token: KToken
+    status_code_token: KToken
+
+
+def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
     result['returnData'] = return_data
+
+    trace_item = TraceItem(*trace_item_kapply.terms)
+
     # program counter
-    program_counter_token = trace_item.terms[0]
-    assert type(program_counter_token) is KToken
-    result['pc'] = int(program_counter_token.token)
+    assert type(trace_item.program_counter_token) is KToken
+    result['pc'] = int(trace_item.program_counter_token.token)
+
     # opcode
-    opcode_kapply = trace_item.terms[1]
-    assert type(opcode_kapply) is KApply
+    assert type(trace_item.opcode_kapply) is KApply
     opcode_size = ''
-    if len(opcode_kapply.terms) > 0:
-        opcode_token = single(opcode_kapply.terms)
+    if len(trace_item.opcode_kapply.terms) > 0:
+        opcode_token = single(trace_item.opcode_kapply.terms)
         assert type(opcode_token) is KToken
         opcode_size = opcode_token.token
-    result['op'] = opcode_kapply.label.name.split('_')[0] + opcode_size
+    result['op'] = trace_item.opcode_kapply.label.name.split('_')[0] + opcode_size
+
     # wordstack
-    wordstack_kapply = trace_item.terms[2]
-    assert type(wordstack_kapply) is KApply
-    if wordstack_kapply == WORDSTACK_EMPTY:
+    assert type(trace_item.wordstack_kapply) is KApply
+    if trace_item.wordstack_kapply == WORDSTACK_EMPTY:
         wordstack = []
     else:
-        wordstack = [hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, wordstack_kapply) if type(e) is KToken]
+        wordstack = [hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, trace_item.wordstack_kapply) if type(e) is KToken]
         wordstack.reverse()
     result['stack'] = wordstack
+
     # local memory
-    local_mem_token = trace_item.terms[3]
-    assert type(local_mem_token) is KToken
-    local_mem = ast.literal_eval(local_mem_token.token).hex()
+    assert type(trace_item.local_mem_token) is KToken
+    local_mem = ast.literal_eval(trace_item.local_mem_token.token).hex()
     memory_chunks = [
         (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
     ]
     result['memory'] = memory_chunks
     # call depth
-    call_depth_token = trace_item.terms[5]
-    assert type(call_depth_token) is KToken
-    result['depth'] = int(call_depth_token.token) + 1
+    assert type(trace_item.call_depth_token) is KToken
+    result['depth'] = int(trace_item.call_depth_token.token) + 1
+
     # gas available
-    gas_token = trace_item.terms[6]
-    assert type(gas_token) is KToken
-    result['gas'] = int(gas_token.token)
-    result['gasCost'] = 0
+    assert type(trace_item.gas_token) is KToken
+    result['gas'] = int(trace_item.gas_token.token)
+
+    # coinbase
+    assert type(trace_item.coinbase_token) is KToken
+    assert trace_item.coinbase_token != ACCOUNT_EMPTY, 'target address empty'
+    result['coinbase'] = int(trace_item.coinbase_token.token)
+
+    # gas price
+    assert type(trace_item.gas_price_token) is KToken
+    result['gasCost'] = int(trace_item.gas_price_token.token)
+
+    # difficulty
+    assert type(trace_item.difficulty_token) is KToken
+    result['difficulty'] = int(trace_item.difficulty_token.token)
+
+    # block number
+    assert type(trace_item.block_number_token) is KToken
+    result['blockNumber'] = int(trace_item.block_number_token.token)
+
+    # block timestamp
+    assert type(trace_item.block_timestamp_token) is KToken
+    result['blockTimestamp'] = int(trace_item.block_timestamp_token.token)
+
+    # target address
+    assert type(trace_item.target_address_token) is KToken
+    assert trace_item.target_address_token != ACCOUNT_EMPTY, 'target address is empty'
+    result['targetAddress'] = int(trace_item.target_address_token.token)
+
+    # message sender
+    assert type(trace_item.message_sender_token) is KToken
+    assert trace_item.message_sender_token != ACCOUNT_EMPTY, 'message sender is empty'
+    result['msgSender'] = int(trace_item.message_sender_token.token)
+
+    # message value
+    assert type(trace_item.message_value_token) is KToken
+    result['msgValue'] = int(trace_item.message_value_token.token)
+
+    # transaction origin
+    assert type(trace_item.transaction_origin_token) is KToken
+    assert trace_item.transaction_origin_token != ACCOUNT_EMPTY, 'transaction origin is empty'
+    result['txOrigin'] = int(trace_item.transaction_origin_token.token)
+
+    # status
+    assert type(trace_item.status_code_token) is KApply
+    result['statusCode'] = _from_statuscode_to_str(trace_item.status_code_token)
+
     return result
 
 

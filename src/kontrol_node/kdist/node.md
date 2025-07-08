@@ -44,7 +44,25 @@ module KONTROL-NODE
   Once debug_traceTransaction get up and running in a PR, these changes below should be moved to Kontrol:trace.md.
 
 ```k
-    syntax TraceItem ::= "{" Int "|" OpCode "|" WordStack "|" Bytes "|" Map "|" Int "|" Int "}" [symbol(traceItem)]
+    syntax TraceItem ::= "{" 
+          Int        // program counter 
+      "|" OpCode     // opcode
+      "|" WordStack  // stack
+      "|" Bytes      // memory
+      "|" Map        // storage
+      "|" Int        // call depth
+      "|" Int        // gas
+      "|" Account    // coinbase
+      "|" Int        // gas price
+      "|" Int        // difficulty
+      "|" Int        // block number
+      "|" Int        // block timestamp
+      "|" Account    // target address
+      "|" Account    // message sender
+      "|" Int        // message value
+      "|" Account    // transaction origin
+      "|" StatusCode // status
+    "}" [symbol(traceItem)]
  // ---------------------------------------------------------------------------------------------------------------
     rule <k> #next [ OPC ] ... </k>
          <activeTracing>  true          </activeTracing>
@@ -58,6 +76,15 @@ module KONTROL-NODE
          <localMem>       MEM           </localMem>
          <id>             ACCT          </id>
          <gas>            GA            </gas>
+         <coinbase>       COINB         </coinbase>
+         <gasPrice>       GASPR         </gasPrice>
+         <difficulty>     DIFF          </difficulty>
+         <number>         NUM           </number>
+         <timestamp>      TIMEST        </timestamp>
+         <caller>         SENDER        </caller>
+         <callValue>      MSGVAL        </callValue>
+         <origin>         TXORIG        </origin>
+         <statusCode>     STATUS        </statusCode>
          <account>
            <acctID>  ACCT    </acctID>
            <storage> STORAGE </storage>
@@ -70,7 +97,18 @@ module KONTROL-NODE
                              | #if DSTK ==K true #then WS      #else .WordStack #fi
                              | #if DMEM ==K true #then MEM     #else .Bytes     #fi
                              | #if DSTG ==K true #then STORAGE #else .Map       #fi
-                             | CD | GA
+                             | CD
+                             | GA
+                             | COINB
+                             | GASPR
+                             | DIFF
+                             | NUM
+                             | TIMEST
+                             | ACCT
+                             | SENDER
+                             | MSGVAL
+                             | TXORIG
+                             | STATUS
                              })
          </traceData> [priority(24)]
 ```
