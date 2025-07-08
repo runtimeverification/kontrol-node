@@ -651,6 +651,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'ACTIVETRACING_CELL', token(steps_tracing))
         init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEMEMORY_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACESTORAGE_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
@@ -859,6 +860,21 @@ def _from_cell_map_to_list(cell: KApply) -> list:
     _PPRINT.pprint(return_list)
     return return_list
 
+def _from_storage_map_to_dict(storage_map: KInner) -> dict[str,str]:
+    if storage_map == map_empty():
+        return {}
+
+    storage_entries = flatten_label(MAP_CONS, storage_map)
+    storage_dict: dict[str, str] = {}
+    for entry in storage_entries:
+        assert type(entry) is KApply and entry.label.name == '_|->_'
+        key, value = entry.terms
+        assert type(key) is KToken
+        assert type(value) is KToken
+        storage_dict[hex(int(key.token))] = hex(int(value.token))
+
+    return storage_dict
+
 
 def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
     cell_dict = {}
@@ -942,6 +958,7 @@ class TraceItem:
     opcode_kapply: KApply
     wordstack_kapply: KApply
     local_mem_token: KToken
+    storage_map_kapply: KApply
     call_depth_token: KToken
     gas_token: KToken
     coinbase_token: KToken
@@ -991,6 +1008,11 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
         (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
     ]
     result['memory'] = memory_chunks
+
+    # storage of current target address
+    assert type(trace_item.storage_map_kapply) is KApply
+    result['storage'] = _from_storage_map_to_dict(trace_item.storage_map_kapply)
+
     # call depth
     assert type(trace_item.call_depth_token) is KToken
     result['depth'] = int(trace_item.call_depth_token.token) + 1
@@ -1081,21 +1103,9 @@ def extract_balance(account_cell: KApply) -> int:
 
 def extract_storage(account_cell: KApply) -> dict[str, str]:
     storage_cell = account_cell.terms[3]
-    storage_dict: dict[str, str] = {}
-
     assert type(storage_cell) is KApply and storage_cell.label.name == '<storage>'
     storage_map = single(storage_cell.terms)
-    if storage_map == map_empty():
-        return {}
-
-    storage_entries = flatten_label(MAP_CONS, storage_map)
-    for entry in storage_entries:
-        assert type(entry) is KApply and entry.label.name == '_|->_'
-        key, value = entry.terms
-        assert type(key) is KToken
-        assert type(value) is KToken
-        storage_dict[hex(int(key.token))] = hex(int(value.token))
-    return storage_dict
+    return _from_storage_map_to_dict(storage_map)
 
 
 def extract_receipt(receipt_cell: KApply) -> dict[str, Any]:
