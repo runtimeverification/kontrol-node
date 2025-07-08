@@ -8,7 +8,7 @@
 
     flake-utils.url = "github:numtide/flake-utils";
 
-    kontrol.url = "github:runtimeverification/kontrol/v1.0.166";
+    kontrol.url = "github:runtimeverification/kontrol/v1.0.170";
     kontrol.inputs.nixpkgs.follows = "nixpkgs";
     k-framework.follows = "kontrol/k-framework";
   };
