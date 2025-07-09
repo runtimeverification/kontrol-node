@@ -132,14 +132,14 @@ uvloop = ["uvloop (>=0.15.2)"]
 
 [[package]]
 name = "certifi"
-version = "2025.6.15"
+version = "2025.7.9"
 description = "Python package for providing Mozilla's CA Bundle."
 optional = false
 python-versions = ">=3.7"
 groups = ["main", "dev"]
 files = [
-    {file = "certifi-2025.6.15-py3-none-any.whl", hash = "sha256:2e0c7ce7cb5d8f8634ca55d2ba7e6ec2689a2fd6537d8dec1296a477a4910057"},
-    {file = "certifi-2025.6.15.tar.gz", hash = "sha256:d747aa5a8b9bbbb1bb8c22bb13e22bd1f18e9796defa16bab421f7f7a317323b"},
+    {file = "certifi-2025.7.9-py3-none-any.whl", hash = "sha256:d842783a14f8fdd646895ac26f719a061408834473cfc10203f6a575beb15d39"},
+    {file = "certifi-2025.7.9.tar.gz", hash = "sha256:c1d2ec05395148ee10cf672ffc28cd37ea0ab0d99f9cc74c43e588cbd111b079"},
 ]
 
 [[package]]
@@ -984,7 +984,7 @@ i18n = ["Babel (>=2.7)"]
 
 [[package]]
 name = "kevm-pyk"
-version = "1.0.851"
+version = "1.0.852"
 description = ""
 optional = false
 python-versions = "^3.10"
@@ -1001,8 +1001,8 @@ tomlkit = "^0.11.6"
 [package.source]
 type = "git"
 url = "https://github.com/runtimeverification/evm-semantics.git"
-reference = "v1.0.851"
-resolved_reference = "559c2158a53ef044a165650efab77789f617bd8c"
+reference = "v1.0.852"
+resolved_reference = "318170d4dd2174c39e887e31936bd544c3e97b29"
 subdirectory = "kevm-pyk"
 
 [[package]]
@@ -1033,7 +1033,7 @@ xdg-base-dirs = ">=6.0.1,<7"
 
 [[package]]
 name = "kontrol"
-version = "1.0.171"
+version = "1.0.172"
 description = "Foundry integration for KEVM"
 optional = false
 python-versions = "~=3.10"
@@ -1044,15 +1044,15 @@ develop = false
 [package.dependencies]
 eth-abi = ">=5.2.0"
 eth-utils = ">=5,<6"
-kevm-pyk = {git = "https://github.com/runtimeverification/evm-semantics.git", rev = "v1.0.851", subdirectory = "kevm-pyk"}
+kevm-pyk = {git = "https://github.com/runtimeverification/evm-semantics.git", rev = "v1.0.852", subdirectory = "kevm-pyk"}
 pycryptodome = ">=3.20.0,<4"
 pyevmasm = ">=0.2.3,<0.3"
 
 [package.source]
 type = "git"
 url = "https://github.com/runtimeverification/kontrol"
-reference = "v1.0.171"
-resolved_reference = "4283fae7d45d09214ab932f6770531fe891f2a29"
+reference = "v1.0.172"
+resolved_reference = "faf984528fc8da3aaed83fdb28b6c31aba0327e7"
 
 [[package]]
 name = "linkify-it-py"
@@ -2170,14 +2170,14 @@ files = [
 
 [[package]]
 name = "textual"
-version = "3.7.0"
+version = "3.7.1"
 description = "Modern Text User Interface framework"
 optional = false
 python-versions = "<4.0.0,>=3.8.1"
 groups = ["main"]
 files = [
-    {file = "textual-3.7.0-py3-none-any.whl", hash = "sha256:761352ada0427ef7e5405c0b01d9df6fafd773cba09338955249a8b45988c3fc"},
-    {file = "textual-3.7.0.tar.gz", hash = "sha256:d5cb710b4691a2d9b9075ff2dc9ebecf2d8369c893af3354dad344960c91d7c9"},
+    {file = "textual-3.7.1-py3-none-any.whl", hash = "sha256:ab5d153f4f65e77017977fa150d0376409e0acf5f1d2e25e2e4ab9de6c0d61ff"},
+    {file = "textual-3.7.1.tar.gz", hash = "sha256:a76ba0c8a6c194ef24fd5c3681ebfddca55e7127c064a014128c84fbd7f5d271"},
 ]
 
 [package.dependencies]
@@ -2371,4 +2371,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "496324ea4c845b2a7cf01bf4026da493b74204f8fbeafc769a24186d399197b7"
+content-hash = "37e90e16374bd38bdf1db03c3b3081fee38c25ad7f0968e174b454814e14a378"
