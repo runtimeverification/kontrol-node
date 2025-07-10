@@ -5,10 +5,10 @@ import gzip
 import json
 import pprint
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
-from dataclasses import dataclass
 
 from eth_keys import keys
 from kevm_pyk.kevm import KEVM
@@ -860,7 +860,8 @@ def _from_cell_map_to_list(cell: KApply) -> list:
     _PPRINT.pprint(return_list)
     return return_list
 
-def _from_storage_map_to_dict(storage_map: KInner) -> dict[str,str]:
+
+def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
     if storage_map == map_empty():
         return {}
 
@@ -896,16 +897,17 @@ def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
 
     return cell_dict
 
-def _from_statuscode_to_str(status_code_kapply: KApply):
+
+def _from_statuscode_to_str(status_code_kapply: KApply) -> str:
     if status_code_kapply == STATUS_CODE_EMPTY:
         return 'empty'
-    status_code = status_code_kapply.label.name \
-        .replace('_NETWORK', '')                \
-        .replace('_StatusCode', '')             \
-        .replace('_ExceptionalStatusCode', '')  \
+    status_code = (
+        status_code_kapply.label.name.replace('_NETWORK', '')
+        .replace('_StatusCode', '')
+        .replace('_ExceptionalStatusCode', '')
         .replace('_EndStatusCode', '')
+    )
     return status_code
-    
 
 
 def eth_send_transaction(
@@ -977,7 +979,7 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     result: dict[str, Any] = {}
     result['returnData'] = return_data
 
-    trace_item = TraceItem(*trace_item_kapply.terms)
+    trace_item = TraceItem(*trace_item_kapply.terms)  # type: ignore[arg-type]
 
     # program counter
     assert type(trace_item.program_counter_token) is KToken
@@ -997,7 +999,9 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     if trace_item.wordstack_kapply == WORDSTACK_EMPTY:
         wordstack = []
     else:
-        wordstack = [hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, trace_item.wordstack_kapply) if type(e) is KToken]
+        wordstack = [
+            hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, trace_item.wordstack_kapply) if type(e) is KToken
+        ]
         wordstack.reverse()
     result['stack'] = wordstack
 
