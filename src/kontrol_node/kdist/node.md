@@ -37,6 +37,11 @@ module KONTROL-NODE
                       </txReceipt>
                     </txReceipts>
                   </simbolikVM>
+                  <KEVMTracing2>
+                    <traceAccessedStorage>         false </traceAccessedStorage>
+                    <allAccessedStorage>           .Map  </allAccessedStorage>
+                    <recordedAccessedStorageTrace> false </recordedAccessedStorageTrace>
+                  </KEVMTracing2>
 ```
 
   Transaction debugging
@@ -111,6 +116,61 @@ module KONTROL-NODE
                              | STATUS
                              })
          </traceData> [priority(24)]
+
+    syntax KItem ::= "#traceAccessStorage" Int Int
+    syntax KItem ::= "#traceAccountAccessStorage" Int Set
+
+    rule <k> #traceAccessStorage ACCT:Int SLOT:Int => .K ... </k>
+         <allAccessedStorage> AS => AS[ACCT <- {AS[ACCT] orDefault .Set}:>Set |Set SetItem(SLOT)] </allAccessedStorage>
+      [priority(25)]
+
+    rule <k> #traceAccountAccessStorage ACCT:Int SLOTS:Set => .K ... </k>
+         <allAccessedStorage> AS => AS[ACCT <- {AS[ACCT] orDefault .Set}:>Set |Set SLOTS] </allAccessedStorage>
+      [priority(25)]
+
+    rule <k> (.K => #traceAccessStorage ACCT SLOT) ~> SLOAD SLOT ... </k>
+         <id> ACCT </id>
+         <recordedAccessedStorageTrace> false => true </recordedAccessedStorageTrace>
+         <activeTracing> true </activeTracing>
+         <traceAccessedStorage> true </traceAccessedStorage>
+      [priority(25)]
+
+    rule <k> (.K => #traceAccessStorage ACCT SLOT) ~> SSTORE SLOT _ ... </k>
+         <id> ACCT </id>
+         <recordedAccessedStorageTrace> false => true </recordedAccessedStorageTrace>
+         <activeTracing> true </activeTracing>
+         <traceAccessedStorage> true </traceAccessedStorage>
+      [priority(25)]
+
+    // cheatcode `load`
+    rule <k> (.K => #traceAccessStorage ACCT SLOT) ~> #returnStorage ACCT SLOT ... </k>
+         <recordedAccessedStorageTrace> false => true </recordedAccessedStorageTrace>
+         <activeTracing> true </activeTracing>
+         <traceAccessedStorage> true </traceAccessedStorage>
+      [priority(25)]
+
+    // cheatcode `store`
+    rule <k> (.K => #traceAccessStorage ACCT SLOT) ~> #setStorage ACCT SLOT _ ... </k>
+         <recordedAccessedStorageTrace> false => true </recordedAccessedStorageTrace>
+         <activeTracing> true </activeTracing>
+         <traceAccessedStorage> true </traceAccessedStorage>
+      [priority(25)]
+
+    // cheatcode `copyStorage`
+    rule <k> (.K => #traceAccountAccessStorage ACCTFROM keys(STORAGEFROM) ~> #traceAccountAccessStorage ACCTTO keys(STORAGEFROM)) ~> #copyStorage ACCTFROM ACCTTO ... </k>
+         <recordedAccessedStorageTrace> false => true </recordedAccessedStorageTrace>
+         <activeTracing> true </activeTracing>
+         <traceAccessedStorage> true </traceAccessedStorage>
+         <account>
+           <acctID> ACCTFROM </acctID>
+           <storage> STORAGEFROM </storage>
+           ...
+         </account>
+      [priority(25)]
+
+    rule <k> #execute ... </k>
+         <recordedAccessedStorageTrace> true => false </recordedAccessedStorageTrace>
+      [priority(25)]
 ```
   Transaction Signing and execution
   ---------------------------------
@@ -132,6 +192,7 @@ module KONTROL-NODE
           ~> #computeHeaderHash
           ... </k>
           <traceData> _ => .List </traceData>
+          <allAccessedStorage> _ => .Map </allAccessedStorage>
 
     syntax KItem ::= "#loadTransaction" Int TxType Account Account Int Int Int Int Bytes
  // ------------------------------------------------------------------------------------
