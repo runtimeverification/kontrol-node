@@ -5,10 +5,10 @@ import gzip
 import json
 import pprint
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
-from dataclasses import dataclass
 
 from eth_keys import keys
 from kevm_pyk.kevm import KEVM
@@ -47,7 +47,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
     traced_transactions: dict[str, Any]
-    traced_accessed_storage: dict[str, dict[str,list[str]]] # dict[tx_hash,dict[address, list[slot]]
+    traced_accessed_storage: dict[str, dict[str, list[str]]]  # dict[tx_hash,dict[address, list[slot]]
     transaction_return_data: dict[str, str]
     transaction_hashes: dict[int, str]
     default_sender_address: Final[int]
@@ -868,7 +868,8 @@ def _from_cell_map_to_list(cell: KApply) -> list:
     _PPRINT.pprint(return_list)
     return return_list
 
-def _from_storage_map_to_dict(storage_map: KInner) -> dict[str,str]:
+
+def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
     if storage_map == map_empty():
         return {}
 
@@ -904,16 +905,17 @@ def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
 
     return cell_dict
 
-def _from_statuscode_to_str(status_code_kapply: KApply):
+
+def _from_statuscode_to_str(status_code_kapply: KApply) -> str:
     if status_code_kapply == STATUS_CODE_EMPTY:
         return 'empty'
-    status_code = status_code_kapply.label.name \
-        .replace('_NETWORK', '')                \
-        .replace('_StatusCode', '')             \
-        .replace('_ExceptionalStatusCode', '')  \
+    status_code = (
+        status_code_kapply.label.name.replace('_NETWORK', '')
+        .replace('_StatusCode', '')
+        .replace('_ExceptionalStatusCode', '')
         .replace('_EndStatusCode', '')
+    )
     return status_code
-    
 
 
 def eth_send_transaction(
@@ -967,7 +969,7 @@ def parse_kapply_set(kapply_set: KApply) -> set:
     :return:  A Python set containing the token values extracted from the KApply set.
     """
     if kapply_set == set_empty():
-        return []
+        return set()
     set_items = flatten_label('_Set_', kapply_set)
     values = set()
     for set_item in set_items:
@@ -979,12 +981,12 @@ def parse_kapply_set(kapply_set: KApply) -> set:
     return values
 
 
-def _from_accessed_storage_map_to_dict(storage_map: KInner) -> dict[str,list[str]]:
+def _from_accessed_storage_map_to_dict(storage_map: KInner) -> dict[str, list[str]]:
     if storage_map == map_empty():
         return {}
 
     storage_entries = flatten_label(MAP_CONS, storage_map)
-    storage_dict: dict[str, str] = {}
+    storage_dict: dict[str, list[str]] = {}
     for entry in storage_entries:
         assert type(entry) is KApply and entry.label.name == '_|->_'
         key, value = entry.terms
@@ -993,7 +995,7 @@ def _from_accessed_storage_map_to_dict(storage_map: KInner) -> dict[str,list[str
         storage_dict[hex(int(key.token))] = [hex(int(slot)) for slot in parse_kapply_set(value)]
 
     return storage_dict
-        
+
 
 @dataclass
 class TraceItem:
@@ -1020,7 +1022,7 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     result: dict[str, Any] = {}
     result['returnData'] = return_data
 
-    trace_item = TraceItem(*trace_item_kapply.terms)
+    trace_item = TraceItem(*trace_item_kapply.terms)  # type: ignore[arg-type]
 
     # program counter
     assert type(trace_item.program_counter_token) is KToken
@@ -1040,7 +1042,9 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     if trace_item.wordstack_kapply == WORDSTACK_EMPTY:
         wordstack = []
     else:
-        wordstack = [hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, trace_item.wordstack_kapply) if type(e) is KToken]
+        wordstack = [
+            hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, trace_item.wordstack_kapply) if type(e) is KToken
+        ]
         wordstack.reverse()
     result['stack'] = wordstack
 
