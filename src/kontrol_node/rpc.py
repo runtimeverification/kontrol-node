@@ -17,7 +17,7 @@ from pyk.cterm import CTerm
 from pyk.kast.inner import KApply, KLabel, KSequence, KToken, Subst, build_assoc, flatten_label
 from pyk.kast.manip import set_cell
 from pyk.kast.prelude.bytes import bytesToken
-from pyk.kast.prelude.collections import list_empty, map_empty
+from pyk.kast.prelude.collections import list_empty, map_empty, set_empty
 from pyk.kast.prelude.k import GENERATED_TOP_CELL
 from pyk.kast.prelude.kbool import TRUE
 from pyk.kast.prelude.utils import token
@@ -47,6 +47,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
     traced_transactions: dict[str, Any]
+    traced_accessed_storage: dict[str, dict[str,list[str]]] # dict[tx_hash,dict[address, list[slot]]
     transaction_return_data: dict[str, str]
     transaction_hashes: dict[int, str]
     default_sender_address: Final[int]
@@ -59,6 +60,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
         self.traced_transactions = {}
+        self.traced_accessed_storage = {}
         self.transaction_return_data = {}
         self.transaction_hashes = {}
         start_time = datetime.now()
@@ -205,6 +207,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict:
         result: dict[str, Any] = {}
         result['structLogs'] = self.traced_transactions[tx_hash]
+        result['accessedStorage'] = self.traced_accessed_storage[tx_hash]
         receipt = self._get_tx_receipt_by_hash(tx_hash)
         if receipt is None:
             return {}
@@ -491,7 +494,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             assert type(trace_item) is KApply
             parsed_trace.append(extract_trace_item(trace_item, return_data))
 
+        accessed_storage_cell = self.cterm.cell('ALLACCESSEDSTORAGE_CELL')
+        accessed_storage = _from_accessed_storage_map_to_dict(accessed_storage_cell)
+
         self.traced_transactions[transaction_hash] = parsed_trace
+        self.traced_accessed_storage[transaction_hash] = accessed_storage
         self.transaction_return_data[transaction_hash] = return_data[2:]
 
     def _get_tx_receipt_by_msg_id(self, msg_id: int) -> dict | None:
@@ -652,6 +659,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEMEMORY_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACESTORAGE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACEACCESSEDSTORAGE_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
@@ -951,6 +959,41 @@ def parse_kapply_list(kapply_list: KApply) -> list:
         values.append(t.token)
     return values
 
+
+def parse_kapply_set(kapply_set: KApply) -> set:
+    """Parses a KApply set of KTokens into a Python set by extracting the KToken values.
+
+    :param kapply_set:  The KApply structure representing the set.
+    :return:  A Python set containing the token values extracted from the KApply set.
+    """
+    if kapply_set == set_empty():
+        return []
+    set_items = flatten_label('_Set_', kapply_set)
+    values = set()
+    for set_item in set_items:
+        assert type(set_item) is KApply
+        assert set_item.label.name == 'SetItem'
+        t = single(set_item.terms)
+        assert type(t) is KToken
+        values.add(t.token)
+    return values
+
+
+def _from_accessed_storage_map_to_dict(storage_map: KInner) -> dict[str,list[str]]:
+    if storage_map == map_empty():
+        return {}
+
+    storage_entries = flatten_label(MAP_CONS, storage_map)
+    storage_dict: dict[str, str] = {}
+    for entry in storage_entries:
+        assert type(entry) is KApply and entry.label.name == '_|->_'
+        key, value = entry.terms
+        assert type(key) is KToken
+        assert type(value) is KApply
+        storage_dict[hex(int(key.token))] = [hex(int(slot)) for slot in parse_kapply_set(value)]
+
+    return storage_dict
+        
 
 @dataclass
 class TraceItem:
