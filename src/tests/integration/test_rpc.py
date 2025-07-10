@@ -46,12 +46,17 @@ def test_rpc_file(
 
                 # method `anvil_dumpState` compresses `result` with gzip, whose output is flaky
                 # therefore decompress the result prior to comparing with saved output, whose result was also decompressed
+                # also, json.dumps is unstable for dictionary entries
+                # therefore sort the encoded json text dict entries
                 if request['method'] == 'anvil_dumpState':
                     result = request_result['result'][2:]
                     result = bytes.fromhex(result)
-                    result = gzip.decompress(result).hex()
-                    request_result['result'] = '0x' + result
+                    decompressed_data = gzip.decompress(result)
+                    # Parse the decompressed JSON and dump with sorted keys
+                    json_data = json.loads(decompressed_data.decode('utf-8'))
+                    sorted_json = json.dumps(json_data, sort_keys=True)
+                    request_result['result'] = '0x' + sorted_json.encode('utf-8').hex()
 
                 response_list.append(request_result)
-            result = json.dumps(response_list, indent=2)
+            result = json.dumps(response_list, indent=2, sort_keys=True)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)

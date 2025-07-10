@@ -1,5 +1,6 @@
 [
   {
+    "id": 0,
     "jsonrpc": "2.0",
     "result": [
       "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
@@ -13,15 +14,15 @@
       "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc",
       "0xa0ee7a142d267c1f36714e4a8f75612f20a79720",
       "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
-    ],
-    "id": 0
+    ]
   },
   {
+    "id": 1,
     "jsonrpc": "2.0",
-    "result": "0xad3255ea437d7fd9834d2ef242053b9130b82acd",
-    "id": 1
+    "result": "0xad3255ea437d7fd9834d2ef242053b9130b82acd"
   },
   {
+    "id": 2,
     "jsonrpc": "2.0",
     "result": [
       "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
@@ -36,7 +37,6 @@
       "0xa0ee7a142d267c1f36714e4a8f75612f20a79720",
       "0xad3255ea437d7fd9834d2ef242053b9130b82acd",
       "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
-    ],
-    "id": 2
+    ]
   }
 ]
