@@ -57,6 +57,11 @@ def test_rpc_file(
                     sorted_json = json.dumps(json_data, sort_keys=True)
                     request_result['result'] = '0x' + sorted_json.encode('utf-8').hex()
 
+                # sets are unordered in python so sort json lists created from sets for replicability
+                if request['method'] == 'debug_traceTransaction':
+                    for accessed_storage_slots in request_result['result']['accessedStorage'].values():
+                        accessed_storage_slots.sort()
+
                 response_list.append(request_result)
             result = json.dumps(response_list, indent=2, sort_keys=True)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
