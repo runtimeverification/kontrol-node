@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from collections import defaultdict
 import gzip
 import json
 import pprint
@@ -652,6 +653,8 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEMEMORY_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACESTORAGE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACENONCE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACEBALANCE_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
@@ -861,6 +864,8 @@ def _from_cell_map_to_list(cell: KApply) -> list:
     return return_list
 
 
+# this was used to parse the storage map of a current account
+# this was approach was deprecatedin favor of tracing individual storage writes, see `_from_storage_changes_to_dict`
 def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
     if storage_map == map_empty():
         return {}
@@ -875,6 +880,75 @@ def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
         storage_dict[hex(int(key.token))] = hex(int(value.token))
 
     return storage_dict
+
+
+
+def _from_int_tuple(int_tuple_k: KApply, label: str) -> tuple:
+        assert type(int_tuple_k) is KApply
+        assert int_tuple_k.label.name == label
+        for term in int_tuple_k.terms:
+            assert type(term) is KToken
+        return tuple((hex(int(value.token)) for value in int_tuple_k.terms))
+
+
+def _from_storage_changes_to_dict(storage_changes_k: KInner) -> dict[str, dict[str, str]]:
+    if storage_changes_k == list_empty():
+        return {}
+    
+    storage_changes_k_items = flatten_label('_List_', storage_changes_k)
+
+    storage_changes = defaultdict(dict)
+    for storage_change_k_list in storage_changes_k_items:
+        # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:StorageMutation)
+        assert type(storage_change_k_list) is KApply
+        assert storage_change_k_list.label.name == 'ListItem'
+        storage_change_k = single(storage_change_k_list.terms)
+
+        # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:StorageMutation
+        account, slot, value = _from_int_tuple(storage_change_k, '{_|_|_}_KONTROL-NODE_StorageMutation_Int_Int_Int')
+        storage_changes[account][slot] = value
+    
+    return storage_changes
+
+
+def _from_nonce_changes_to_dict(nonce_changes_k: KInner) -> dict[str, dict[str, str]]:
+    if nonce_changes_k == list_empty():
+        return {}
+    
+    nonce_changes_k_items = flatten_label('_List_', nonce_changes_k)
+
+    nonce_changes = {}
+    for nonce_change_k_list in nonce_changes_k_items:
+        # nonce_change_k_list := ListItem({ ACCT:Int | NONCE:Int }:NonceMutation)
+        assert type(nonce_change_k_list) is KApply
+        assert nonce_change_k_list.label.name == 'ListItem'
+        nonce_change_k = single(nonce_change_k_list.terms)
+
+        # nonce_change_k := { ACCT:Int | NONCE:Int }:NonceMutation
+        account, nonce = _from_int_tuple(nonce_change_k, '{_|_}_KONTROL-NODE_NonceMutation_Int_Int')
+        nonce_changes[account] = nonce
+    
+    return nonce_changes
+
+
+def _from_balance_changes_to_dict(balance_changes_k: KInner) -> dict[str, dict[str, str]]:
+    if balance_changes_k == list_empty():
+        return {}
+    
+    balance_changes_k_items = flatten_label('_List_', balance_changes_k)
+
+    balance_changes = {}
+    for balance_change_k_list in balance_changes_k_items:
+        # balance_change_k_list := ListItem({ ACCT:Int | BALANCE:Int }:BalanceMutation)
+        assert type(balance_change_k_list) is KApply
+        assert balance_change_k_list.label.name == 'ListItem'
+        balance_change_k = single(balance_change_k_list.terms)
+
+        # balance_change_k := { ACCT:Int | BALANCE:Int }:BalanceMutation
+        account, balance = _from_int_tuple(balance_change_k, '{_|_}_KONTROL-NODE_BalanceMutation_Int_Int')
+        balance_changes[account] = balance
+    
+    return balance_changes
 
 
 def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
@@ -960,7 +1034,9 @@ class TraceItem:
     opcode_kapply: KApply
     wordstack_kapply: KApply
     local_mem_token: KToken
-    storage_map_kapply: KApply
+    storage_changes_kapply: KApply
+    nonce_changes_kapply: KApply
+    balance_changes_kapply: KApply
     call_depth_token: KToken
     gas_token: KToken
     coinbase_token: KToken
@@ -1013,9 +1089,17 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     ]
     result['memory'] = memory_chunks
 
-    # storage of current target address
-    assert type(trace_item.storage_map_kapply) is KApply
-    result['storage'] = _from_storage_map_to_dict(trace_item.storage_map_kapply)
+    # storage changes from previous step
+    assert type(trace_item.storage_changes_kapply) is KApply
+    result['storageChanges'] = _from_storage_changes_to_dict(trace_item.storage_changes_kapply)
+
+    # nonce changes from previous step
+    assert type(trace_item.nonce_changes_kapply) is KApply
+    result['nonceChanges'] = _from_nonce_changes_to_dict(trace_item.nonce_changes_kapply)
+
+    # balance changes from previous step
+    assert type(trace_item.balance_changes_kapply) is KApply
+    result['balanceChanges'] = _from_balance_changes_to_dict(trace_item.balance_changes_kapply)
 
     # call depth
     assert type(trace_item.call_depth_token) is KToken
