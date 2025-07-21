@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Mapping
+from typing import TYPE_CHECKING, Any, Final
 
 from eth_keys import keys
 from kevm_pyk.kevm import KEVM
@@ -30,6 +30,8 @@ from pyk.utils import single
 from .blockstore import BlockStore
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from eth_keys.datatypes import PublicKey
     from pyk.kast.inner import KInner
 
@@ -887,7 +889,7 @@ def _from_int_tuple(int_tuple_k: KApply, label: str) -> tuple[str, ...]:
     assert int_tuple_k.label.name == label
     for term in int_tuple_k.terms:
         assert type(term) is KToken
-    return tuple((hex(int(value.token)) for value in int_tuple_k.terms))  # type: ignore[attr-defined]
+    return tuple(hex(int(value.token)) for value in int_tuple_k.terms)  # type: ignore[attr-defined]
 
 
 def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dict[str, str]]:
