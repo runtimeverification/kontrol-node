@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import ast
-from collections import defaultdict
 import gzip
 import json
 import pprint
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Mapping
 
 from eth_keys import keys
 from kevm_pyk.kevm import KEVM
@@ -882,22 +882,21 @@ def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
     return storage_dict
 
 
+def _from_int_tuple(int_tuple_k: KApply, label: str) -> tuple[str, ...]:
+    assert type(int_tuple_k) is KApply
+    assert int_tuple_k.label.name == label
+    for term in int_tuple_k.terms:
+        assert type(term) is KToken
+    return tuple((hex(int(value.token)) for value in int_tuple_k.terms))  # type: ignore[attr-defined]
 
-def _from_int_tuple(int_tuple_k: KApply, label: str) -> tuple:
-        assert type(int_tuple_k) is KApply
-        assert int_tuple_k.label.name == label
-        for term in int_tuple_k.terms:
-            assert type(term) is KToken
-        return tuple((hex(int(value.token)) for value in int_tuple_k.terms))
 
-
-def _from_storage_changes_to_dict(storage_changes_k: KInner) -> dict[str, dict[str, str]]:
+def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dict[str, str]]:
     if storage_changes_k == list_empty():
         return {}
-    
+
     storage_changes_k_items = flatten_label('_List_', storage_changes_k)
 
-    storage_changes = defaultdict(dict)
+    storage_changes: Mapping[str, dict[str, str]] = defaultdict(dict)
     for storage_change_k_list in storage_changes_k_items:
         # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:StorageMutation)
         assert type(storage_change_k_list) is KApply
@@ -905,16 +904,17 @@ def _from_storage_changes_to_dict(storage_changes_k: KInner) -> dict[str, dict[s
         storage_change_k = single(storage_change_k_list.terms)
 
         # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:StorageMutation
+        assert type(storage_change_k) is KApply
         account, slot, value = _from_int_tuple(storage_change_k, '{_|_|_}_KONTROL-NODE_StorageMutation_Int_Int_Int')
         storage_changes[account][slot] = value
-    
+
     return storage_changes
 
 
-def _from_nonce_changes_to_dict(nonce_changes_k: KInner) -> dict[str, dict[str, str]]:
+def _from_nonce_changes_to_dict(nonce_changes_k: KInner) -> dict[str, str]:
     if nonce_changes_k == list_empty():
         return {}
-    
+
     nonce_changes_k_items = flatten_label('_List_', nonce_changes_k)
 
     nonce_changes = {}
@@ -925,16 +925,17 @@ def _from_nonce_changes_to_dict(nonce_changes_k: KInner) -> dict[str, dict[str, 
         nonce_change_k = single(nonce_change_k_list.terms)
 
         # nonce_change_k := { ACCT:Int | NONCE:Int }:NonceMutation
+        assert type(nonce_change_k) is KApply
         account, nonce = _from_int_tuple(nonce_change_k, '{_|_}_KONTROL-NODE_NonceMutation_Int_Int')
         nonce_changes[account] = nonce
-    
+
     return nonce_changes
 
 
-def _from_balance_changes_to_dict(balance_changes_k: KInner) -> dict[str, dict[str, str]]:
+def _from_balance_changes_to_dict(balance_changes_k: KInner) -> dict[str, str]:
     if balance_changes_k == list_empty():
         return {}
-    
+
     balance_changes_k_items = flatten_label('_List_', balance_changes_k)
 
     balance_changes = {}
@@ -945,9 +946,10 @@ def _from_balance_changes_to_dict(balance_changes_k: KInner) -> dict[str, dict[s
         balance_change_k = single(balance_change_k_list.terms)
 
         # balance_change_k := { ACCT:Int | BALANCE:Int }:BalanceMutation
+        assert type(balance_change_k) is KApply
         account, balance = _from_int_tuple(balance_change_k, '{_|_}_KONTROL-NODE_BalanceMutation_Int_Int')
         balance_changes[account] = balance
-    
+
     return balance_changes
 
 
