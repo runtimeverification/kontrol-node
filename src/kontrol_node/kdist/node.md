@@ -140,44 +140,6 @@ module KONTROL-NODE
     // ideally, new rules are introduced in the future in evm-semantics that moduralize mutations of nonce and balance 
     //  that would allow for tracing rules that do not re-implement evm-semantics specifications
 
-    // evm.md:968 `#executeBeaconRoots`
-    syntax Int ::= "BEACON_ROOTS_ADDRESS" [alias]
-    rule BEACON_ROOTS_ADDRESS => 339909022928299415537769066420252604268194818
-
-    rule <k> #executeBeaconRoots => .K ... </k>
-         <traceStorage> true </traceStorage>
-         <schedule> SCHED </schedule>
-         <timestamp> TS </timestamp>
-         <beaconRoot> BR </beaconRoot>
-         <account>
-          <acctID> BEACON_ROOTS_ADDRESS </acctID>
-           <storage> M:Map => M [(TS modInt 8191) <- TS] [(TS modInt 8191 +Int 8191) <- BR] </storage>
-           ...
-         </account>
-         <currentStorageMutations> ... .List => ListItem({ BEACON_ROOTS_ADDRESS | (TS modInt 8191) | TS }) ListItem({ BEACON_ROOTS_ADDRESS | (TS modInt 8191 +Int 8191) | BR }) </currentStorageMutations>
-      requires Ghasbeaconroot << SCHED >>
-      [priority(49)]
-
- // ---------------------------------------------------------------------------------------------------------------
-    syntax Int ::= "HISTORY_STORAGE_ADDRESS" [alias]
-    rule HISTORY_STORAGE_ADDRESS => 21693734551179282564423033930679318143314229
- 
-    // evm.md:952 `#executeBlockHashHistory`
-    rule <k> #executeBlockHashHistory => .K ... </k>
-         <traceStorage> true </traceStorage>
-         <schedule> SCHED </schedule>
-         <previousHash> HP </previousHash>
-         <number> BN </number>
-         <account>
-           <acctID> HISTORY_STORAGE_ADDRESS </acctID>
-           <storage> M:Map => M [((BN -Int 1) modInt 8191) <- HP] </storage>
-           ...
-         </account>
-         <currentStorageMutations> ... .List => ListItem({ HISTORY_STORAGE_ADDRESS | ((BN -Int 1) modInt 8191) | HP }) </currentStorageMutations>
-      requires Ghashistory << SCHED >>
-      [priority(49)]
-
- // ---------------------------------------------------------------------------------------------------------------
     // evm.md:1483 [sstore] `STORE`
     rule [sstore]:
          <k> SSTORE INDEX NEW => .K ... </k>
@@ -202,53 +164,6 @@ module KONTROL-NODE
          </account>
          <currentStorageMutations> ... .List => ListItem({ ACCTID | LOC | VALUE }) </currentStorageMutations>
       [priority(49)]
-
- // ---------------------------------------------------------------------------------------------------------------
-    // driver.md:156 `loadTx(ACCTFROM) call`
-    // TODO: this rule was changed starting with https://github.com/runtimeverification/evm-semantics/pull/2755
-    rule <k> loadTx(ACCTFROM)
-          => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
-          ~> #deductBlobGas
-          ~> #loadAccessList(TA)
-          ~> #checkCall ACCTFROM VALUE
-          ~> #call ACCTFROM ACCTTO ACCTTO VALUE VALUE DATA false
-          ~> #finishTx ~> #finalizeTx(false, Ctxfloor(SCHED, DATA)) ~> startTx
-         ...
-         </k>
-         <traceNonce> TRNONCE </traceNonce>
-         <traceBalance> TRBAL </traceBalance>
-         <schedule> SCHED </schedule>
-         <gasPrice> _ => #effectiveGasPrice(TXID) </gasPrice>
-         <callGas> _ => GLIMIT -Int G0(SCHED, DATA, false) </callGas>
-         <origin> _ => ACCTFROM </origin>
-         <callDepth> _ => -1 </callDepth>
-         <txPending> ListItem(TXID:Int) ... </txPending>
-         <coinbase> MINER </coinbase>
-         <message>
-           <msgID>             TXID   </msgID>
-           <txGasLimit>        GLIMIT </txGasLimit>
-           <to>                ACCTTO </to>
-           <value>             VALUE  </value>
-           <data>              DATA   </data>
-           <txAccess>          TA     </txAccess>
-           <txVersionedHashes> TVH    </txVersionedHashes>
-           ...
-         </message>
-         <versionedHashes> _ => TVH </versionedHashes>
-         <account>
-           <acctID> ACCTFROM </acctID>
-           <balance> BAL => BAL -Int (GLIMIT *Int #effectiveGasPrice(TXID)) </balance>
-           <nonce> NONCE => NONCE +Int 1 </nonce>
-           ...
-         </account>
-         <accessedAccounts> _ => #if Ghaswarmcoinbase << SCHED >> #then SetItem(MINER) #else .Set #fi </accessedAccounts>
-         <touchedAccounts> _ => SetItem(MINER) </touchedAccounts>
-         <currentNonceMutations> ... .List => #if TRNONCE #then ListItem({ ACCTFROM | NONCE +Int 1 }:NonceMutation) #else .List #fi </currentNonceMutations>
-         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int #effectiveGasPrice(TXID)) }:BalanceMutation) #else .List #fi </currentBalanceMutations>
-      requires ACCTTO =/=K .Account
-       andBool #isValidTransaction(TXID, ACCTFROM)
-       andBool GLIMIT >=Int maxInt(G0(SCHED, DATA, false), Ctxfloor(SCHED, DATA))
-    [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
     // TODO: `#addAuthority` will change nonce starting with a newer revision of evm-semantics
@@ -333,48 +248,6 @@ module KONTROL-NODE
          </message>
          <currentBalanceMutations> ... .List => ListItem({ ACCTFROM | BAL -Int Cblobfee(SCHED, EXCESS_BLOB_GAS, size(TVH)) }:BalanceMutation) </currentBalanceMutations>
       requires Ghasblobbasefee << SCHED >>
-      [priority(49)]
-
- // ---------------------------------------------------------------------------------------------------------------
-    // driver.md:119 `loadTx(ACCTFROM) create`
-    rule <k> loadTx(ACCTFROM)
-          => #accessAccounts ACCTFROM #newAddr(ACCTFROM, NONCE) #precompiledAccountsSet(SCHED)
-          ~> #deductBlobGas
-          ~> #loadAccessList(TA)
-          ~> #checkCreate ACCTFROM VALUE
-          ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE
-          ~> #finishTx ~> #finalizeTx(false, Ctxfloor(SCHED, CODE)) ~> startTx
-         ...
-         </k>
-         <traceBalance> true </traceBalance>
-         <schedule> SCHED </schedule>
-         <gasPrice> _ => #effectiveGasPrice(TXID) </gasPrice>
-         <callGas> _ => GLIMIT -Int G0(SCHED, CODE, true) </callGas>
-         <origin> _ => ACCTFROM </origin>
-         <callDepth> _ => -1 </callDepth>
-         <txPending> ListItem(TXID:Int) ... </txPending>
-         <coinbase> MINER </coinbase>
-         <message>
-           <msgID>             TXID     </msgID>
-           <txGasLimit>        GLIMIT   </txGasLimit>
-           <to>                .Account </to>
-           <value>             VALUE    </value>
-           <data>              CODE     </data>
-           <txAccess>          TA       </txAccess>
-           ...
-         </message>
-         <account>
-           <acctID> ACCTFROM </acctID>
-           <balance> BAL => BAL -Int (GLIMIT *Int #effectiveGasPrice(TXID)) </balance>
-           <nonce> NONCE </nonce>
-           ...
-         </account>
-         <accessedAccounts> _ => #if Ghaswarmcoinbase << SCHED >> #then SetItem(MINER) #else .Set #fi </accessedAccounts>
-         <touchedAccounts> _ => SetItem(MINER) </touchedAccounts>
-         <currentBalanceMutations> ... .List => ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int #effectiveGasPrice(TXID)) }:BalanceMutation) </currentBalanceMutations>
-      requires #hasValidInitCode(lengthBytes(CODE), SCHED)
-       andBool #isValidTransaction(TXID, ACCTFROM)
-       andBool GLIMIT >=Int maxInt(G0(SCHED, CODE, true), Ctxfloor(SCHED, CODE))
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
