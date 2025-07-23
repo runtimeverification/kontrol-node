@@ -9,6 +9,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import shutil
+import tempfile
 from typing import TYPE_CHECKING, Any, Final
 
 from eth_keys import keys
@@ -20,8 +22,9 @@ from pyk.kast.manip import set_cell
 from pyk.kast.prelude.bytes import bytesToken
 from pyk.kast.prelude.collections import list_empty, map_empty
 from pyk.kast.prelude.k import GENERATED_TOP_CELL
-from pyk.kast.prelude.kbool import TRUE
+from pyk.kast.prelude.kbool import TRUE, FALSE
 from pyk.kast.prelude.utils import token
+from pyk.kore.parser import KoreParser
 from pyk.kdist import kdist
 from pyk.ktool.krun import KRun
 from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
@@ -196,12 +199,37 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             )
         )
 
-        self._krun_cterm()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tracelogs_path = Path(tmpdir).resolve() / 'tracelogs.kore'
+            self.cterm = CTerm.from_kast(
+                set_cell(
+                    self.cterm.config,
+                    'TRACELOGSFILEPATH_CELL',
+                    token(str(tracelogs_path)),
+                )
+            )
+            self._krun_cterm()
+
+            if tracelogs_path.exists() and self.active_tracing:
+                # TODO: this can be further optimized:
+                # - parallelize this
+                # - use a faster implementation, e.g. rust FFI
+                # - decode a custom binary serialization instead of KORE
+                kore_traces_str = tracelogs_path.read_text().split("\n")[:-1]
+                kast_traces = []
+                for kore_trace_str in kore_traces_str:
+                    kore_trace_parser = KoreParser(kore_trace_str)
+                    kore_trace_pattern = kore_trace_parser.pattern()
+                    kast_trace = self.krun.kore_to_kast(kore_trace_pattern)
+                    kast_traces.append(kast_trace)
+            else:
+                kast_traces = None
+
         transaction_hash = self._get_rpc_response()
         transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
         self.transaction_hashes[transaction_id] = transaction_hash
         if self.active_tracing:
-            self._collect_trace(transaction_hash)
+            self._collect_trace(transaction_hash, trace_data=kast_traces)
         self._save_block()
         return transaction_hash
 
@@ -480,17 +508,23 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             account_dict[address] = {'nonce': nonce, 'balance': balance, 'code': code, 'storage': storage}
         return account_dict
 
-    def _collect_trace(self, transaction_hash: str) -> None:
-        parsed_trace: list[dict[str, Any]] = []
-        trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
-        trace_data = flatten_label('_List_', trace_data_cell)
+    def _collect_trace(self, transaction_hash: str, trace_data: list[KInner] | None = None) -> None:
         return_data = '0x' + ast.literal_eval(self._parse_ktoken_cell('OUTPUT_CELL')).hex()
-        if len(trace_data) == 1 and trace_data[0] == list_empty():
-            return
 
-        for trace_list_item in trace_data:
-            assert type(trace_list_item) is KApply
-            trace_item = single(trace_list_item.terms)
+        parsed_trace: list[dict[str, Any]] = []
+        if trace_data is None:
+            trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
+            flattened_trace_data = flatten_label('_List_', trace_data_cell)
+            if len(flattened_trace_data) == 1 and flattened_trace_data[0] == list_empty():
+                return
+            trace_data = []
+            for flattened_trace_data_item in flattened_trace_data:
+                assert type(flattened_trace_data_item) is KApply
+                flattened_trace_item = single(flattened_trace_data_item.terms)
+                assert type(flattened_trace_item) is KApply
+                trace_data.append(flattened_trace_item)
+
+        for trace_item in trace_data:
             assert type(trace_item) is KApply
             parsed_trace.append(extract_trace_item(trace_item, return_data))
 
@@ -657,6 +691,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'TRACESTORAGE_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACENONCE_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEBALANCE_CELL', TRUE)
+        init_config = set_cell(init_config, 'WRITETRACELOGSTOFILE_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)

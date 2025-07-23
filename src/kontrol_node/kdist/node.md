@@ -7,6 +7,8 @@ module KONTROL-NODE
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
     imports NO-CODE-SIZE-CHECKS
+    imports K-IO
+    imports K-REFLECTION
 
     syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
  // -------------------------------------------------------------
@@ -40,6 +42,9 @@ module KONTROL-NODE
                         <contractAddress> .Account   </contractAddress>
                       </txReceipt>
                     </txReceipts>
+                    <traceLogsFileDescriptor> .FileDescr </traceLogsFileDescriptor>
+                    <traceLogsFilePath> "":String </traceLogsFilePath>
+                    <writeTraceLogsToFile> false </writeTraceLogsToFile>
                   </simbolikVM>
                   <KEVMTracing2>
                     <currentNonceMutations>   .List </currentNonceMutations>          
@@ -85,6 +90,7 @@ module KONTROL-NODE
          <currentNonceMutations>   NONCECH => .List </currentNonceMutations>          
          <currentBalanceMutations> BALCH => .List   </currentBalanceMutations>          
          <currentStorageMutations> STORCH => .List  </currentStorageMutations>
+         <writeTraceLogsToFile> false </writeTraceLogsToFile>
          <pc>                      PCOUNT           </pc>
          <wordStack>               WS               </wordStack>
          <callDepth>               CD               </callDepth>
@@ -122,7 +128,85 @@ module KONTROL-NODE
                              | TXORIG
                              | STATUS
                              })
-         </traceData> [priority(24)]
+         </traceData>
+      [priority(24)]
+
+    rule <k> (.K => #write (TRFILEDESCR, 
+              #unparseKORE( { PCOUNT
+                            | OPC
+                            | #if DSTK ==K true #then WS      #else .WordStack #fi
+                            | #if DMEM ==K true #then MEM     #else .Bytes     #fi
+                            | STORCH
+                            | NONCECH
+                            | BALCH
+                            | CD
+                            | GA
+                            | COINB
+                            | GASPR
+                            | DIFF
+                            | NUM
+                            | TIMEST
+                            | ACCT
+                            | SENDER
+                            | MSGVAL
+                            | TXORIG
+                            | STATUS
+                            } ) +String "\n"
+             ))
+             ~> #next [ OPC ] ... </k>
+         <activeTracing>           true             </activeTracing>
+         <traceWordStack>          DSTK             </traceWordStack>
+         <traceMemory>             DMEM             </traceMemory>
+         <traceLogsFileDescriptor> TRFILEDESCR      </traceLogsFileDescriptor>
+         <recordedTrace>           false => true    </recordedTrace>
+         <currentNonceMutations>   NONCECH => .List </currentNonceMutations>          
+         <currentBalanceMutations> BALCH => .List   </currentBalanceMutations>          
+         <currentStorageMutations> STORCH => .List  </currentStorageMutations>
+         <pc>                      PCOUNT           </pc>
+         <wordStack>               WS               </wordStack>
+         <callDepth>               CD               </callDepth>
+         <localMem>                MEM              </localMem>
+         <id>                      ACCT             </id>
+         <gas>                     GA               </gas>
+         <coinbase>                COINB            </coinbase>
+         <gasPrice>                GASPR            </gasPrice>
+         <difficulty>              DIFF             </difficulty>
+         <number>                  NUM              </number>
+         <timestamp>               TIMEST           </timestamp>
+         <caller>                  SENDER           </caller>
+         <callValue>               MSGVAL           </callValue>
+         <origin>                  TXORIG           </origin>
+         <statusCode>              STATUS           </statusCode>
+      requires TRFILEDESCR =/=K .FileDescr
+      [priority(24)]
+
+ // ---------------------------------------------------------------------------------------------------------------
+
+syntax KItem ::= "#openTraceLogsFile"  [symbol(openTraceLogsFile)]
+               | "#closeTraceLogsFile" [symbol(closeTraceLogsFile)]
+               | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
+
+syntax FILEDESCR ::= Int
+                   | ".FileDescr"
+
+rule <k> #openTraceLogsFile => #open(TRFILEPATH, "w") ~> #storeTraceLogsFileDescriptor ... </k>
+     <traceLogsFilePath>       TRFILEPATH                  </traceLogsFilePath>
+     <writeTraceLogsToFile> true </writeTraceLogsToFile>
+
+rule <k> #openTraceLogsFile => .K ... </k>
+     <writeTraceLogsToFile> false </writeTraceLogsToFile>
+
+rule <k> TRFILEDESCR ~> #storeTraceLogsFileDescriptor => .K ... </k>
+     <traceLogsFileDescriptor> _ => TRFILEDESCR </traceLogsFileDescriptor>
+
+rule <k> #closeTraceLogsFile => #close(TRFILEDESCR) ... </k>
+     <traceLogsFileDescriptor> TRFILEDESCR => .FileDescr </traceLogsFileDescriptor>
+  requires TRFILEDESCR =/=K .FileDescr
+
+rule <k> #closeTraceLogsFile => .K ... </k>
+  [owise]
+
+
  // ---------------------------------------------------------------------------------------------------------------
 
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
@@ -460,7 +544,9 @@ module KONTROL-NODE
           => #updateBlockHeader
           ~> mkTX !TXID
           ~> #loadTransaction !TXID TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
+          ~> #openTraceLogsFile
           ~> #runTransaction !TXID ACCTFROM
+          ~> #closeTraceLogsFile
           ~> #makeTxReceipt !TXID
           ~> #finalizeBlock
           ~> #computeHeaderHash
