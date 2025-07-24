@@ -29,7 +29,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                     args=(
                         KApply(
                             label=KLabel(
-                                name='{_|_}_KONTROL-NODE_NonceMutation_Int_Int',
+                                name='node_mapMutation',
                                 params=(),
                             ),
                             args=(
@@ -65,7 +65,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                                                             args=(
                                                                 KApply(
                                                                     label=KLabel(
-                                                                        name='{_|_}_KONTROL-NODE_BalanceMutation_Int_Int',
+                                                                        name='node_mapMutation',
                                                                         params=(),
                                                                     ),
                                                                     args=(
@@ -89,7 +89,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                                                             args=(
                                                                 KApply(
                                                                     label=KLabel(
-                                                                        name='{_|_}_KONTROL-NODE_BalanceMutation_Int_Int',
+                                                                        name='node_mapMutation',
                                                                         params=(),
                                                                     ),
                                                                     args=(
@@ -112,7 +112,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                                                     args=(
                                                         KApply(
                                                             label=KLabel(
-                                                                name='{_|_}_KONTROL-NODE_BalanceMutation_Int_Int',
+                                                                name='node_mapMutation',
                                                                 params=(),
                                                             ),
                                                             args=(
@@ -135,7 +135,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                                             args=(
                                                 KApply(
                                                     label=KLabel(
-                                                        name='{_|_}_KONTROL-NODE_BalanceMutation_Int_Int',
+                                                        name='node_mapMutation',
                                                         params=(),
                                                     ),
                                                     args=(
@@ -158,7 +158,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                                     args=(
                                         KApply(
                                             label=KLabel(
-                                                name='{_|_}_KONTROL-NODE_BalanceMutation_Int_Int',
+                                                name='node_mapMutation',
                                                 params=(),
                                             ),
                                             args=(
@@ -181,7 +181,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                             args=(
                                 KApply(
                                     label=KLabel(
-                                        name='{_|_}_KONTROL-NODE_BalanceMutation_Int_Int',
+                                        name='node_mapMutation',
                                         params=(),
                                     ),
                                     args=(
