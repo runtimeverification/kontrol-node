@@ -5,8 +5,8 @@ import gzip
 import json
 import multiprocessing
 import pprint
-from collections import defaultdict
 import tempfile
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
