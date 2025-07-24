@@ -15,11 +15,8 @@ module KONTROL-NODE
                          | ".RPCResponse" [symbol(EmptyRPCResponse)]
  // ----------------------------------------------------------------
 
-    syntax StorageMutation ::= "{" Int "|" Int "|" Int "}"
-
-    syntax NonceMutation ::= "{" Int "|" Int "}"
-
-    syntax BalanceMutation ::= "{" Int "|" Int "}"
+    syntax MapMutation ::= "{" Int "|" Int "|" Int "}" [symbol(node_doubleMapMutation)]
+                         | "{" Int "|" Int "}"         [symbol(node_mapMutation)]
  // ----------------------------------------------------------------
 
     configuration <simbolikVM>
@@ -191,7 +188,7 @@ module KONTROL-NODE
            ...
          </account>
          <createdAccounts> ACCTS => ACCTS |Set SetItem(ACCTTO) </createdAccounts>
-         <currentNonceMutations> ... .List => ListItem({ACCTTO | #if Gemptyisnonexistent << SCHED >> #then NONCE +Int 1 #else NONCE #fi }:NonceMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ACCTTO | #if Gemptyisnonexistent << SCHED >> #then NONCE +Int 1 #else NONCE #fi }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -203,7 +200,7 @@ module KONTROL-NODE
            <nonce> NONCE => NONCE +Int 1 </nonce>
            ...
          </account>
-         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE +Int 1 }:NonceMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE +Int 1 }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -211,7 +208,7 @@ module KONTROL-NODE
     rule <k> loadAccount ACCT { "nonce" : (NONCE:Int), REST => REST } ... </k>
          <traceNonce> true </traceNonce>
          <account> <acctID> ACCT </acctID> <nonce> _ => NONCE </nonce> ... </account>
-         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE }:NonceMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -223,7 +220,7 @@ module KONTROL-NODE
              <nonce> _ => NONCE </nonce>
              ...
          </account>
-         <currentNonceMutations> ... .List => ListItem({ ACCTID | NONCE }:NonceMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ ACCTID | NONCE }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
 
@@ -246,7 +243,7 @@ module KONTROL-NODE
            <txType>            Blob         </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .List => ListItem({ ACCTFROM | BAL -Int Cblobfee(SCHED, EXCESS_BLOB_GAS, size(TVH)) }:BalanceMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCTFROM | BAL -Int Cblobfee(SCHED, EXCESS_BLOB_GAS, size(TVH)) }:MapMutation) </currentBalanceMutations>
       requires Ghasblobbasefee << SCHED >>
       [priority(49)]
 
@@ -266,7 +263,7 @@ module KONTROL-NODE
            <balance> B => B +Int #gweiToWei(VALUE) </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | B +Int #gweiToWei(VALUE) }:BalanceMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | B +Int #gweiToWei(VALUE) }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
 
@@ -303,8 +300,8 @@ module KONTROL-NODE
            ...
          </message>
          <currentBalanceMutations> ... .List => 
-            ListItem({ ORG | ORGBAL +Int minInt(GAVAIL, GLIMIT -Int GFLOOR) *Int GPRICE }:BalanceMutation) 
-            ListItem({ MINER | MINBAL +Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int (GPRICE -Int BFEE) }:BalanceMutation) 
+            ListItem({ ORG | ORGBAL +Int minInt(GAVAIL, GLIMIT -Int GFLOOR) *Int GPRICE }:MapMutation) 
+            ListItem({ MINER | MINBAL +Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int (GPRICE -Int BFEE) }:MapMutation) 
          </currentBalanceMutations>
       requires ORG =/=Int MINER
       [priority(49)]
@@ -336,7 +333,7 @@ module KONTROL-NODE
            <txType> TXTYPE </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL +Int GLIMIT *Int GPRICE -Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int BFEE }:BalanceMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL +Int GLIMIT *Int GPRICE -Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int BFEE }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -359,7 +356,7 @@ module KONTROL-NODE
          </account>
          <log> LOGS </log>
          <logsBloom> _ => #bloomFilter(LOGS) </logsBloom>
-         <currentBalanceMutations> ... .List => ListItem({ MINER | MINBAL +Int Rb < SCHED > }:BalanceMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ MINER | MINBAL +Int Rb < SCHED > }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -380,8 +377,8 @@ module KONTROL-NODE
           ...
          </account>
          <currentBalanceMutations> ... .List =>
-            ListItem({ MINER | MINBAL +Int Rb < SCHED > /Int 32 }:BalanceMutation)
-            ListItem({ OMMER | OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) }:BalanceMutation)
+            ListItem({ MINER | MINBAL +Int Rb < SCHED > /Int 32 }:MapMutation)
+            ListItem({ OMMER | OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) }:MapMutation)
          </currentBalanceMutations>
       [priority(49)]
 
@@ -401,8 +398,8 @@ module KONTROL-NODE
            ...
          </account>
          <currentBalanceMutations> ... .List =>
-            ListItem({ ACCTFROM | ORIGFROM -Word VALUE }:BalanceMutation)
-            ListItem({ ACCTTO | ORIGTO +Word VALUE }:BalanceMutation)
+            ListItem({ ACCTFROM | ORIGFROM -Word VALUE }:MapMutation)
+            ListItem({ ACCTTO | ORIGTO +Word VALUE }:MapMutation)
          </currentBalanceMutations>
       requires ACCTFROM =/=K ACCTTO andBool VALUE <=Int ORIGFROM
       [preserves-definedness, priority(49)]
@@ -422,7 +419,7 @@ module KONTROL-NODE
          </account>
          <output> _ => .Bytes </output>
          <createdAccounts> CA </createdAccounts>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | 0 }:BalanceMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | 0 }:MapMutation) </currentBalanceMutations>
       requires ((notBool Ghaseip6780 << SCHED >>) orBool ACCT in CA)
       [priority(49)]
 
@@ -431,7 +428,7 @@ module KONTROL-NODE
     rule <k> loadAccount ACCT { "balance" : (BAL:Int), REST => REST } ... </k>
          <traceBalance> true </traceBalance>
          <account> <acctID> ACCT </acctID> <balance> _ => BAL </balance> ... </account>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL }:BalanceMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -443,7 +440,7 @@ module KONTROL-NODE
            <balance> _ => NEWBAL </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .List => ListItem({ ACCTID | NEWBAL }:BalanceMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCTID | NEWBAL }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
     
@@ -629,7 +626,7 @@ module KONTROL-NODE
            <nonce> NONCE </nonce>
            ...
          </account>
-         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:BalanceMutation) #else .List #fi </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation) #else .List #fi </currentBalanceMutations>
 
     rule <k> #executeTx TXID:Int
           => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
@@ -662,8 +659,8 @@ module KONTROL-NODE
            <nonce> NONCE => NONCE +Int 1 </nonce>
            ...
          </account>
-         <currentNonceMutations> ... .List => #if TRNONCE #then ListItem({ ACCTFROM | NONCE +Int 1 }:NonceMutation) #else .List #fi </currentNonceMutations>
-         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:BalanceMutation) #else .List #fi </currentBalanceMutations>
+         <currentNonceMutations> ... .List => #if TRNONCE #then ListItem({ ACCTFROM | NONCE +Int 1 }:MapMutation) #else .List #fi </currentNonceMutations>
+         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation) #else .List #fi </currentBalanceMutations>
       requires ACCTTO =/=K .Account
 
     syntax KItem ::= "#makeTxReceipt" Int
@@ -785,7 +782,7 @@ module KONTROL-NODE
            </account>
            ...
          </accounts>
-         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ KEY | BAL }:BalanceMutation) #else .List #fi </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ KEY | BAL }:MapMutation) #else .List #fi </currentBalanceMutations>
 endmodule
 
 ```

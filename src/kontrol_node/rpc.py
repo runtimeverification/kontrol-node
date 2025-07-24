@@ -900,59 +900,39 @@ def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dic
 
     storage_changes: Mapping[str, dict[str, str]] = defaultdict(dict)
     for storage_change_k_list in storage_changes_k_items:
-        # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:StorageMutation)
+        # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:Mutation)
         assert type(storage_change_k_list) is KApply
         assert storage_change_k_list.label.name == 'ListItem'
         storage_change_k = single(storage_change_k_list.terms)
 
-        # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:StorageMutation
+        # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:Mutation
         assert type(storage_change_k) is KApply
-        account, slot, value = _from_int_tuple(storage_change_k, '{_|_|_}_KONTROL-NODE_StorageMutation_Int_Int_Int')
+        account, slot, value = _from_int_tuple(storage_change_k, 'node_doubleMapMutation')
         storage_changes[account][slot] = value
 
     return storage_changes
 
 
-def _from_nonce_changes_to_dict(nonce_changes_k: KInner) -> dict[str, str]:
-    if nonce_changes_k == list_empty():
+# used for either balance or nonce
+def _from_balance_nonce_changes_to_dict(balance_nonce_changes_k: KInner) -> dict[str, str]:
+    if balance_nonce_changes_k == list_empty():
         return {}
 
-    nonce_changes_k_items = flatten_label('_List_', nonce_changes_k)
+    balance_nonce_changes_k_items = flatten_label('_List_', balance_nonce_changes_k)
 
-    nonce_changes = {}
-    for nonce_change_k_list in nonce_changes_k_items:
-        # nonce_change_k_list := ListItem({ ACCT:Int | NONCE:Int }:NonceMutation)
-        assert type(nonce_change_k_list) is KApply
-        assert nonce_change_k_list.label.name == 'ListItem'
-        nonce_change_k = single(nonce_change_k_list.terms)
+    balance_nonce_changes = {}
+    for balance_nonce_change_k_list in balance_nonce_changes_k_items:
+        # balance_nonce_change_k_list := ListItem({ ACCT:Int | BALANACE_OR_NONCE:Int }:Mutation)
+        assert type(balance_nonce_change_k_list) is KApply
+        assert balance_nonce_change_k_list.label.name == 'ListItem'
+        balance_nonce_change_k = single(balance_nonce_change_k_list.terms)
 
-        # nonce_change_k := { ACCT:Int | NONCE:Int }:NonceMutation
-        assert type(nonce_change_k) is KApply
-        account, nonce = _from_int_tuple(nonce_change_k, '{_|_}_KONTROL-NODE_NonceMutation_Int_Int')
-        nonce_changes[account] = nonce
+        # nonce_change_k := { ACCT:Int | BALANACE_OR_NONCE:Int }:Mutation
+        assert type(balance_nonce_change_k) is KApply
+        account, balance_nonce = _from_int_tuple(balance_nonce_change_k, 'node_mapMutation')
+        balance_nonce_changes[account] = balance_nonce
 
-    return nonce_changes
-
-
-def _from_balance_changes_to_dict(balance_changes_k: KInner) -> dict[str, str]:
-    if balance_changes_k == list_empty():
-        return {}
-
-    balance_changes_k_items = flatten_label('_List_', balance_changes_k)
-
-    balance_changes = {}
-    for balance_change_k_list in balance_changes_k_items:
-        # balance_change_k_list := ListItem({ ACCT:Int | BALANCE:Int }:BalanceMutation)
-        assert type(balance_change_k_list) is KApply
-        assert balance_change_k_list.label.name == 'ListItem'
-        balance_change_k = single(balance_change_k_list.terms)
-
-        # balance_change_k := { ACCT:Int | BALANCE:Int }:BalanceMutation
-        assert type(balance_change_k) is KApply
-        account, balance = _from_int_tuple(balance_change_k, '{_|_}_KONTROL-NODE_BalanceMutation_Int_Int')
-        balance_changes[account] = balance
-
-    return balance_changes
+    return balance_nonce_changes
 
 
 def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
@@ -1099,11 +1079,11 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
 
     # nonce changes from previous step
     assert type(trace_item.nonce_changes_kapply) is KApply
-    result['nonceChanges'] = _from_nonce_changes_to_dict(trace_item.nonce_changes_kapply)
+    result['nonceChanges'] = _from_balance_nonce_changes_to_dict(trace_item.nonce_changes_kapply)
 
     # balance changes from previous step
     assert type(trace_item.balance_changes_kapply) is KApply
-    result['balanceChanges'] = _from_balance_changes_to_dict(trace_item.balance_changes_kapply)
+    result['balanceChanges'] = _from_balance_nonce_changes_to_dict(trace_item.balance_changes_kapply)
 
     # call depth
     assert type(trace_item.call_depth_token) is KToken
