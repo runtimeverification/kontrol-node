@@ -6,12 +6,13 @@ import json
 import multiprocessing
 import pprint
 from collections import defaultdict
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import tempfile
 from typing import TYPE_CHECKING, Any, Final
+
 from eth_keys import keys
 from kevm_pyk.kevm import KEVM
 from kontrol.foundry import Foundry
@@ -21,10 +22,10 @@ from pyk.kast.manip import set_cell
 from pyk.kast.prelude.bytes import bytesToken
 from pyk.kast.prelude.collections import list_empty, map_empty
 from pyk.kast.prelude.k import GENERATED_TOP_CELL
-from pyk.kast.prelude.kbool import TRUE, FALSE
+from pyk.kast.prelude.kbool import TRUE
 from pyk.kast.prelude.utils import token
-from pyk.kore.parser import KoreParser
 from pyk.kdist import kdist
+from pyk.kore.parser import KoreParser
 from pyk.ktool.krun import KRun
 from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
 from pyk.utils import single
@@ -47,21 +48,24 @@ MAP_CONS: Final[str] = '_Map_'
 STATUS_CODE_EMPTY: Final[KApply] = KApply('.StatusCode_NETWORK_StatusCode')
 CHUNK_SIZE: Final[int] = 64
 
+
 # must be located in module root for multiprocessing
 def pool_init_forkserver(krun_dir: str, tracelogs_path_str: str) -> None:
-    global krun, kore_traces_str
-    krun = KRun(Path(krun_dir))
+    global krun, kore_traces_str  # flake8: noqa: F824
+    krun = KRun(Path(krun_dir))  # type: ignore[name-defined]
     tracelogs_path = Path(tracelogs_path_str)
-    kore_traces_str = tracelogs_path.read_text().split("\n")[:-1]
+    kore_traces_str = tracelogs_path.read_text().split('\n')[:-1]  # type: ignore[name-defined]
+
 
 # must be located in module root for multiprocessing
 def pool_parse_kore_to_kast_forkserver(trace_index: int) -> KInner:
-    global krun, kore_traces_str
+    global krun, kore_traces_str  # noqa: F824
 
-    kore_parser = KoreParser(kore_traces_str[trace_index])
+    kore_parser = KoreParser(kore_traces_str[trace_index])  # type: ignore[name-defined]
     kore_pattern = kore_parser.pattern()
-    kast = krun.kore_to_kast(kore_pattern)
+    kast = krun.kore_to_kast(kore_pattern)  # type: ignore[name-defined]
     return kast
+
 
 class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
@@ -71,7 +75,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     transaction_hashes: dict[int, str]
     default_sender_address: Final[int]
     block_storage: BlockStore
-    multiproc_ctx: multiprocessing.ForkServerContext
+    multiproc_ctx: multiprocessing.context.ForkServerContext
 
     def __init__(self, options: VMOptions) -> None:
         super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
@@ -89,19 +93,21 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.block_storage = BlockStore()
 
         self.multiproc_ctx = multiprocessing.get_context('forkserver')
-        self.multiproc_ctx.set_forkserver_preload([
-            'eth_keys',
-            'kevm_pyk.kevm',
-            'kontrol.foundry',
-            'pyk.cterm',
-            'pyk.kast.inner',
-            'pyk.kast.manip',
-            'pyk.kore.parser',
-            'pyk.kdist',
-            'pyk.ktool.krun',
-            'pyk.rpc.rpc',
-            'pyk.utils',
-        ])
+        self.multiproc_ctx.set_forkserver_preload(
+            [
+                'eth_keys',
+                'kevm_pyk.kevm',
+                'kontrol.foundry',
+                'pyk.cterm',
+                'pyk.kast.inner',
+                'pyk.kast.manip',
+                'pyk.kore.parser',
+                'pyk.kdist',
+                'pyk.ktool.krun',
+                'pyk.rpc.rpc',
+                'pyk.utils',
+            ]
+        )
 
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
 
@@ -244,10 +250,14 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                 # TODO: this can be further optimized:
                 # - use a faster implementation, e.g. rust FFI
                 # - decode a custom binary serialization instead of KORE
-                kore_traces_len = tracelogs_path.read_text().count("\n")
+                kore_traces_len = tracelogs_path.read_text().count('\n')
 
-                with self.multiproc_ctx.Pool(initializer=pool_init_forkserver, initargs=(str(self.krun.definition_dir), str(tracelogs_path))) as pool:
-                    kast_traces = pool.map(pool_parse_kore_to_kast_forkserver, list(range(kore_traces_len)), chunksize=100)
+                with self.multiproc_ctx.Pool(
+                    initializer=pool_init_forkserver, initargs=(str(self.krun.definition_dir), str(tracelogs_path))
+                ) as pool:
+                    kast_traces = pool.map(
+                        pool_parse_kore_to_kast_forkserver, list(range(kore_traces_len)), chunksize=100
+                    )
             else:
                 kast_traces = None
 
