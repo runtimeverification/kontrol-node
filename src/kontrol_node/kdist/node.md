@@ -167,10 +167,7 @@ rule <k> #closeTraceLogsFile => #close(TRFILEDESCR) ... </k>
      <traceLogsFileDescriptor> TRFILEDESCR => .FileDescr </traceLogsFileDescriptor>
   requires TRFILEDESCR =/=K .FileDescr
 
-rule <k> #closeTraceLogsFile => .K ... </k>
-  [owise]
-
-
+rule <k> #closeTraceLogsFile => .K ... </k> [owise]
  // ---------------------------------------------------------------------------------------------------------------
 
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
