@@ -7,6 +7,8 @@ module KONTROL-NODE
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
     imports NO-CODE-SIZE-CHECKS
+    imports K-IO
+    imports K-REFLECTION
 
     syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
  // -------------------------------------------------------------
@@ -40,6 +42,9 @@ module KONTROL-NODE
                         <contractAddress> .Account   </contractAddress>
                       </txReceipt>
                     </txReceipts>
+                    <traceLogsFileDescriptor> .FileDescr </traceLogsFileDescriptor>
+                    <traceLogsFilePath> "":String </traceLogsFilePath>
+                    <writeTraceLogsToFile> false </writeTraceLogsToFile>
                   </simbolikVM>
                   <KEVMTracing2>
                     <currentNonceMutations>   .List </currentNonceMutations>          
@@ -76,8 +81,31 @@ module KONTROL-NODE
       "|" Account    // transaction origin
       "|" StatusCode // status
     "}" [symbol(traceItem)]
+
+    syntax KItem ::= "#storeTraceItem" TraceItem
  // ---------------------------------------------------------------------------------------------------------------
-    rule <k> #next [ OPC ] ... </k>
+    rule <k> (.K => #storeTraceItem { PCOUNT
+                                    | OPC
+                                    | #if DSTK ==K true #then WS      #else .WordStack #fi
+                                    | #if DMEM ==K true #then MEM     #else .Bytes     #fi
+                                    | STORCH
+                                    | NONCECH
+                                    | BALCH
+                                    | CD
+                                    | GA
+                                    | COINB
+                                    | GASPR
+                                    | DIFF
+                                    | NUM
+                                    | TIMEST
+                                    | ACCT
+                                    | SENDER
+                                    | MSGVAL
+                                    | TXORIG
+                                    | STATUS
+                                    })
+             ~> #next [ OPC ] ...
+         </k>
          <activeTracing>           true             </activeTracing>
          <traceWordStack>          DSTK             </traceWordStack>
          <traceMemory>             DMEM             </traceMemory>
@@ -100,29 +128,46 @@ module KONTROL-NODE
          <callValue>               MSGVAL           </callValue>
          <origin>                  TXORIG           </origin>
          <statusCode>              STATUS           </statusCode>
+      [priority(24)]
+
+    rule <k> #storeTraceItem TRITEM => .K ... </k>
+         <writeTraceLogsToFile> false </writeTraceLogsToFile>
          <traceData>
            ...
-           .List => ListItem({ PCOUNT
-                             | OPC
-                             | #if DSTK ==K true #then WS      #else .WordStack #fi
-                             | #if DMEM ==K true #then MEM     #else .Bytes     #fi
-                             | STORCH
-                             | NONCECH
-                             | BALCH
-                             | CD
-                             | GA
-                             | COINB
-                             | GASPR
-                             | DIFF
-                             | NUM
-                             | TIMEST
-                             | ACCT
-                             | SENDER
-                             | MSGVAL
-                             | TXORIG
-                             | STATUS
-                             })
-         </traceData> [priority(24)]
+           .List => ListItem(TRITEM)
+         </traceData>
+
+    rule <k> #storeTraceItem TRITEM => #write (TRFILEDESCR, 
+               #unparseKORE( TRITEM ) +String "\n"
+             ) ... </k>
+         <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
+         <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
+      requires TRFILEDESCR =/=K .FileDescr
+
+ // ---------------------------------------------------------------------------------------------------------------
+
+syntax KItem ::= "#openTraceLogsFile"  [symbol(openTraceLogsFile)]
+               | "#closeTraceLogsFile" [symbol(closeTraceLogsFile)]
+               | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
+
+syntax FILEDESCR ::= Int
+                   | ".FileDescr"
+
+rule <k> #openTraceLogsFile => #open(TRFILEPATH, "w") ~> #storeTraceLogsFileDescriptor ... </k>
+     <traceLogsFilePath>       TRFILEPATH                  </traceLogsFilePath>
+     <writeTraceLogsToFile> true </writeTraceLogsToFile>
+
+rule <k> #openTraceLogsFile => .K ... </k>
+     <writeTraceLogsToFile> false </writeTraceLogsToFile>
+
+rule <k> TRFILEDESCR ~> #storeTraceLogsFileDescriptor => .K ... </k>
+     <traceLogsFileDescriptor> _ => TRFILEDESCR </traceLogsFileDescriptor>
+
+rule <k> #closeTraceLogsFile => #close(TRFILEDESCR) ... </k>
+     <traceLogsFileDescriptor> TRFILEDESCR => .FileDescr </traceLogsFileDescriptor>
+  requires TRFILEDESCR =/=K .FileDescr
+
+rule <k> #closeTraceLogsFile => .K ... </k> [owise]
  // ---------------------------------------------------------------------------------------------------------------
 
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
@@ -460,7 +505,9 @@ module KONTROL-NODE
           => #updateBlockHeader
           ~> mkTX !TXID
           ~> #loadTransaction !TXID TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
+          ~> #openTraceLogsFile
           ~> #runTransaction !TXID ACCTFROM
+          ~> #closeTraceLogsFile
           ~> #makeTxReceipt !TXID
           ~> #finalizeBlock
           ~> #computeHeaderHash
