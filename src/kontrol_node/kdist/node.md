@@ -81,8 +81,31 @@ module KONTROL-NODE
       "|" Account    // transaction origin
       "|" StatusCode // status
     "}" [symbol(traceItem)]
+
+    syntax KItem ::= "#storeTraceItem" TraceItem
  // ---------------------------------------------------------------------------------------------------------------
-    rule <k> #next [ OPC ] ... </k>
+    rule <k> (.K => #storeTraceItem { PCOUNT
+                                    | OPC
+                                    | #if DSTK ==K true #then WS      #else .WordStack #fi
+                                    | #if DMEM ==K true #then MEM     #else .Bytes     #fi
+                                    | STORCH
+                                    | NONCECH
+                                    | BALCH
+                                    | CD
+                                    | GA
+                                    | COINB
+                                    | GASPR
+                                    | DIFF
+                                    | NUM
+                                    | TIMEST
+                                    | ACCT
+                                    | SENDER
+                                    | MSGVAL
+                                    | TXORIG
+                                    | STATUS
+                                    })
+             ~> #next [ OPC ] ...
+         </k>
          <activeTracing>           true             </activeTracing>
          <traceWordStack>          DSTK             </traceWordStack>
          <traceMemory>             DMEM             </traceMemory>
@@ -90,7 +113,6 @@ module KONTROL-NODE
          <currentNonceMutations>   NONCECH => .List </currentNonceMutations>          
          <currentBalanceMutations> BALCH => .List   </currentBalanceMutations>          
          <currentStorageMutations> STORCH => .List  </currentStorageMutations>
-         <writeTraceLogsToFile> false </writeTraceLogsToFile>
          <pc>                      PCOUNT           </pc>
          <wordStack>               WS               </wordStack>
          <callDepth>               CD               </callDepth>
@@ -106,79 +128,21 @@ module KONTROL-NODE
          <callValue>               MSGVAL           </callValue>
          <origin>                  TXORIG           </origin>
          <statusCode>              STATUS           </statusCode>
-         <traceData>
-           ...
-           .List => ListItem({ PCOUNT
-                             | OPC
-                             | #if DSTK ==K true #then WS      #else .WordStack #fi
-                             | #if DMEM ==K true #then MEM     #else .Bytes     #fi
-                             | STORCH
-                             | NONCECH
-                             | BALCH
-                             | CD
-                             | GA
-                             | COINB
-                             | GASPR
-                             | DIFF
-                             | NUM
-                             | TIMEST
-                             | ACCT
-                             | SENDER
-                             | MSGVAL
-                             | TXORIG
-                             | STATUS
-                             })
-         </traceData>
       [priority(24)]
 
-    rule <k> (.K => #write (TRFILEDESCR, 
-              #unparseKORE( { PCOUNT
-                            | OPC
-                            | #if DSTK ==K true #then WS      #else .WordStack #fi
-                            | #if DMEM ==K true #then MEM     #else .Bytes     #fi
-                            | STORCH
-                            | NONCECH
-                            | BALCH
-                            | CD
-                            | GA
-                            | COINB
-                            | GASPR
-                            | DIFF
-                            | NUM
-                            | TIMEST
-                            | ACCT
-                            | SENDER
-                            | MSGVAL
-                            | TXORIG
-                            | STATUS
-                            } ) +String "\n"
-             ))
-             ~> #next [ OPC ] ... </k>
-         <activeTracing>           true             </activeTracing>
-         <traceWordStack>          DSTK             </traceWordStack>
-         <traceMemory>             DMEM             </traceMemory>
-         <traceLogsFileDescriptor> TRFILEDESCR      </traceLogsFileDescriptor>
-         <recordedTrace>           false => true    </recordedTrace>
-         <currentNonceMutations>   NONCECH => .List </currentNonceMutations>          
-         <currentBalanceMutations> BALCH => .List   </currentBalanceMutations>          
-         <currentStorageMutations> STORCH => .List  </currentStorageMutations>
-         <pc>                      PCOUNT           </pc>
-         <wordStack>               WS               </wordStack>
-         <callDepth>               CD               </callDepth>
-         <localMem>                MEM              </localMem>
-         <id>                      ACCT             </id>
-         <gas>                     GA               </gas>
-         <coinbase>                COINB            </coinbase>
-         <gasPrice>                GASPR            </gasPrice>
-         <difficulty>              DIFF             </difficulty>
-         <number>                  NUM              </number>
-         <timestamp>               TIMEST           </timestamp>
-         <caller>                  SENDER           </caller>
-         <callValue>               MSGVAL           </callValue>
-         <origin>                  TXORIG           </origin>
-         <statusCode>              STATUS           </statusCode>
+    rule <k> #storeTraceItem TRITEM => .K ... </k>
+         <writeTraceLogsToFile> false </writeTraceLogsToFile>
+         <traceData>
+           ...
+           .List => ListItem(TRITEM)
+         </traceData>
+
+    rule <k> #storeTraceItem TRITEM => #write (TRFILEDESCR, 
+               #unparseKORE( TRITEM ) +String "\n"
+             ) ... </k>
+         <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
+         <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
       requires TRFILEDESCR =/=K .FileDescr
-      [priority(24)]
 
  // ---------------------------------------------------------------------------------------------------------------
 
