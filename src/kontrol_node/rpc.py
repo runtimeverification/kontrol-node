@@ -48,6 +48,9 @@ MAP_CONS: Final[str] = '_Map_'
 STATUS_CODE_EMPTY: Final[KApply] = KApply('.StatusCode_NETWORK_StatusCode')
 CHUNK_SIZE: Final[int] = 64
 
+# 32 bytes, and two characters for '0x'
+HASH_LENGTH: Final[int] = 32 * 2 + 2
+
 
 # must be located in module root for multiprocessing
 def pool_init_forkserver(krun_dir: str, tracelogs_path_str: str) -> None:
@@ -624,16 +627,16 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def _get_block_header(self) -> dict:
         return {
-            '<currentBlockHash>': hex(int(self._parse_ktoken_cell('CURRENTBLOCKHASH_CELL'))),
-            '<previousHash>': hex(int(self._parse_ktoken_cell('PREVIOUSHASH_CELL'))),
-            '<ommersHash>': hex(int(self._parse_ktoken_cell('OMMERSHASH_CELL'))).ljust(64, '0'),
-            '<stateRoot>': hex(int(self._parse_ktoken_cell('STATEROOT_CELL'))).ljust(64, '0'),
-            '<transactionsRoot>': hex(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL'))).ljust(64, '0'),
-            '<receiptsRoot>': hex(int(self._parse_ktoken_cell('RECEIPTSROOT_CELL'))).ljust(64, '0'),
+            '<currentBlockHash>': format(int(self._parse_ktoken_cell('CURRENTBLOCKHASH_CELL')), f'#0{HASH_LENGTH}x'),
+            '<previousHash>': format(int(self._parse_ktoken_cell('PREVIOUSHASH_CELL')), f'#0{HASH_LENGTH}x'),
+            '<ommersHash>': format(int(self._parse_ktoken_cell('OMMERSHASH_CELL')), f'#0{HASH_LENGTH}x'),
+            '<stateRoot>': format(int(self._parse_ktoken_cell('STATEROOT_CELL')), f'#0{HASH_LENGTH}x'),
+            '<transactionsRoot>': format(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL')), f'#0{HASH_LENGTH}x'),
+            '<receiptsRoot>': format(int(self._parse_ktoken_cell('RECEIPTSROOT_CELL')), f'#0{HASH_LENGTH}x'),
             '<logsBloom>': '0x' + ast.literal_eval(self._parse_ktoken_cell('LOGSBLOOM_CELL')).hex(),
             '<gasUsed>': hex(int(self._parse_ktoken_cell('GASUSED_CELL'))),
             '<extraData>': '0x' + ast.literal_eval(self._parse_ktoken_cell('EXTRADATA_CELL')).hex(),
-            '<mixHash>': hex(int(self._parse_ktoken_cell('MIXHASH_CELL'))).ljust(64, '0'),
+            '<mixHash>': format(int(self._parse_ktoken_cell('MIXHASH_CELL')), f'#0{HASH_LENGTH}x'),
             '<blockNonce>': hex(int(self._parse_ktoken_cell('BLOCKNONCE_CELL'))),
             '<withdrawalsRoot>': hex(int(self._parse_ktoken_cell('WITHDRAWALSROOT_CELL'))),
             '<beaconRoot>': hex(int(self._parse_ktoken_cell('BEACONROOT_CELL'))),
