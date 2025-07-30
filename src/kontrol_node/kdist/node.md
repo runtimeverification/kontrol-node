@@ -55,6 +55,8 @@ module KONTROL-NODE
                     <traceBalance>            false </traceBalance>
                     <currentStorageMutations> .List </currentStorageMutations>
 
+                    <localMemoryChanged>      true  </localMemoryChanged>
+
                     <injectedTracesCallStack> false </injectedTracesCallStack>
                     <recordedMkCallCreate>    false </recordedMkCallCreate>
                     <contextSwitch>           true  </contextSwitch>
@@ -87,7 +89,7 @@ module KONTROL-NODE
           Int        // program counter 
       "|" OpCode     // opcode
       "|" WordStack  // stack
-      "|" Bytes      // memory
+      "|" DataChange // memory
       "|" List       // storage changes
       "|" List       // nonce changes
       "|" List       // balance changes
@@ -116,7 +118,7 @@ module KONTROL-NODE
     rule <k> (.K => #storeTraceItem { PCOUNT
                                     | OPC
                                     | #if DSTK ==K true #then WS      #else .WordStack #fi
-                                    | #if DMEM ==K true #then MEM     #else .Bytes     #fi
+                                    | #if (DMEM andBool MEMCH)          ==K true #then MEM  #else .DataChange #fi
                                     | STORCH
                                     | NONCECH
                                     | BALCH
@@ -149,6 +151,7 @@ module KONTROL-NODE
          <recordedTrace>                false => true          </recordedTrace>
          <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
          <recordedCreate>               _ => false             </recordedCreate>
+         <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
          <currentNonceMutations>        NONCECH => .List       </currentNonceMutations>          
          <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
          <currentBalanceMutations>      BALCH => .List         </currentBalanceMutations>          
@@ -574,6 +577,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          <tracesCallState> _ => TRACESCALLSTATE </tracesCallState>
          <contextSwitch> _ => true </contextSwitch>
          <programChanged> _ => true </programChanged>
+         <localMemoryChanged> _ => true </localMemoryChanged>
 
     rule <k> #mkCreate _ _ _ _ ... </k>
          <recordedMkCallCreate> false => true </recordedMkCallCreate>
@@ -624,7 +628,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | CODE }:MapMutation) </currentDeployedCodeMutations>
       [priority(49)]
 
-    // trace cheatcode changes as well
+    // trace program changes by cheatcodes as well
     rule <k> #setCode ACCTID CODE => .K ... </k>
          <traceDeployedCode> true </traceDeployedCode>
          <account>
@@ -660,7 +664,60 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          <currentInitCodeMutations> ... .List => ListItem({ ACCTTO | INITCODE }:MapMutation) </currentInitCodeMutations>
          <recordedCreate> false => true </recordedCreate>
       [priority(49)]
-    
+
+ // ---------------------------------------------------------------------------------------------------------------
+    // trace memory changes to reduce the size of traces
+    // when memory change, we trace the entire memory contents
+    // the <localMemory> cell is also changed at `#popTracesCallStack`
+    rule <k> MSTORE _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> MSTORE8 _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> MCOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> CODECOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> CALLDATACOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> RETURNDATACOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> EXTCODECOPY _ _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> #initVM ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> #setLocalMem _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> clearTX ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
 
 ```
   Transaction Signing and execution

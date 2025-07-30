@@ -1135,7 +1135,7 @@ class TraceItem:
     program_counter_token: KToken
     opcode_kapply: KApply
     wordstack_kapply: KApply
-    local_mem_token: KToken
+    local_mem_change_kinner: KApply | KToken
     storage_changes_kapply: KApply
     nonce_changes_kapply: KApply
     balance_changes_kapply: KApply
@@ -1188,13 +1188,16 @@ def extract_trace_item(trace_item_kapply: KApply) -> dict[str, Any]:
         wordstack.reverse()
     result['stack'] = wordstack
 
-    # local memory
-    assert type(trace_item.local_mem_token) is KToken
-    local_mem = ast.literal_eval(trace_item.local_mem_token.token).hex()
-    memory_chunks = [
-        (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
-    ]
-    result['memory'] = memory_chunks
+    # local_mem_change_kinner
+    if type(trace_item.local_mem_change_kinner) is KApply:
+        assert trace_item.local_mem_change_kinner == UNCHANGED_DATA
+    else:
+        assert type(trace_item.local_mem_change_kinner) is KToken
+        local_mem = ast.literal_eval(trace_item.local_mem_change_kinner.token).hex()
+        memory_chunks = [
+            (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
+        ]
+        result['memoryChange'] = memory_chunks
 
     # storage changes from previous step
     assert type(trace_item.storage_changes_kapply) is KApply
