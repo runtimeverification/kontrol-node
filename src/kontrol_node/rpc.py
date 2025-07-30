@@ -703,7 +703,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_subst = {
             '$PGM': KSequence([KEVM.sharp_execute()]),
             '$MODE': KApply('NORMAL'),
-            '$SCHEDULE': KApply('SHANGHAI_EVM'),
+            '$SCHEDULE': KApply('CANCUN_EVM'),
             '$USEGAS': TRUE,
             '$CHAINID': token(31337),
         }
