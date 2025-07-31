@@ -719,6 +719,49 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
+  // ---------------------------------------------------------------------------------------------------------------
+    // the `#setMockCall` rules in kontrol are unsound and cause execution issues when run using the llvm-backend
+    // TODO: remove this once the fixes (using [owise]) were upstreamed to kontrol
+    rule <k> #setMockCall MOCKADDRESS MOCKCALLDATA MOCKRETURN => .K ... </k>
+         <mockCall>
+            <mockAddress> MOCKADDRESS </mockAddress>
+            <mockValues>  MOCKVALUES => MOCKVALUES [ MOCKCALLDATA <- MOCKRETURN ] </mockValues>
+         </mockCall>
+      [priority(49)]
+
+    rule <k> #setMockCall MOCKADDRESS MOCKCALLDATA MOCKRETURN => .K ... </k>
+         <mockCalls>
+           ( .Bag
+            => <mockCall>
+                  <mockAddress> MOCKADDRESS </mockAddress>
+                  <mockValues> .Map [ MOCKCALLDATA <- MOCKRETURN ] </mockValues>
+               </mockCall>
+           )
+           ...
+         </mockCalls>
+      [owise,priority(49)]
+
+    // same issue with `#setMockFunction`
+    // TODO: remove this once the fixes (using [owise]) were upstreamed to kontrol
+    rule <k> #setMockFunction MOCKADDRESS MOCKTARGET MOCKCALLDATA => .K ... </k>
+         <mockFunction>
+            <mockFunctionAddress> MOCKADDRESS </mockFunctionAddress>
+            <mockFunctionValues>  MOCKVALUES => MOCKVALUES [ MOCKCALLDATA <- MOCKTARGET ] </mockFunctionValues>
+         </mockFunction>
+      [priority(49)]
+
+   rule <k> #setMockFunction MOCKADDRESS MOCKTARGET MOCKCALLDATA => .K ... </k>
+         <mockFunctions>
+           ( .Bag
+            => <mockFunction>
+                  <mockFunctionAddress> MOCKADDRESS </mockFunctionAddress>
+                  <mockFunctionValues> .Map [ MOCKCALLDATA <- MOCKTARGET ] </mockFunctionValues>
+               </mockFunction>
+           )
+           ...
+         </mockFunctions>
+      [owise,priority(49)]
+
 ```
   Transaction Signing and execution
   ---------------------------------
