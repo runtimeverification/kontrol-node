@@ -947,7 +947,7 @@ def _from_cell_map_to_list(cell: KApply) -> list:
 
 
 def string_to_bool(bool_str: str) -> bool:
-    return bool_str.lower() == "true"
+    return bool_str.lower() == 'true'
 
 
 # this was used to parse the storage map of a current account
@@ -980,13 +980,13 @@ def _from_int_bytes_tuple(int_bytes_tuple_k: KApply, label: str) -> tuple[str, s
     assert type(int_bytes_tuple_k) is KApply
     assert int_bytes_tuple_k.label.name == label
 
-    assert len(int_bytes_tuple_k.terms) == 2, "expected exactly two k terms for (int, bytes) tuple"
+    assert len(int_bytes_tuple_k.terms) == 2, 'expected exactly two k terms for (int, bytes) tuple'
 
     first_term, second_term = int_bytes_tuple_k.terms
     assert type(first_term is KToken)
     assert type(second_term is KToken)
 
-    return (hex(int(first_term.token)), '0x' + ast.literal_eval(second_term.token).hex())
+    return (hex(int(first_term.token)), '0x' + ast.literal_eval(second_term.token).hex())  # type: ignore[attr-defined]
 
 
 def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dict[str, str]]:
@@ -1032,10 +1032,10 @@ def _from_balance_nonce_changes_to_dict(balance_nonce_changes_k: KInner) -> dict
     return balance_nonce_changes
 
 
-def _from_code_changes_to_dict(code_changes_k: KInner) -> dict[str, dict[str, str]]:
+def _from_code_changes_to_dict(code_changes_k: KInner) -> dict[str, str]:
     if code_changes_k == list_empty():
         return {}
-    
+
     code_changes_k_items = flatten_label('_List_', code_changes_k)
 
     code_changes = {}
@@ -1049,7 +1049,7 @@ def _from_code_changes_to_dict(code_changes_k: KInner) -> dict[str, dict[str, st
         assert type(code_change_k) is KApply
         account, program = _from_int_bytes_tuple(code_change_k, 'node_bytesMapMutation')
         code_changes[account] = program
-    
+
     return code_changes
 
 

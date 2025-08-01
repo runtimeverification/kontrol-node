@@ -18,10 +18,8 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                     label=KLabel(name='PUSH', params=()),
                     args=(KToken(token='1', sort=KSort(name='Int')),),
                 ),
-                KApply(
-                    label=KLabel(name='.WordStack_EVM-TYPES_WordStack', params=()), args=()
-                ),
-                KToken(token='b""', sort=KSort(name="Bytes")),
+                KApply(label=KLabel(name='.WordStack_EVM-TYPES_WordStack', params=()), args=()),
+                KToken(token='b""', sort=KSort(name='Bytes')),
                 KApply(label=KLabel(name='.List', params=()), args=()),
                 KApply(
                     label=KLabel(name='ListItem', params=()),
@@ -54,9 +52,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                                                     label=KLabel(name='_List_', params=()),
                                                     args=(
                                                         KApply(
-                                                            label=KLabel(
-                                                                name='ListItem', params=()
-                                                            ),
+                                                            label=KLabel(name='ListItem', params=()),
                                                             args=(
                                                                 KApply(
                                                                     label=KLabel(
@@ -66,24 +62,18 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                                                                     args=(
                                                                         KToken(
                                                                             token='119096571092301921719253721560231391405901977941',
-                                                                            sort=KSort(
-                                                                                name='Int'
-                                                                            ),
+                                                                            sort=KSort(name='Int'),
                                                                         ),
                                                                         KToken(
                                                                             token='100000000000000000000',
-                                                                            sort=KSort(
-                                                                                name='Int'
-                                                                            ),
+                                                                            sort=KSort(name='Int'),
                                                                         ),
                                                                     ),
                                                                 ),
                                                             ),
                                                         ),
                                                         KApply(
-                                                            label=KLabel(
-                                                                name='ListItem', params=()
-                                                            ),
+                                                            label=KLabel(name='ListItem', params=()),
                                                             args=(
                                                                 KApply(
                                                                     label=KLabel(
@@ -93,15 +83,11 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                                                                     args=(
                                                                         KToken(
                                                                             token='0',
-                                                                            sort=KSort(
-                                                                                name='Int'
-                                                                            ),
+                                                                            sort=KSort(name='Int'),
                                                                         ),
                                                                         KToken(
                                                                             token='-9322133000000000',
-                                                                            sort=KSort(
-                                                                                name='Int'
-                                                                            ),
+                                                                            sort=KSort(name='Int'),
                                                                         ),
                                                                     ),
                                                                 ),
@@ -110,9 +96,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                                                     ),
                                                 ),
                                                 KApply(
-                                                    label=KLabel(
-                                                        name='ListItem', params=()
-                                                    ),
+                                                    label=KLabel(name='ListItem', params=()),
                                                     args=(
                                                         KApply(
                                                             label=KLabel(
@@ -161,9 +145,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                                     label=KLabel(name='ListItem', params=()),
                                     args=(
                                         KApply(
-                                            label=KLabel(
-                                                name='node_intMapMutation', params=()
-                                            ),
+                                            label=KLabel(name='node_intMapMutation', params=()),
                                             args=(
                                                 KToken(
                                                     token='119096571092301921719253721560231391405901977941',
