@@ -983,8 +983,8 @@ def _from_int_bytes_tuple(int_bytes_tuple_k: KApply, label: str) -> tuple[str, s
     assert len(int_bytes_tuple_k.terms) == 2, 'expected exactly two k terms for (int, bytes) tuple'
 
     first_term, second_term = int_bytes_tuple_k.terms
-    assert type(first_term is KToken)
-    assert type(second_term is KToken)
+    assert type(first_term) is KToken
+    assert type(second_term) is KToken
 
     return (hex(int(first_term.token)), '0x' + ast.literal_eval(second_term.token).hex())  # type: ignore[attr-defined]
 

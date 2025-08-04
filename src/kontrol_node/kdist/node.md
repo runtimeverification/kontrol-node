@@ -223,7 +223,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
     // due to this, Map hooks cannot be used
     // instead, mutations on the state of accounts has to be traced individually with tracing rules of higher priority
-    // both <nonce> and <balance> are moft often mutated directly by rules
+    // both <nonce> and <balance> are most often mutated directly by rules
     // these rules sometimes do not re-execute themselves, which is why an inserted K production can be
     //  used to enforce tracing to happen only once per mutation
     // rules that are re-executed or re-insert themselves into <k> must be overwritten entirely
