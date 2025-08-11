@@ -7,6 +7,7 @@ module KONTROL-NODE
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
     imports NO-CODE-SIZE-CHECKS
+    imports JSON
     imports K-IO
     imports K-REFLECTION
 
@@ -82,6 +83,61 @@ module KONTROL-NODE
       "|" StatusCode // status
     "}" [symbol(traceItem)]
 
+  // --------------------------------------------------------------------------------------------------------------
+  // JSON encoding of trace items
+
+    syntax JSON ::= traceToJson(traceToJson) [function, symbol(traceToJson)]
+                  | opcodeToJson(OpCode)     [function, symbol(opcodeToJson)]
+                  | stackToJson(WordStack)   [function, symbol(stackToJson)]
+                  | bytesToJson(Bytes)       [function, symbol(bytesToJson)]
+                  | storageToJson(List)      [function, symbol(storageToJson)]
+                  | nonceToJson(List)        [function, symbol(nonceToJson)]
+                  | balanceToJson(List)      [function, symbol(balanceToJson)]
+                  | accountToJson(Account)   [function, symbol(accountToJson)]
+                  | statusToJson(StatusCode) [function, symbol(statusToJson)]
+
+    rule traceToJson (
+      { PC
+      | OPCODE
+      | WORDSTACK
+      | MEMORY
+      | STORAGE_CHANGES
+      | NONCE_CHANGES
+      | BALANCE_CHANGES
+      | CALL_DEPTH
+      | GAS_LEFT
+      | COINBASE
+      | GAS_PRICE
+      | DIFFICULTY
+      | BLOCK_NUMBER
+      | TIMESTAMP
+      | TARGET_ADDRESS
+      | MESSAGE_SENDER
+      | MESSAGE_VALUE
+      | TX_ORIGIN
+      | STATUS_CODE
+      } ) => {
+        "pc": PC,
+        "opcode": OPCODE,
+        "stack": WORDSTACK,
+        "memory": MEMORY,
+        "storage": toJson( STORAGE_CHANGES ),
+        "nonce_changes": toJson( NONCE_CHANGES ),
+        "balance_changes": toJson( BALANCE_CHANGES),
+        "call_depth": CALL_DEPTH,
+        "gas_left": GAS_LEFT,
+        "coinbase": COINBASE,
+        "gasprice": GAS_PRICE,
+        "difficulty": DIFFICULTY,
+        "blocknumber": BLOCK_NUMBER,
+        "timestamp": TIMESTAMP,
+        "target_address": TARGET_ADDRESS,
+        "msg_sender": MESSAGE_SENDER,
+        "msg_value": MESSAGE_VALUE,
+        "tx_origin": TX_ORIGIN,
+        "status_code": STATUS_CODE
+      }
+
     syntax KItem ::= "#storeTraceItem" TraceItem
  // ---------------------------------------------------------------------------------------------------------------
     rule <k> (.K => #storeTraceItem { PCOUNT
@@ -138,7 +194,7 @@ module KONTROL-NODE
          </traceData>
 
     rule <k> #storeTraceItem TRITEM => #write (TRFILEDESCR, 
-               #unparseKORE( TRITEM ) +String "\n"
+               JSON2String( traceToJson( TRITEM) ) +String "\n"
              ) ... </k>
          <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
          <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
