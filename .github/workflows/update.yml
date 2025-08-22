@@ -39,17 +39,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - name: 'Install Poetry'
-        uses: Gr1N/setup-poetry@v9
-      - name: 'Update Poetry files'
+      - name: 'Install uv'
+        uses: astral-sh/setup-uv@v6
+      - name: 'Update uv files'
         run: |
           KONTROL_VERSION="$(cat deps/kontrol_release)"
-          sed -i 's!kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "[v0-9\.]*" }!kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v'${KONTROL_VERSION}'" }!' pyproject.toml
-          poetry update
-          git add . && git commit -m "Sync Poetry files: kontrol ${KONTROL_VERSION}" || true
+          sed -i 's!    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v[0-9\.]*",!    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v'${KONTROL_VERSION}',!' pyproject.toml
+          uv lock --upgrade
+          git add . && git commit -m "Sync uv files: kontrol ${KONTROL_VERSION}" || true
       - name: 'Update K release'
         run: |
-          K_VERSION=$(poetry run python3 -c 'import pyk; print(pyk.__version__)')
+          K_VERSION=$(uv run python3 -c 'import pyk; print(pyk.__version__)')
           echo ${K_VERSION} > deps/k_release
           git add deps/k_release && git commit -m "Sync release file: K ${K_VERSION}" || true
       - name: 'Update Nix flake inputs'

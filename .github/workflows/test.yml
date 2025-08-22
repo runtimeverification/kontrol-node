@@ -27,6 +27,7 @@ jobs:
           og_version=$(git show origin/${GITHUB_BASE_REF}:package/version)
           ./package/version.sh bump ${og_version}
           ./package/version.sh sub
+          uv lock
           new_version=$(cat package/version)
           git add --update && git commit --message "Set Version: ${new_version}" || true
       - name: 'Push updates'
@@ -72,10 +73,8 @@ jobs:
         uses: ./.github/actions/with-docker
         with:
           container-name: ${CONTAINER}
-      - name: 'Create poetry virtual environment'
-        run: docker exec --user user ${CONTAINER} poetry install
       - name: 'Build kontrol-node'
-        run: docker exec --user user ${CONTAINER} poetry run kdist -v build kontrol-node.simbolik
+        run: docker exec --user user ${CONTAINER} uv run kdist -v build kontrol-node.simbolik
       - name: 'Run integration tests'
         run: docker exec --user user ${CONTAINER} make test-integration
       - name: 'Tear down Docker'
