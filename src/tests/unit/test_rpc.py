@@ -9,7 +9,7 @@ from kontrol_node.rpc import extract_message, extract_receipt, extract_trace_ite
 
 EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = [
     (
-        'extract_trace_item_0',
+        'extract_trace_item_1',
         KApply(
             label=KLabel(name='traceItem', params=()),
             args=(
@@ -18,15 +18,193 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                     label=KLabel(name='PUSH', params=()),
                     args=(KToken(token='1', sort=KSort(name='Int')),),
                 ),
-                KApply(label=KLabel(name='.WordStack_EVM-TYPES_WordStack', params=()), args=()),
+                KApply(
+                    label=KLabel(name='.WordStack_EVM-TYPES_WordStack', params=()),
+                    args=(),
+                ),
                 KToken(token='b""', sort=KSort(name='Bytes')),
-                KApply(label=KLabel(name='.Map', params=()), args=()),
+                KApply(label=KLabel(name='.List', params=()), args=()),
+                KApply(
+                    label=KLabel(name='ListItem', params=()),
+                    args=(
+                        KApply(
+                            label=KLabel(
+                                name='node_mapMutation',
+                                params=(),
+                            ),
+                            args=(
+                                KToken(
+                                    token='119096571092301921719253721560231391405901977941',
+                                    sort=KSort(name='Int'),
+                                ),
+                                KToken(token='3', sort=KSort(name='Int')),
+                            ),
+                        ),
+                    ),
+                ),
+                KApply(
+                    label=KLabel(name='_List_', params=()),
+                    args=(
+                        KApply(
+                            label=KLabel(name='_List_', params=()),
+                            args=(
+                                KApply(
+                                    label=KLabel(name='_List_', params=()),
+                                    args=(
+                                        KApply(
+                                            label=KLabel(name='_List_', params=()),
+                                            args=(
+                                                KApply(
+                                                    label=KLabel(name='_List_', params=()),
+                                                    args=(
+                                                        KApply(
+                                                            label=KLabel(
+                                                                name='ListItem',
+                                                                params=(),
+                                                            ),
+                                                            args=(
+                                                                KApply(
+                                                                    label=KLabel(
+                                                                        name='node_mapMutation',
+                                                                        params=(),
+                                                                    ),
+                                                                    args=(
+                                                                        KToken(
+                                                                            token='119096571092301921719253721560231391405901977941',
+                                                                            sort=KSort(name='Int'),
+                                                                        ),
+                                                                        KToken(
+                                                                            token='100000000000000000000',
+                                                                            sort=KSort(name='Int'),
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                        KApply(
+                                                            label=KLabel(
+                                                                name='ListItem',
+                                                                params=(),
+                                                            ),
+                                                            args=(
+                                                                KApply(
+                                                                    label=KLabel(
+                                                                        name='node_mapMutation',
+                                                                        params=(),
+                                                                    ),
+                                                                    args=(
+                                                                        KToken(
+                                                                            token='0',
+                                                                            sort=KSort(name='Int'),
+                                                                        ),
+                                                                        KToken(
+                                                                            token='-9322133000000000',
+                                                                            sort=KSort(name='Int'),
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                                KApply(
+                                                    label=KLabel(name='ListItem', params=()),
+                                                    args=(
+                                                        KApply(
+                                                            label=KLabel(
+                                                                name='node_mapMutation',
+                                                                params=(),
+                                                            ),
+                                                            args=(
+                                                                KToken(
+                                                                    token='0',
+                                                                    sort=KSort(name='Int'),
+                                                                ),
+                                                                KToken(
+                                                                    token='-9322133000000000',
+                                                                    sort=KSort(name='Int'),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                        KApply(
+                                            label=KLabel(name='ListItem', params=()),
+                                            args=(
+                                                KApply(
+                                                    label=KLabel(
+                                                        name='node_mapMutation',
+                                                        params=(),
+                                                    ),
+                                                    args=(
+                                                        KToken(
+                                                            token='119096571092301921719253721560231391405901977941',
+                                                            sort=KSort(name='Int'),
+                                                        ),
+                                                        KToken(
+                                                            token='100000000000000000000',
+                                                            sort=KSort(name='Int'),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                KApply(
+                                    label=KLabel(name='ListItem', params=()),
+                                    args=(
+                                        KApply(
+                                            label=KLabel(
+                                                name='node_mapMutation',
+                                                params=(),
+                                            ),
+                                            args=(
+                                                KToken(
+                                                    token='119096571092301921719253721560231391405901977941',
+                                                    sort=KSort(name='Int'),
+                                                ),
+                                                KToken(
+                                                    token='100000000000000000000',
+                                                    sort=KSort(name='Int'),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        KApply(
+                            label=KLabel(name='ListItem', params=()),
+                            args=(
+                                KApply(
+                                    label=KLabel(
+                                        name='node_mapMutation',
+                                        params=(),
+                                    ),
+                                    args=(
+                                        KToken(
+                                            token='1364846179604156837468707468773843663978916111562',
+                                            sort=KSort(name='Int'),
+                                        ),
+                                        KToken(
+                                            token='1000000000000000000000000',
+                                            sort=KSort(name='Int'),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
                 KToken(token='0', sort=KSort(name='Int')),
-                KToken(token='29999546786', sort=KSort(name='Int')),
+                KToken(token='29999978936', sort=KSort(name='Int')),
                 KToken(token='0', sort=KSort(name='Int')),
                 KToken(token='0', sort=KSort(name='Int')),
                 KToken(token='0', sort=KSort(name='Int')),
-                KToken(token='1', sort=KSort(name='Int')),
+                KToken(token='3', sort=KSort(name='Int')),
                 KToken(token='1725635810', sort=KSort(name='Int')),
                 KToken(
                     token='1364846179604156837468707468773843663978916111562',
@@ -41,7 +219,10 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                     token='119096571092301921719253721560231391405901977941',
                     sort=KSort(name='Int'),
                 ),
-                KApply(label=KLabel(name='.StatusCode_NETWORK_StatusCode', params=()), args=()),
+                KApply(
+                    label=KLabel(name='EVMC_SUCCESS_NETWORK_EndStatusCode', params=()),
+                    args=(),
+                ),
             ),
         ),
         '0x',
@@ -51,19 +232,25 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
             'op': 'PUSH1',
             'stack': [],
             'memory': [],
-            'storage': {},
+            'storageChanges': {},
+            'nonceChanges': {'0x14dc79964da2c08b23698b3d3cc7ca32193d9955': '0x3'},
+            'balanceChanges': {
+                '0x14dc79964da2c08b23698b3d3cc7ca32193d9955': '0x56bc75e2d63100000',
+                '0x0': '-0x211e6e3a039200',
+                '0xef11d1c2aa48826d4c41e54ab82d1ff5ad8a64ca': '0xd3c21bcecceda1000000',
+            },
             'depth': 1,
-            'gas': 29999546786,
+            'gas': 29999978936,
             'coinbase': 0,
             'gasCost': 0,
             'difficulty': 0,
-            'blockNumber': 1,
+            'blockNumber': 3,
             'blockTimestamp': 1725635810,
             'targetAddress': 1364846179604156837468707468773843663978916111562,
             'msgSender': 119096571092301921719253721560231391405901977941,
             'msgValue': 0,
             'txOrigin': 119096571092301921719253721560231391405901977941,
-            'statusCode': 'empty',
+            'statusCode': 'EVMC_SUCCESS',
         },
     ),
     (
@@ -87,100 +274,9 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                     token='b"\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\xa0\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00d\\x00\\x00\\x00d\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00d"',
                     sort=KSort(name='Bytes'),
                 ),
-                KApply(
-                    label=KLabel(name='_Map_', params=()),
-                    args=(
-                        KApply(
-                            label=KLabel(name='_Map_', params=()),
-                            args=(
-                                KApply(
-                                    label=KLabel(name='_Map_', params=()),
-                                    args=(
-                                        KApply(
-                                            label=KLabel(name='_Map_', params=()),
-                                            args=(
-                                                KApply(
-                                                    label=KLabel(name='_Map_', params=()),
-                                                    args=(
-                                                        KApply(
-                                                            label=KLabel(name='_|->_', params=()),
-                                                            args=(
-                                                                KToken(
-                                                                    token='31',
-                                                                    sort=KSort(name='Int'),
-                                                                ),
-                                                                KToken(
-                                                                    token='116848421129523080157339061407615272923298111283713',
-                                                                    sort=KSort(name='Int'),
-                                                                ),
-                                                            ),
-                                                        ),
-                                                        KApply(
-                                                            label=KLabel(name='_|->_', params=()),
-                                                            args=(
-                                                                KToken(
-                                                                    token='12',
-                                                                    sort=KSort(name='Int'),
-                                                                ),
-                                                                KToken(
-                                                                    token='1',
-                                                                    sort=KSort(name='Int'),
-                                                                ),
-                                                            ),
-                                                        ),
-                                                    ),
-                                                ),
-                                                KApply(
-                                                    label=KLabel(name='_|->_', params=()),
-                                                    args=(
-                                                        KToken(
-                                                            token='34',
-                                                            sort=KSort(name='Int'),
-                                                        ),
-                                                        KToken(
-                                                            token='493120498101196152138321806898883778678928149372',
-                                                            sort=KSort(name='Int'),
-                                                        ),
-                                                    ),
-                                                ),
-                                            ),
-                                        ),
-                                        KApply(
-                                            label=KLabel(name='_|->_', params=()),
-                                            args=(
-                                                KToken(token='35', sort=KSort(name='Int')),
-                                                KToken(
-                                                    token='100852501475775601404650405464272661921201036538',
-                                                    sort=KSort(name='Int'),
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                ),
-                                KApply(
-                                    label=KLabel(name='_|->_', params=()),
-                                    args=(
-                                        KToken(token='32', sort=KSort(name='Int')),
-                                        KToken(
-                                            token='929221947425989735260509044971516249812803787378',
-                                            sort=KSort(name='Int'),
-                                        ),
-                                    ),
-                                ),
-                            ),
-                        ),
-                        KApply(
-                            label=KLabel(name='_|->_', params=()),
-                            args=(
-                                KToken(token='33', sort=KSort(name='Int')),
-                                KToken(
-                                    token='703931746484987709520011241182268216790810902249',
-                                    sort=KSort(name='Int'),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
+                KApply(label=KLabel(name='.List', params=()), args=()),
+                KApply(label=KLabel(name='.List', params=()), args=()),
+                KApply(label=KLabel(name='.List', params=()), args=()),
                 KToken(token='0', sort=KSort(name='Int')),
                 KToken(token='29999738857', sort=KSort(name='Int')),
                 KToken(token='0', sort=KSort(name='Int')),
@@ -207,9 +303,9 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                 ),
             ),
         ),
-        '0x60806040',
+        '0x',
         {
-            'returnData': '0x60806040',
+            'returnData': '0x',
             'pc': 669,
             'op': 'STOP',
             'stack': ['0xc01b672c'],
@@ -222,14 +318,9 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, str, dict[str, Any]]]] = 
                 '0000006400000000000000000000000000000000000000000000000000000000',
                 '0000006400000000000000000000000000000000000000000000000000000000',
             ],
-            'storage': {
-                '0x1f': '0x4ff3706b36a51e0e0a6e30aeab70cf4eb71175e201',
-                '0xc': '0x1',
-                '0x22': '0x566049b37b48465baaed8dc5f171e30cb31b8b7c',
-                '0x23': '0x11aa61f060af699eeb4846d15673551a5f569cfa',
-                '0x20': '0xa2c3c0d2a5f98a74ea0752d377f6ec7adc541a72',
-                '0x21': '0x7b4d642664d837f9f843cbd0b6d3eb3e0bcc3ee9',
-            },
+            'storageChanges': {},
+            'nonceChanges': {},
+            'balanceChanges': {},
             'depth': 1,
             'gas': 29999738857,
             'coinbase': 0,

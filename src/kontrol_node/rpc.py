@@ -3,7 +3,10 @@ from __future__ import annotations
 import ast
 import gzip
 import json
+import multiprocessing
 import pprint
+import tempfile
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -22,6 +25,7 @@ from pyk.kast.prelude.k import GENERATED_TOP_CELL
 from pyk.kast.prelude.kbool import TRUE
 from pyk.kast.prelude.utils import token
 from pyk.kdist import kdist
+from pyk.kore.parser import KoreParser
 from pyk.ktool.krun import KRun
 from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
 from pyk.utils import single
@@ -29,6 +33,8 @@ from pyk.utils import single
 from .blockstore import BlockStore
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from eth_keys.datatypes import PublicKey
     from pyk.kast.inner import KInner
 
@@ -43,6 +49,24 @@ STATUS_CODE_EMPTY: Final[KApply] = KApply('.StatusCode_NETWORK_StatusCode')
 CHUNK_SIZE: Final[int] = 64
 
 
+# must be located in module root for multiprocessing
+def pool_init_forkserver(krun_dir: str, tracelogs_path_str: str) -> None:
+    global krun, kore_traces_str  # flake8: noqa: F824
+    krun = KRun(Path(krun_dir))  # type: ignore[name-defined]
+    tracelogs_path = Path(tracelogs_path_str)
+    kore_traces_str = tracelogs_path.read_text().split('\n')[:-1]  # type: ignore[name-defined]
+
+
+# must be located in module root for multiprocessing
+def pool_parse_kore_to_kast_forkserver(trace_index: int) -> KInner:
+    global krun, kore_traces_str  # noqa: F824
+
+    kore_parser = KoreParser(kore_traces_str[trace_index])  # type: ignore[name-defined]
+    kore_pattern = kore_parser.pattern()
+    kast = krun.kore_to_kast(kore_pattern)  # type: ignore[name-defined]
+    return kast
+
+
 class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
@@ -51,6 +75,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     transaction_hashes: dict[int, str]
     default_sender_address: Final[int]
     block_storage: BlockStore
+    multiproc_ctx: multiprocessing.context.ForkServerContext
 
     def __init__(self, options: VMOptions) -> None:
         super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
@@ -66,6 +91,23 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.default_sender_address = self._get_account_addresses()[0]
         end_time = datetime.now()
         self.block_storage = BlockStore()
+
+        self.multiproc_ctx = multiprocessing.get_context('forkserver')
+        self.multiproc_ctx.set_forkserver_preload(
+            [
+                'eth_keys',
+                'kevm_pyk.kevm',
+                'kontrol.foundry',
+                'pyk.cterm',
+                'pyk.kast.inner',
+                'pyk.kast.manip',
+                'pyk.kore.parser',
+                'pyk.kdist',
+                'pyk.ktool.krun',
+                'pyk.rpc.rpc',
+                'pyk.utils',
+            ]
+        )
 
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
 
@@ -193,12 +235,37 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             )
         )
 
-        self._krun_cterm()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tracelogs_path = Path(tmpdir).resolve() / 'tracelogs.kore'
+            self.cterm = CTerm.from_kast(
+                set_cell(
+                    self.cterm.config,
+                    'TRACELOGSFILEPATH_CELL',
+                    token(str(tracelogs_path)),
+                )
+            )
+            self._krun_cterm()
+
+            if tracelogs_path.exists() and self.active_tracing:
+                # TODO: this can be further optimized:
+                # - use a faster implementation, e.g. rust FFI
+                # - decode a custom binary serialization instead of KORE
+                kore_traces_len = tracelogs_path.read_text().count('\n')
+
+                with self.multiproc_ctx.Pool(
+                    initializer=pool_init_forkserver, initargs=(str(self.krun.definition_dir), str(tracelogs_path))
+                ) as pool:
+                    kast_traces = pool.map(
+                        pool_parse_kore_to_kast_forkserver, list(range(kore_traces_len)), chunksize=100
+                    )
+            else:
+                kast_traces = None
+
         transaction_hash = self._get_rpc_response()
         transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
         self.transaction_hashes[transaction_id] = transaction_hash
         if self.active_tracing:
-            self._collect_trace(transaction_hash)
+            self._collect_trace(transaction_hash, trace_data=kast_traces)
         self._save_block()
         return transaction_hash
 
@@ -477,17 +544,23 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             account_dict[address] = {'nonce': nonce, 'balance': balance, 'code': code, 'storage': storage}
         return account_dict
 
-    def _collect_trace(self, transaction_hash: str) -> None:
-        parsed_trace: list[dict[str, Any]] = []
-        trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
-        trace_data = flatten_label('_List_', trace_data_cell)
+    def _collect_trace(self, transaction_hash: str, trace_data: list[KInner] | None = None) -> None:
         return_data = '0x' + ast.literal_eval(self._parse_ktoken_cell('OUTPUT_CELL')).hex()
-        if len(trace_data) == 1 and trace_data[0] == list_empty():
-            return
 
-        for trace_list_item in trace_data:
-            assert type(trace_list_item) is KApply
-            trace_item = single(trace_list_item.terms)
+        parsed_trace: list[dict[str, Any]] = []
+        if trace_data is None:
+            trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
+            flattened_trace_data = flatten_label('_List_', trace_data_cell)
+            if len(flattened_trace_data) == 1 and flattened_trace_data[0] == list_empty():
+                return
+            trace_data = []
+            for flattened_trace_data_item in flattened_trace_data:
+                assert type(flattened_trace_data_item) is KApply
+                flattened_trace_item = single(flattened_trace_data_item.terms)
+                assert type(flattened_trace_item) is KApply
+                trace_data.append(flattened_trace_item)
+
+        for trace_item in trace_data:
             assert type(trace_item) is KApply
             parsed_trace.append(extract_trace_item(trace_item, return_data))
 
@@ -630,7 +703,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_subst = {
             '$PGM': KSequence([KEVM.sharp_execute()]),
             '$MODE': KApply('NORMAL'),
-            '$SCHEDULE': KApply('SHANGHAI_EVM'),
+            '$SCHEDULE': KApply('CANCUN_EVM'),
             '$USEGAS': TRUE,
             '$CHAINID': token(31337),
         }
@@ -652,6 +725,9 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEMEMORY_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACESTORAGE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACENONCE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACEBALANCE_CELL', TRUE)
+        init_config = set_cell(init_config, 'WRITETRACELOGSTOFILE_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)
         self.cterm = CTerm.from_kast(init_term)
@@ -861,6 +937,8 @@ def _from_cell_map_to_list(cell: KApply) -> list:
     return return_list
 
 
+# this was used to parse the storage map of a current account
+# this was approach was deprecatedin favor of tracing individual storage writes, see `_from_storage_changes_to_dict`
 def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
     if storage_map == map_empty():
         return {}
@@ -875,6 +953,57 @@ def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
         storage_dict[hex(int(key.token))] = hex(int(value.token))
 
     return storage_dict
+
+
+def _from_int_tuple(int_tuple_k: KApply, label: str) -> tuple[str, ...]:
+    assert type(int_tuple_k) is KApply
+    assert int_tuple_k.label.name == label
+    for term in int_tuple_k.terms:
+        assert type(term) is KToken
+    return tuple(hex(int(value.token)) for value in int_tuple_k.terms)  # type: ignore[attr-defined]
+
+
+def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dict[str, str]]:
+    if storage_changes_k == list_empty():
+        return {}
+
+    storage_changes_k_items = flatten_label('_List_', storage_changes_k)
+
+    storage_changes: Mapping[str, dict[str, str]] = defaultdict(dict)
+    for storage_change_k_list in storage_changes_k_items:
+        # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:Mutation)
+        assert type(storage_change_k_list) is KApply
+        assert storage_change_k_list.label.name == 'ListItem'
+        storage_change_k = single(storage_change_k_list.terms)
+
+        # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:Mutation
+        assert type(storage_change_k) is KApply
+        account, slot, value = _from_int_tuple(storage_change_k, 'node_doubleMapMutation')
+        storage_changes[account][slot] = value
+
+    return storage_changes
+
+
+# used for either balance or nonce
+def _from_balance_nonce_changes_to_dict(balance_nonce_changes_k: KInner) -> dict[str, str]:
+    if balance_nonce_changes_k == list_empty():
+        return {}
+
+    balance_nonce_changes_k_items = flatten_label('_List_', balance_nonce_changes_k)
+
+    balance_nonce_changes = {}
+    for balance_nonce_change_k_list in balance_nonce_changes_k_items:
+        # balance_nonce_change_k_list := ListItem({ ACCT:Int | BALANACE_OR_NONCE:Int }:Mutation)
+        assert type(balance_nonce_change_k_list) is KApply
+        assert balance_nonce_change_k_list.label.name == 'ListItem'
+        balance_nonce_change_k = single(balance_nonce_change_k_list.terms)
+
+        # nonce_change_k := { ACCT:Int | BALANACE_OR_NONCE:Int }:Mutation
+        assert type(balance_nonce_change_k) is KApply
+        account, balance_nonce = _from_int_tuple(balance_nonce_change_k, 'node_mapMutation')
+        balance_nonce_changes[account] = balance_nonce
+
+    return balance_nonce_changes
 
 
 def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
@@ -960,7 +1089,9 @@ class TraceItem:
     opcode_kapply: KApply
     wordstack_kapply: KApply
     local_mem_token: KToken
-    storage_map_kapply: KApply
+    storage_changes_kapply: KApply
+    nonce_changes_kapply: KApply
+    balance_changes_kapply: KApply
     call_depth_token: KToken
     gas_token: KToken
     coinbase_token: KToken
@@ -1013,9 +1144,17 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     ]
     result['memory'] = memory_chunks
 
-    # storage of current target address
-    assert type(trace_item.storage_map_kapply) is KApply
-    result['storage'] = _from_storage_map_to_dict(trace_item.storage_map_kapply)
+    # storage changes from previous step
+    assert type(trace_item.storage_changes_kapply) is KApply
+    result['storageChanges'] = _from_storage_changes_to_dict(trace_item.storage_changes_kapply)
+
+    # nonce changes from previous step
+    assert type(trace_item.nonce_changes_kapply) is KApply
+    result['nonceChanges'] = _from_balance_nonce_changes_to_dict(trace_item.nonce_changes_kapply)
+
+    # balance changes from previous step
+    assert type(trace_item.balance_changes_kapply) is KApply
+    result['balanceChanges'] = _from_balance_nonce_changes_to_dict(trace_item.balance_changes_kapply)
 
     # call depth
     assert type(trace_item.call_depth_token) is KToken

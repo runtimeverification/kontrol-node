@@ -13,6 +13,10 @@
       "returnValue": "",
       "structLogs": [
         {
+          "balanceChanges": {
+            "0x5fbdb2315678afecb367f032d93f642f64180aa3": "0x0",
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266": "0x22b1c8de3d0ea2000"
+          },
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -23,16 +27,21 @@
           "memory": [],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {
+            "0x5fbdb2315678afecb367f032d93f642f64180aa3": "0x1",
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266": "0x1"
+          },
           "op": "PUSH1",
           "pc": 0,
           "returnData": "0x",
           "stack": [],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -43,6 +52,7 @@
           "memory": [],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "PUSH1",
           "pc": 2,
           "returnData": "0x",
@@ -50,11 +60,12 @@
             "0x80"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -65,6 +76,7 @@
           "memory": [],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "MSTORE",
           "pc": 4,
           "returnData": "0x",
@@ -73,11 +85,12 @@
             "0x40"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -92,16 +105,18 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "CALLVALUE",
           "pc": 5,
           "returnData": "0x",
           "stack": [],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -116,6 +131,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "DUP1",
           "pc": 6,
           "returnData": "0x",
@@ -123,11 +139,12 @@
             "0x0"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -142,6 +159,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "ISZERO",
           "pc": 7,
           "returnData": "0x",
@@ -150,11 +168,12 @@
             "0x0"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -169,6 +188,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "PUSH1",
           "pc": 8,
           "returnData": "0x",
@@ -177,11 +197,12 @@
             "0x1"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -196,6 +217,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "JUMPI",
           "pc": 10,
           "returnData": "0x",
@@ -205,11 +227,12 @@
             "0xf"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -224,6 +247,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "JUMPDEST",
           "pc": 15,
           "returnData": "0x",
@@ -231,11 +255,12 @@
             "0x0"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -250,6 +275,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "POP",
           "pc": 16,
           "returnData": "0x",
@@ -257,11 +283,12 @@
             "0x0"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -276,16 +303,18 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "PUSH1",
           "pc": 17,
           "returnData": "0x",
           "stack": [],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -300,6 +329,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "DUP1",
           "pc": 19,
           "returnData": "0x",
@@ -307,11 +337,12 @@
             "0xf7"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -326,6 +357,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "PUSH2",
           "pc": 20,
           "returnData": "0x",
@@ -334,11 +366,12 @@
             "0xf7"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -353,6 +386,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "PUSH1",
           "pc": 23,
           "returnData": "0x",
@@ -362,11 +396,12 @@
             "0x1e"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -381,6 +416,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "CODECOPY",
           "pc": 25,
           "returnData": "0x",
@@ -391,11 +427,12 @@
             "0x0"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -415,6 +452,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "PUSH1",
           "pc": 26,
           "returnData": "0x",
@@ -422,11 +460,12 @@
             "0xf7"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         },
         {
+          "balanceChanges": {},
           "blockNumber": 1,
           "blockTimestamp": 1725635810,
           "coinbase": 0,
@@ -446,6 +485,7 @@
           ],
           "msgSender": 1390849295786071768276380950238675083608645509734,
           "msgValue": 0,
+          "nonceChanges": {},
           "op": "RETURN",
           "pc": 28,
           "returnData": "0x",
@@ -454,7 +494,7 @@
             "0x0"
           ],
           "statusCode": "empty",
-          "storage": {},
+          "storageChanges": {},
           "targetAddress": 546584486846459126461364135121053344201067465379,
           "txOrigin": 1390849295786071768276380950238675083608645509734
         }
