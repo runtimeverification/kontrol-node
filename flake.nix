@@ -45,6 +45,7 @@
             mpfr
             cmake
             boost
+            clang
           ];
         };
       }
