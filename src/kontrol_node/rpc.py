@@ -1308,9 +1308,6 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
             continue
         if key in ['<txVersionedHashes>', '<txAuthList>']:
             continue  # TODO
-        print(key)
-        print(value)
-        print(type(value))
         assert type(value) is KToken
         if key in ['<sigR>', '<sigS>', '<data>']:
             msg_dict[key] = '0x' + ast.literal_eval(value.token).hex()
