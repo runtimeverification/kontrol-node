@@ -1100,6 +1100,7 @@ class TraceItem:
     block_number_token: KToken
     block_timestamp_token: KToken
     target_address_token: KToken
+    code_address_token: KToken
     message_sender_token: KToken
     message_value_token: KToken
     transaction_origin_token: KToken
@@ -1189,6 +1190,11 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     assert type(trace_item.target_address_token) is KToken
     assert trace_item.target_address_token != ACCOUNT_EMPTY, 'target address is empty'
     result['targetAddress'] = int(trace_item.target_address_token.token)
+
+    # code address
+    assert type(trace_item.code_address_token) is KToken
+    assert trace_item.code_address_token != ACCOUNT_EMPTY, 'target address is empty'
+    result['codeAddress'] = int(trace_item.code_address_token.token)
 
     # message sender
     assert type(trace_item.message_sender_token) is KToken
@@ -1306,7 +1312,7 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
             assert type(value) is KApply
             msg_dict[key] = tx_type_to_int(value.label)
             continue
-        if key == '<txVersionedHashes>':
+        if key in ('<txVersionedHashes>', '<txAuthList>'):
             continue  # TODO
         assert type(value) is KToken
         if key in ['<sigR>', '<sigS>', '<data>']:

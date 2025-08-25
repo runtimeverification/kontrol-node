@@ -58,3 +58,6 @@ skip-string-normalization = true
 
 [tool.mypy]
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
