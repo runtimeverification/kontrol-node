@@ -76,6 +76,7 @@ module KONTROL-NODE
       "|" Int        // block number
       "|" Int        // block timestamp
       "|" Account    // target address
+      "|" Account    // code address
       "|" Account    // message sender
       "|" Int        // message value
       "|" Account    // transaction origin
@@ -99,6 +100,7 @@ module KONTROL-NODE
                                     | NUM
                                     | TIMEST
                                     | ACCT
+                                    | CODEADDR
                                     | SENDER
                                     | MSGVAL
                                     | TXORIG
@@ -118,6 +120,7 @@ module KONTROL-NODE
          <callDepth>               CD               </callDepth>
          <localMem>                MEM              </localMem>
          <id>                      ACCT             </id>
+         <codeAddr>                CODEADDR         </codeAddr>
          <gas>                     GA               </gas>
          <coinbase>                COINB            </coinbase>
          <gasPrice>                GASPR            </gasPrice>
@@ -221,6 +224,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          <useGas> USEGAS </useGas>
          <schedule> SCHED </schedule>
          <id> _ => ACCTTO </id>
+         <codeAddr> _ => ACCTTO </codeAddr>
          <gas> GAVAIL => #if USEGAS #then GCALL #else GAVAIL #fi </gas>
          <callGas> GCALL => #if USEGAS #then 0 #else GCALL #fi </callGas>
          <caller> _ => ACCTFROM </caller>
