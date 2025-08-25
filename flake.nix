@@ -1,7 +1,15 @@
 {
   description = "kontrol-node - A local testnet node powered by KEVM";
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-25.05";
+    rv-nix-tools.url = "github:runtimeverification/rv-nix-tools/854d4f05ea78547d46e807b414faad64cea10ae4";
+    nixpkgs.follows = "rv-nix-tools/nixpkgs";
+
+    kontrol.url = "github:runtimeverification/kontrol/v1.0.182";
+    kontrol.inputs.nixpkgs.follows = "nixpkgs";
+
+    k-framework.follows = "kontrol/k-framework";
+    k-framework.inputs.nixpkgs.follows = "nixpkgs";
+
     flake-utils.url = "github:numtide/flake-utils";
     uv2nix.url = "github:pyproject-nix/uv2nix/680e2f8e637bc79b84268949d2f2b2f5e5f1d81c";
     # stale nixpkgs is missing the alias `lib.match` -> `builtins.match`
@@ -17,7 +25,7 @@
     };
     pyproject-nix.follows = "uv2nix/pyproject-nix";
   };
-  outputs = { self, nixpkgs, flake-utils, pyproject-nix, pyproject-build-systems, uv2nix }:
+  outputs = { self, rv-nix-tools, nixpkgs, kontrol, k-framework, flake-utils, pyproject-nix, pyproject-build-systems, uv2nix }:
   let
     pythonVer = "310";
   in flake-utils.lib.eachSystem [
@@ -32,6 +40,9 @@
       uvOverlay = final: prev: {
         uv = uv2nix.packages.${final.system}.uv-bin;
       };
+      kOverlay = final: prev: {
+        k = k-framework.packages.${system}.k;
+      };
       kontrol-nodeOverlay = final: prev: {
         kontrol-node = final.callPackage ./nix/kontrol-node {
           inherit pyproject-nix pyproject-build-systems uv2nix;
@@ -42,6 +53,7 @@
         inherit system;
         overlays = [
           uvOverlay
+          kOverlay
           kontrol-nodeOverlay
         ];
       };
@@ -51,8 +63,16 @@
         name = "uv develop shell";
         buildInputs = [
           python
-          pkgs.uv
-        ];
+        ] ++ (with pkgs; [
+          uv
+          k.openssl.secp256k1
+          openssl.dev
+          secp256k1
+          pkg-config
+          mpfr
+          cmake
+          boost
+        ]);
         env = {
           # prevent uv from managing Python downloads and force use of specific
           UV_PYTHON_DOWNLOADS = "never";
