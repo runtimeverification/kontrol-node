@@ -248,7 +248,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                     token(str(tracelogs_path)),
                 )
             )
-            self._krun_cterm()
+            self._run_cterm()
 
             if tracelogs_path.exists() and self.active_tracing:
                 # TODO: this can be further optimized:
@@ -696,9 +696,15 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self._add_or_update_accounts(account_list)
         self._add_or_update_private_keys(private_key_pairs)
 
-    def _krun_cterm(self) -> None:
+    def _run_cterm(self) -> None:
+        from pyk.ktool.krun import llvm_interpret
+
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
-        output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
+        output_kore = llvm_interpret(
+            definition_dir=self.krun.definition_dir,
+            pattern=pattern,
+            check=False,
+        )
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
 
     def _init_cterm(self, steps_tracing: bool) -> None:

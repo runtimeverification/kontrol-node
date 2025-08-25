@@ -44,6 +44,7 @@ __TARGETS__: Final = {
             'main_module': 'KONTROL-NODE',
             'syntax_module': 'KONTROL-NODE',
             'includes': [KONTROL_KSRC_DIR],
+            'optimization': 2,
         },
     ),
 }
