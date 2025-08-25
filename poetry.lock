@@ -987,37 +987,37 @@ i18n = ["Babel (>=2.7)"]
 
 [[package]]
 name = "kevm-pyk"
-version = "1.0.852"
+version = "1.0.860"
 description = ""
 optional = false
-python-versions = "^3.10"
+python-versions = "~=3.10"
 groups = ["main"]
 files = []
 develop = false
 
 [package.dependencies]
-frozendict = "^2.4.6"
-kframework = "7.1.273"
+frozendict = ">=2.4.6,<3"
+kframework = "7.1.280"
 pathos = "*"
-tomlkit = "^0.11.6"
+tomlkit = ">=0.11.6"
 
 [package.source]
 type = "git"
 url = "https://github.com/runtimeverification/evm-semantics.git"
-reference = "v1.0.852"
-resolved_reference = "318170d4dd2174c39e887e31936bd544c3e97b29"
+reference = "v1.0.860"
+resolved_reference = "4829d259e7fced7a5142df6ebe70643ea5a47757"
 subdirectory = "kevm-pyk"
 
 [[package]]
 name = "kframework"
-version = "7.1.273"
+version = "7.1.280"
 description = ""
 optional = false
 python-versions = "~=3.10"
 groups = ["main"]
 files = [
-    {file = "kframework-7.1.273-py3-none-any.whl", hash = "sha256:61343c38e2162816c985fb63eff84b0a0de1f393cba67793bf901deae7185ba5"},
-    {file = "kframework-7.1.273.tar.gz", hash = "sha256:1eb8e9979f6ba66276b76f802dcb91374ece6f4445140180d503f934af4f37dc"},
+    {file = "kframework-7.1.280-py3-none-any.whl", hash = "sha256:f7ff167f8acd0931ead9d6d53968e901c0f69f322d3f90089cf413f3e4993b1f"},
+    {file = "kframework-7.1.280.tar.gz", hash = "sha256:e63098c7eb24c936ba2ed57c9184866e0316767f898148f91a0691e341f1ab3a"},
 ]
 
 [package.dependencies]
@@ -1036,7 +1036,7 @@ xdg-base-dirs = ">=6.0.1,<7"
 
 [[package]]
 name = "kontrol"
-version = "1.0.172"
+version = "1.0.182"
 description = "Foundry integration for KEVM"
 optional = false
 python-versions = "~=3.10"
@@ -1047,15 +1047,15 @@ develop = false
 [package.dependencies]
 eth-abi = ">=5.2.0"
 eth-utils = ">=5,<6"
-kevm-pyk = {git = "https://github.com/runtimeverification/evm-semantics.git", rev = "v1.0.852", subdirectory = "kevm-pyk"}
+kevm-pyk = {git = "https://github.com/runtimeverification/evm-semantics.git", rev = "v1.0.860", subdirectory = "kevm-pyk"}
 pycryptodome = ">=3.20.0,<4"
 pyevmasm = ">=0.2.3,<0.3"
 
 [package.source]
 type = "git"
 url = "https://github.com/runtimeverification/kontrol"
-reference = "v1.0.172"
-resolved_reference = "faf984528fc8da3aaed83fdb28b6c31aba0327e7"
+reference = "v1.0.182"
+resolved_reference = "bf49a0c6f97b0bc21f9c1414715feeeaaf3afbbd"
 
 [[package]]
 name = "linkify-it-py"
@@ -2247,14 +2247,14 @@ markers = {dev = "python_full_version <= \"3.11.0a6\""}
 
 [[package]]
 name = "tomlkit"
-version = "0.11.8"
+version = "0.13.3"
 description = "Style preserving TOML library"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "tomlkit-0.11.8-py3-none-any.whl", hash = "sha256:8c726c4c202bdb148667835f68d68780b9a003a9ec34167b6c673b38eff2a171"},
-    {file = "tomlkit-0.11.8.tar.gz", hash = "sha256:9330fc7faa1db67b541b28e62018c17d20be733177d290a13b24c62d1614e0c3"},
+    {file = "tomlkit-0.13.3-py3-none-any.whl", hash = "sha256:c89c649d79ee40629a9fda55f8ace8c6a1b42deb912b2a8fd8d942ddadb606b0"},
+    {file = "tomlkit-0.13.3.tar.gz", hash = "sha256:430cf247ee57df2b94ee3fbe588e71d362a941ebb545dec29b53961d61add2a1"},
 ]
 
 [[package]]
@@ -2372,4 +2372,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "37e90e16374bd38bdf1db03c3b3081fee38c25ad7f0968e174b454814e14a378"
+content-hash = "c7e96b78b7fb8cfe96dac96b2a97cff6c61c79ed496476db134b15474101cc2d"

@@ -18,7 +18,7 @@ kontrol-node = "kontrol_node.kdist.plugin"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v1.0.172" }
+kontrol = { git = "https://github.com/runtimeverification/kontrol", tag = "v1.0.182" }
 
 [tool.poetry.group.dev.dependencies]
 autoflake = "*"
@@ -58,3 +58,6 @@ skip-string-normalization = true
 
 [tool.mypy]
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]

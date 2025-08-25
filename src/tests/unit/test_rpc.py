@@ -201,6 +201,10 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                     sort=KSort(name='Int'),
                 ),
                 KToken(
+                    token='1364846179604156837468707468773843663978916111562',
+                    sort=KSort(name='Int'),
+                ),
+                KToken(
                     token='119096571092301921719253721560231391405901977941',
                     sort=KSort(name='Int'),
                 ),
@@ -241,6 +245,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
             'blockNumber': 3,
             'blockTimestamp': 1725635810,
             'targetAddress': 1364846179604156837468707468773843663978916111562,
+            'codeAddress': 1364846179604156837468707468773843663978916111562,
             'msgSender': 119096571092301921719253721560231391405901977941,
             'msgValue': 0,
             'txOrigin': 119096571092301921719253721560231391405901977941,
@@ -286,6 +291,10 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
                     sort=KSort(name='Int'),
                 ),
                 KToken(
+                    token='1364846179604156837468707468773843663978916111562',
+                    sort=KSort(name='Int'),
+                ),
+                KToken(
                     token='119096571092301921719253721560231391405901977941',
                     sort=KSort(name='Int'),
                 ),
@@ -318,6 +327,7 @@ EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
             'blockNumber': 3,
             'blockTimestamp': 1725635810,
             'targetAddress': 1364846179604156837468707468773843663978916111562,
+            'codeAddress': 1364846179604156837468707468773843663978916111562,
             'msgSender': 119096571092301921719253721560231391405901977941,
             'msgValue': 0,
             'txOrigin': 119096571092301921719253721560231391405901977941,
