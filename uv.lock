@@ -705,8 +705,8 @@ wheels = [
 
 [[package]]
 name = "kontrol"
-version = "1.0.182"
-source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.182#bf49a0c6f97b0bc21f9c1414715feeeaaf3afbbd" }
+version = "1.0.183"
+source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.183#03f0f703822629ca45798bf592c0a67c3e23ee97" }
 dependencies = [
     { name = "eth-abi" },
     { name = "eth-utils" },
@@ -746,7 +746,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.182" }]
+requires-dist = [{ name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.183" }]
 
 [package.metadata.requires-dev]
 dev = [
