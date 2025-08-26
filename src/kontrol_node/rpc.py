@@ -46,7 +46,11 @@ WORDSTACK_EMPTY: Final[KApply] = KApply('.WordStack_EVM-TYPES_WordStack')
 WORDSTACK_CONS: Final[str] = '_:__EVM-TYPES_WordStack_Int_WordStack'
 MAP_CONS: Final[str] = '_Map_'
 STATUS_CODE_EMPTY: Final[KApply] = KApply('.StatusCode_NETWORK_StatusCode')
+UNCHANGED_DATA: Final[KApply] = KApply('UnchangedData')
 CHUNK_SIZE: Final[int] = 64
+
+# 32 bytes, and two characters for '0x'
+HASH_LENGTH: Final[int] = 32 * 2 + 2
 
 
 # must be located in module root for multiprocessing
@@ -244,7 +248,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                     token(str(tracelogs_path)),
                 )
             )
-            self._krun_cterm()
+            self._run_cterm()
 
             if tracelogs_path.exists() and self.active_tracing:
                 # TODO: this can be further optimized:
@@ -562,7 +566,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
         for trace_item in trace_data:
             assert type(trace_item) is KApply
-            parsed_trace.append(extract_trace_item(trace_item, return_data))
+            parsed_trace.append(extract_trace_item(trace_item))
 
         self.traced_transactions[transaction_hash] = parsed_trace
         self.transaction_return_data[transaction_hash] = return_data[2:]
@@ -624,16 +628,16 @@ class StatefulKJsonRpcServer(JsonRpcServer):
 
     def _get_block_header(self) -> dict:
         return {
-            '<currentBlockHash>': hex(int(self._parse_ktoken_cell('CURRENTBLOCKHASH_CELL'))),
-            '<previousHash>': hex(int(self._parse_ktoken_cell('PREVIOUSHASH_CELL'))),
-            '<ommersHash>': hex(int(self._parse_ktoken_cell('OMMERSHASH_CELL'))).ljust(64, '0'),
-            '<stateRoot>': hex(int(self._parse_ktoken_cell('STATEROOT_CELL'))).ljust(64, '0'),
-            '<transactionsRoot>': hex(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL'))).ljust(64, '0'),
-            '<receiptsRoot>': hex(int(self._parse_ktoken_cell('RECEIPTSROOT_CELL'))).ljust(64, '0'),
+            '<currentBlockHash>': format(int(self._parse_ktoken_cell('CURRENTBLOCKHASH_CELL')), f'#0{HASH_LENGTH}x'),
+            '<previousHash>': format(int(self._parse_ktoken_cell('PREVIOUSHASH_CELL')), f'#0{HASH_LENGTH}x'),
+            '<ommersHash>': format(int(self._parse_ktoken_cell('OMMERSHASH_CELL')), f'#0{HASH_LENGTH}x'),
+            '<stateRoot>': format(int(self._parse_ktoken_cell('STATEROOT_CELL')), f'#0{HASH_LENGTH}x'),
+            '<transactionsRoot>': format(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL')), f'#0{HASH_LENGTH}x'),
+            '<receiptsRoot>': format(int(self._parse_ktoken_cell('RECEIPTSROOT_CELL')), f'#0{HASH_LENGTH}x'),
             '<logsBloom>': '0x' + ast.literal_eval(self._parse_ktoken_cell('LOGSBLOOM_CELL')).hex(),
             '<gasUsed>': hex(int(self._parse_ktoken_cell('GASUSED_CELL'))),
             '<extraData>': '0x' + ast.literal_eval(self._parse_ktoken_cell('EXTRADATA_CELL')).hex(),
-            '<mixHash>': hex(int(self._parse_ktoken_cell('MIXHASH_CELL'))).ljust(64, '0'),
+            '<mixHash>': format(int(self._parse_ktoken_cell('MIXHASH_CELL')), f'#0{HASH_LENGTH}x'),
             '<blockNonce>': hex(int(self._parse_ktoken_cell('BLOCKNONCE_CELL'))),
             '<withdrawalsRoot>': hex(int(self._parse_ktoken_cell('WITHDRAWALSROOT_CELL'))),
             '<beaconRoot>': hex(int(self._parse_ktoken_cell('BEACONROOT_CELL'))),
@@ -692,9 +696,15 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self._add_or_update_accounts(account_list)
         self._add_or_update_private_keys(private_key_pairs)
 
-    def _krun_cterm(self) -> None:
+    def _run_cterm(self) -> None:
+        from pyk.ktool.krun import llvm_interpret
+
         pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
-        output_kore = self.krun.run_pattern(pattern, pipe_stderr=True)
+        output_kore = llvm_interpret(
+            definition_dir=self.krun.definition_dir,
+            pattern=pattern,
+            check=False,
+        )
         self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
 
     def _init_cterm(self, steps_tracing: bool) -> None:
@@ -727,6 +737,11 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'TRACESTORAGE_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACENONCE_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEBALANCE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACECALLDATA_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACERETURNDATA_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACECURRENTPROGRAM_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACEDEPLOYEDCODE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACEINITCODE_CELL', TRUE)
         init_config = set_cell(init_config, 'WRITETRACELOGSTOFILE_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)
@@ -937,6 +952,10 @@ def _from_cell_map_to_list(cell: KApply) -> list:
     return return_list
 
 
+def string_to_bool(bool_str: str) -> bool:
+    return bool_str.lower() == 'true'
+
+
 # this was used to parse the storage map of a current account
 # this was approach was deprecatedin favor of tracing individual storage writes, see `_from_storage_changes_to_dict`
 def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
@@ -963,6 +982,19 @@ def _from_int_tuple(int_tuple_k: KApply, label: str) -> tuple[str, ...]:
     return tuple(hex(int(value.token)) for value in int_tuple_k.terms)  # type: ignore[attr-defined]
 
 
+def _from_int_bytes_tuple(int_bytes_tuple_k: KApply, label: str) -> tuple[str, str]:
+    assert type(int_bytes_tuple_k) is KApply
+    assert int_bytes_tuple_k.label.name == label
+
+    assert len(int_bytes_tuple_k.terms) == 2, 'expected exactly two k terms for (int, bytes) tuple'
+
+    first_term, second_term = int_bytes_tuple_k.terms
+    assert type(first_term) is KToken
+    assert type(second_term) is KToken
+
+    return (hex(int(first_term.token)), '0x' + ast.literal_eval(second_term.token).hex())  # type: ignore[attr-defined]
+
+
 def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dict[str, str]]:
     if storage_changes_k == list_empty():
         return {}
@@ -971,14 +1003,14 @@ def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dic
 
     storage_changes: Mapping[str, dict[str, str]] = defaultdict(dict)
     for storage_change_k_list in storage_changes_k_items:
-        # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:Mutation)
+        # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:MapMutation)
         assert type(storage_change_k_list) is KApply
         assert storage_change_k_list.label.name == 'ListItem'
         storage_change_k = single(storage_change_k_list.terms)
 
-        # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:Mutation
+        # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:MapMutation
         assert type(storage_change_k) is KApply
-        account, slot, value = _from_int_tuple(storage_change_k, 'node_doubleMapMutation')
+        account, slot, value = _from_int_tuple(storage_change_k, 'node_intDoubleMapMutation')
         storage_changes[account][slot] = value
 
     return storage_changes
@@ -993,17 +1025,38 @@ def _from_balance_nonce_changes_to_dict(balance_nonce_changes_k: KInner) -> dict
 
     balance_nonce_changes = {}
     for balance_nonce_change_k_list in balance_nonce_changes_k_items:
-        # balance_nonce_change_k_list := ListItem({ ACCT:Int | BALANACE_OR_NONCE:Int }:Mutation)
+        # balance_nonce_change_k_list := ListItem({ ACCT:Int | BALANACE_OR_NONCE:Int }:MapMutation)
         assert type(balance_nonce_change_k_list) is KApply
         assert balance_nonce_change_k_list.label.name == 'ListItem'
         balance_nonce_change_k = single(balance_nonce_change_k_list.terms)
 
-        # nonce_change_k := { ACCT:Int | BALANACE_OR_NONCE:Int }:Mutation
+        # nonce_change_k := { ACCT:Int | BALANACE_OR_NONCE:Int }:MapMutation
         assert type(balance_nonce_change_k) is KApply
-        account, balance_nonce = _from_int_tuple(balance_nonce_change_k, 'node_mapMutation')
+        account, balance_nonce = _from_int_tuple(balance_nonce_change_k, 'node_intMapMutation')
         balance_nonce_changes[account] = balance_nonce
 
     return balance_nonce_changes
+
+
+def _from_code_changes_to_dict(code_changes_k: KInner) -> dict[str, str]:
+    if code_changes_k == list_empty():
+        return {}
+
+    code_changes_k_items = flatten_label('_List_', code_changes_k)
+
+    code_changes = {}
+    for code_change_k_list in code_changes_k_items:
+        # code_change_k_list := ListItem({ ACCT:Int | CODE:Bytes }:MapMutation)
+        assert type(code_change_k_list) is KApply
+        assert code_change_k_list.label.name == 'ListItem'
+        code_change_k = single(code_change_k_list.terms)
+
+        # code_change_k := { ACCT:Int | CODE:Bytes }:MapMutation
+        assert type(code_change_k) is KApply
+        account, program = _from_int_bytes_tuple(code_change_k, 'node_bytesMapMutation')
+        code_changes[account] = program
+
+    return code_changes
 
 
 def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
@@ -1088,10 +1141,15 @@ class TraceItem:
     program_counter_token: KToken
     opcode_kapply: KApply
     wordstack_kapply: KApply
-    local_mem_token: KToken
+    local_mem_change_kinner: KApply | KToken
     storage_changes_kapply: KApply
     nonce_changes_kapply: KApply
     balance_changes_kapply: KApply
+    call_data_change_kinner: KApply | KToken
+    return_data_change_kinner: KApply | KToken
+    program_change_kinner: KApply | KToken
+    deployed_program_changes_kapply: KApply
+    init_code_changes_kapply: KApply
     call_depth_token: KToken
     gas_token: KToken
     coinbase_token: KToken
@@ -1100,15 +1158,16 @@ class TraceItem:
     block_number_token: KToken
     block_timestamp_token: KToken
     target_address_token: KToken
+    code_address_token: KToken
     message_sender_token: KToken
     message_value_token: KToken
     transaction_origin_token: KToken
+    is_init_code_token: KToken
     status_code_token: KToken
 
 
-def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str, Any]:
+def extract_trace_item(trace_item_kapply: KApply) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    result['returnData'] = return_data
 
     trace_item = TraceItem(*trace_item_kapply.terms)  # type: ignore[arg-type]
 
@@ -1136,13 +1195,16 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
         wordstack.reverse()
     result['stack'] = wordstack
 
-    # local memory
-    assert type(trace_item.local_mem_token) is KToken
-    local_mem = ast.literal_eval(trace_item.local_mem_token.token).hex()
-    memory_chunks = [
-        (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
-    ]
-    result['memory'] = memory_chunks
+    # local_mem_change_kinner
+    if type(trace_item.local_mem_change_kinner) is KApply:
+        assert trace_item.local_mem_change_kinner == UNCHANGED_DATA
+    else:
+        assert type(trace_item.local_mem_change_kinner) is KToken
+        local_mem = ast.literal_eval(trace_item.local_mem_change_kinner.token).hex()
+        memory_chunks = [
+            (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
+        ]
+        result['memoryChange'] = memory_chunks
 
     # storage changes from previous step
     assert type(trace_item.storage_changes_kapply) is KApply
@@ -1155,6 +1217,35 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     # balance changes from previous step
     assert type(trace_item.balance_changes_kapply) is KApply
     result['balanceChanges'] = _from_balance_nonce_changes_to_dict(trace_item.balance_changes_kapply)
+
+    # call_data_change_kinner
+    if type(trace_item.call_data_change_kinner) is KApply:
+        assert trace_item.call_data_change_kinner == UNCHANGED_DATA
+    else:
+        assert type(trace_item.call_data_change_kinner) is KToken
+        result['callDataChange'] = '0x' + ast.literal_eval(trace_item.call_data_change_kinner.token).hex()
+
+    # return_data_change_kinner
+    if type(trace_item.return_data_change_kinner) is KApply:
+        assert trace_item.return_data_change_kinner == UNCHANGED_DATA
+    else:
+        assert type(trace_item.return_data_change_kinner) is KToken
+        result['returnDataChange'] = '0x' + ast.literal_eval(trace_item.return_data_change_kinner.token).hex()
+
+    # program_change_kinner
+    if type(trace_item.program_change_kinner) is KApply:
+        assert trace_item.program_change_kinner == UNCHANGED_DATA
+    else:
+        assert type(trace_item.program_change_kinner) is KToken
+        result['programChange'] = '0x' + ast.literal_eval(trace_item.program_change_kinner.token).hex()
+
+    # deployed_program_changes_kapply
+    assert type(trace_item.deployed_program_changes_kapply) is KApply
+    result['deployedCodeChanges'] = _from_code_changes_to_dict(trace_item.deployed_program_changes_kapply)
+
+    # init_code_changes_kapply
+    assert type(trace_item.init_code_changes_kapply) is KApply
+    result['initCodeChanges'] = _from_code_changes_to_dict(trace_item.init_code_changes_kapply)
 
     # call depth
     assert type(trace_item.call_depth_token) is KToken
@@ -1190,6 +1281,11 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     assert trace_item.target_address_token != ACCOUNT_EMPTY, 'target address is empty'
     result['targetAddress'] = int(trace_item.target_address_token.token)
 
+    # code address
+    assert type(trace_item.code_address_token) is KToken
+    assert trace_item.code_address_token != ACCOUNT_EMPTY, 'target address is empty'
+    result['codeAddress'] = int(trace_item.code_address_token.token)
+
     # message sender
     assert type(trace_item.message_sender_token) is KToken
     assert trace_item.message_sender_token != ACCOUNT_EMPTY, 'message sender is empty'
@@ -1203,6 +1299,10 @@ def extract_trace_item(trace_item_kapply: KApply, return_data: str) -> dict[str,
     assert type(trace_item.transaction_origin_token) is KToken
     assert trace_item.transaction_origin_token != ACCOUNT_EMPTY, 'transaction origin is empty'
     result['txOrigin'] = int(trace_item.transaction_origin_token.token)
+
+    # is init code
+    assert type(trace_item.is_init_code_token) is KToken
+    result['isInitCode'] = string_to_bool(trace_item.is_init_code_token.token)
 
     # status
     assert type(trace_item.status_code_token) is KApply
@@ -1306,7 +1406,7 @@ def extract_message(message_cell: KApply) -> dict[str, Any]:
             assert type(value) is KApply
             msg_dict[key] = tx_type_to_int(value.label)
             continue
-        if key == '<txVersionedHashes>':
+        if key in ('<txVersionedHashes>', '<txAuthList>'):
             continue  # TODO
         assert type(value) is KToken
         if key in ['<sigR>', '<sigS>', '<data>']:
