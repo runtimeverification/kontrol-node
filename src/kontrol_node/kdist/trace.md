@@ -33,23 +33,47 @@ The configuration of the KEVMTracing is defined as following:
         <traceStorage>            false      </traceStorage>
         <traceWordStack>          false      </traceWordStack>
         <traceMemory>             false      </traceMemory>
-        <traceNonce>              false      </traceNonce>
-        <traceBalance>            false      </traceBalance>
         <recordedTrace>           false      </recordedTrace>
         <traceData>               .List      </traceData>
-        <currentNonceMutations>   .List      </currentNonceMutations>
-        <currentBalanceMutations> .List      </currentBalanceMutations>
-        <currentStorageMutations> .List      </currentStorageMutations>
         <traceLogsFileDescriptor> .FileDescr </traceLogsFileDescriptor>
         <traceLogsFilePath>       "":String  </traceLogsFilePath>
         <writeTraceLogsToFile>    false      </writeTraceLogsToFile>
+
+        <currentNonceMutations>   .List </currentNonceMutations>
+        <traceNonce>              false </traceNonce>
+        <currentBalanceMutations> .List </currentBalanceMutations>
+        <traceBalance>            false </traceBalance>
+        <currentStorageMutations> .List </currentStorageMutations>
+
+        <localMemoryChanged>      true  </localMemoryChanged>
+
+        <injectedTracesCallStack> false </injectedTracesCallStack>
+        <recordedMkCallCreate>    false </recordedMkCallCreate>
+        <contextSwitch>           true  </contextSwitch>
+        <traceCallData>           false </traceCallData>
+        <traceReturnData>         false </traceReturnData>
+        <tracesCallStack>         .List </tracesCallStack>
+        <tracesCallState>
+           <isInitCode> false </isInitCode>
+        </tracesCallState>
+
+        <traceCurrentProgram> false </traceCurrentProgram>
+        <programChanged> true </programChanged>
+
+        <traceDeployedCode> false </traceDeployedCode>
+        <currentDeployedCodeMutations> .List </currentDeployedCodeMutations>
+
+        <traceInitCode> false </traceInitCode>
+        <currentInitCodeMutations> .List </currentInitCodeMutations>
+        <recordedCreate> false </recordedCreate>
       </KEVMTracing>
 ```
 
 ```k
-    syntax MapMutation ::= "{" Int "|" Int "|" Int "}" [symbol(node_doubleMapMutation)]
-                         | "{" Int "|" Int "}"         [symbol(node_mapMutation)]
- // -----------------------------------------------------------------------------
+    syntax MapMutation ::= "{" Int "|" Int "|" Int "}" [symbol(node_intDoubleMapMutation)]
+                         | "{" Int "|" Int "}"         [symbol(node_intMapMutation)]
+                         | "{" Int "|" Bytes "}"       [symbol(node_bytesMapMutation)]
+ // ----------------------------------------------------------------------------------
 ```
 
 The `TraceItem` is a sort used to serialize information from the configuration about the executed opcodes.
@@ -59,10 +83,15 @@ The `TraceItem` is a sort used to serialize information from the configuration a
           Int        // program counter 
       "|" OpCode     // opcode
       "|" WordStack  // stack
-      "|" Bytes      // memory
-      "|" List       // storage changes <- CHANGED
-      "|" List       // nonce changes <- NEW
-      "|" List       // balance changes <- NEW
+      "|" DataChange // memory
+      "|" List       // storage changes
+      "|" List       // nonce changes
+      "|" List       // balance changes
+      "|" DataChange // call data change
+      "|" DataChange // return data change
+      "|" DataChange // program change
+      "|" List       // deployed code changes
+      "|" List       // init code changes
       "|" Int        // call depth
       "|" Int        // gas
       "|" Account    // coinbase
@@ -71,12 +100,14 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       "|" Int        // block number
       "|" Int        // block timestamp
       "|" Account    // target address
+      "|" Account    // code address
       "|" Account    // message sender
       "|" Int        // message value
       "|" Account    // transaction origin
+      "|" Bool       // is init code
       "|" StatusCode // status
     "}" [symbol(traceItem)]
- // -----------------------
+
 
     syntax FILEDESCR ::= Int | ".FileDescr"
  // --------------------------------------
@@ -85,15 +116,49 @@ The `TraceItem` is a sort used to serialize information from the configuration a
          <recordedTrace> true => false </recordedTrace>
       [priority(25)]
 
-    syntax KItem ::= "#storeTraceItem" TraceItem [symbol(storeTraceItem)]
- // ---------------------------------------------------------------------
+    syntax TraceItem ::= "{" 
+          Int        // program counter 
+      "|" OpCode     // opcode
+      "|" WordStack  // stack
+      "|" DataChange // memory
+      "|" List       // storage changes
+      "|" List       // nonce changes
+      "|" List       // balance changes
+      "|" DataChange // call data change
+      "|" DataChange // return data change
+      "|" DataChange // program change
+      "|" List       // deployed code changes
+      "|" List       // init code changes
+      "|" Int        // call depth
+      "|" Int        // gas
+      "|" Account    // coinbase
+      "|" Int        // gas price
+      "|" Int        // difficulty
+      "|" Int        // block number
+      "|" Int        // block timestamp
+      "|" Account    // target address
+      "|" Account    // code address
+      "|" Account    // message sender
+      "|" Int        // message value
+      "|" Account    // transaction origin
+      "|" Bool       // is init code
+      "|" StatusCode // status
+    "}" [symbol(traceItem)]
+
+    syntax KItem ::= "#storeTraceItem" TraceItem
+ // ---------------------------------------------------------------------------------------------------------------
     rule <k> (.K => #storeTraceItem { PCOUNT
                                     | OPC
                                     | #if DSTK ==K true #then WS      #else .WordStack #fi
-                                    | #if DMEM ==K true #then MEM     #else .Bytes     #fi
+                                    | #if (DMEM andBool MEMCH)          ==K true #then MEM  #else .DataChange #fi
                                     | STORCH
                                     | NONCECH
                                     | BALCH
+                                    | #if (DCADA andBool CONTEXTSWITCH) ==K true #then CADA #else .DataChange #fi
+                                    | #if (DREDA andBool CONTEXTSWITCH) ==K true #then REDA #else .DataChange #fi
+                                    | #if PROGCHANGED                   ==K true #then PROG #else .DataChange #fi
+                                    | DEPLCODECH
+                                    | INITCODECH
                                     | CD
                                     | GA
                                     | COINB
@@ -102,35 +167,51 @@ The `TraceItem` is a sort used to serialize information from the configuration a
                                     | NUM
                                     | TIMEST
                                     | ACCT
+                                    | CODEADDR
                                     | SENDER
                                     | MSGVAL
                                     | TXORIG
+                                    | ISINIT
                                     | STATUS
                                     })
              ~> #next [ OPC ] ...
          </k>
-         <activeTracing>           true             </activeTracing>
-         <traceWordStack>          DSTK             </traceWordStack>
-         <traceMemory>             DMEM             </traceMemory>
-         <recordedTrace>           false => true    </recordedTrace>
-         <currentNonceMutations>   NONCECH => .List </currentNonceMutations>
-         <currentBalanceMutations> BALCH => .List   </currentBalanceMutations>
-         <currentStorageMutations> STORCH => .List  </currentStorageMutations>
-         <pc>                      PCOUNT           </pc>
-         <wordStack>               WS               </wordStack>
-         <callDepth>               CD               </callDepth>
-         <localMem>                MEM              </localMem>
-         <id>                      ACCT             </id>
-         <gas>                     GA               </gas>
-         <coinbase>                COINB            </coinbase>
-         <gasPrice>                GASPR            </gasPrice>
-         <difficulty>              DIFF             </difficulty>
-         <number>                  NUM              </number>
-         <timestamp>               TIMEST           </timestamp>
-         <caller>                  SENDER           </caller>
-         <callValue>               MSGVAL           </callValue>
-         <origin>                  TXORIG           </origin>
-         <statusCode>              STATUS           </statusCode>
+         <activeTracing>                true                   </activeTracing>
+         <traceWordStack>               DSTK                   </traceWordStack>
+         <traceMemory>                  DMEM                   </traceMemory>
+         <traceCallData>                DCADA                  </traceCallData>
+         <traceReturnData>              DREDA                  </traceReturnData>
+         <recordedTrace>                false => true          </recordedTrace>
+         <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
+         <recordedCreate>               _ => false             </recordedCreate>
+         <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
+         <currentNonceMutations>        NONCECH => .List       </currentNonceMutations>          
+         <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
+         <currentBalanceMutations>      BALCH => .List         </currentBalanceMutations>          
+         <currentStorageMutations>      STORCH => .List        </currentStorageMutations>
+         <programChanged>               PROGCHANGED => false   </programChanged>
+         <currentDeployedCodeMutations> DEPLCODECH => .List    </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     INITCODECH => .List    </currentInitCodeMutations>
+         <callData>                     CADA                   </callData>
+         <output>                       REDA                   </output>
+         <pc>                           PCOUNT                 </pc>
+         <wordStack>                    WS                     </wordStack>
+         <callDepth>                    CD                     </callDepth>
+         <localMem>                     MEM                    </localMem>
+         <program>                      PROG                   </program>
+         <id>                           ACCT                   </id>
+         <codeAddr>                     CODEADDR               </codeAddr>
+         <gas>                          GA                     </gas>
+         <coinbase>                     COINB                  </coinbase>
+         <gasPrice>                     GASPR                  </gasPrice>
+         <difficulty>                   DIFF                   </difficulty>
+         <number>                       NUM                    </number>
+         <timestamp>                    TIMEST                 </timestamp>
+         <caller>                       SENDER                 </caller>
+         <callValue>                    MSGVAL                 </callValue>
+         <origin>                       TXORIG                 </origin>
+         <isInitCode>                   ISINIT                 </isInitCode>
+         <statusCode>                   STATUS                 </statusCode>
       [priority(24)]
 
     rule <k> #storeTraceItem TRITEM => .K ... </k>
@@ -154,7 +235,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
                    | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
  // ---------------------------------------------------------------------------------------
 rule <k> #openTraceLogsFile => #open(TRFILEPATH, "w") ~> #storeTraceLogsFileDescriptor ... </k>
-     <traceLogsFilePath>       TRFILEPATH                  </traceLogsFilePath>
+     <traceLogsFilePath> TRFILEPATH </traceLogsFilePath>
      <writeTraceLogsToFile> true </writeTraceLogsToFile>
 
 rule <k> #openTraceLogsFile => .K ... </k>
@@ -173,7 +254,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
     // due to this, Map hooks cannot be used
     // instead, mutations on the state of accounts has to be traced individually with tracing rules of higher priority
-    // both <nonce> and <balance> is moft often mutated directly by rules
+    // both <nonce> and <balance> are most often mutated directly by rules
     // these rules sometimes do not re-execute themselves, which is why an inserted K production can be
     //  used to enforce tracing to happen only once per mutation
     // rules that are re-executed or re-insert themselves into <k> must be overwritten entirely
@@ -221,6 +302,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          <useGas> USEGAS </useGas>
          <schedule> SCHED </schedule>
          <id> _ => ACCTTO </id>
+         <codeAddr> _ => ACCTTO </codeAddr>
          <gas> GAVAIL => #if USEGAS #then GCALL #else GAVAIL #fi </gas>
          <callGas> GCALL => #if USEGAS #then 0 #else GCALL #fi </callGas>
          <caller> _ => ACCTFROM </caller>
@@ -487,6 +569,230 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          </account>
          <currentBalanceMutations> ... .List => ListItem({ ACCTID | NEWBAL }:MapMutation) </currentBalanceMutations>
       [priority(49)]
+
+ // ---------------------------------------------------------------------------------------------------------------
+    syntax DataChange ::= ".DataChange" [symbol(UnchangedData)]
+                        | Bytes
+ 
+    // trace `isInitcode`
+    // create a second callstack <tracesCallStack> with <isInitcode> subcell
+    //  hook into callstack changes by overriding `#pushCallStack`/`#popCallStack`
+    //  and insert new productions `#pushTracesCallStack`/`#popTracesCallStack`
+    // init <isInitcode> to false and update state on `#mkCreate/#mkCall/#mkSystemCall`
+
+    syntax KItem ::= "#pushTracesCallStack"
+                   | "#popTracesCallStack"
+
+    // `#pushCallStack` does not append new KItems after itself
+    // therefore this kind of hook is safe
+    rule <k> #pushCallStack ~> (.K => #pushTracesCallStack) ... </k>
+         <injectedTracesCallStack> false => true </injectedTracesCallStack>
+      [priority(49)]
+
+    // `#popCallStack` does not append new KItems after itself
+    // therefore this kind of hook is safe
+    rule <k> #popCallStack ~> (.K => #popTracesCallStack) ... </k>
+         <injectedTracesCallStack> false => true </injectedTracesCallStack>
+      [priority(49)]
+    
+    // track with <contextSwitch> that call data and return data has changed and needs to be included in the next trace
+    rule <k> #pushTracesCallStack => .K ... </k>
+         <injectedTracesCallStack> true => false </injectedTracesCallStack>
+         <tracesCallStack> STACK => ListItem(<tracesCallState> TRACESCALLSTATE </tracesCallState>) STACK </tracesCallStack>
+         <tracesCallState> TRACESCALLSTATE </tracesCallState>
+         <contextSwitch> _ => true </contextSwitch>
+
+    // track with <contextSwitch> that call data and return data has changed and needs to be included in the next trace
+    rule <k> #popTracesCallStack => .K ... </k>
+         <injectedTracesCallStack> true => false </injectedTracesCallStack>
+         <tracesCallStack> ListItem(<tracesCallState> TRACESCALLSTATE </tracesCallState>) REST => REST </tracesCallStack>
+         <tracesCallState> _ => TRACESCALLSTATE </tracesCallState>
+         <contextSwitch> _ => true </contextSwitch>
+         <programChanged> _ => true </programChanged>
+         <localMemoryChanged> _ => true </localMemoryChanged>
+
+    rule <k> #mkCreate _ _ _ _ ... </k>
+         <recordedMkCallCreate> false => true </recordedMkCallCreate>
+         <isInitCode>           _ => true     </isInitCode>
+      [priority(48)]
+
+    rule <k> #mkCall _ _ _ _ _ _ _ ... </k>
+         <recordedMkCallCreate> false => true </recordedMkCallCreate>
+         <isInitCode>           _ => false    </isInitCode>
+      [priority(48)]
+
+    // TODO: `#mkSystemCall` is introduced in a newer revision of evm-semantics
+    // rule <k> #mkSystemCall _ _ </k>
+    //      <recordedMkCallCreate> false => true </recordedMkCallCreate>
+    //      <isInitCode>           _ => false    </isInitCode>
+    //   [priority(49)]
+
+ // ---------------------------------------------------------------------------------------------------------------
+    // trace <program> changes by `#loadProgram`
+    // we override and re-implement the original rule to additionally record program changes
+    // the <program> cell is also changed at `#popTracesCallStack`
+    rule [program.load]:
+         <k> #loadProgram BYTES => .K ... </k>
+         <traceCurrentProgram> true </traceCurrentProgram>
+         <program> _ => BYTES </program>
+         <jumpDests> _ => #computeValidJumpDests(BYTES) </jumpDests>
+         <programChanged> false => true </programChanged>
+      [priority(49)]
+ // ---------------------------------------------------------------------------------------------------------------
+    // trace deployed code to accounts by overriding and re-implementing rules from evm-semantics
+    rule <k> #finishCodeDeposit ACCT OUT
+          => #popCallStack ~> #dropWorldState
+          ~> #refund GAVAIL ~> ACCT ~> #push
+         ...
+         </k>
+         <traceDeployedCode> true </traceDeployedCode>
+         <gas> GAVAIL </gas>
+         <account>
+           <acctID> ACCT </acctID>
+           <code> _ => OUT </code>
+           ...
+         </account>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | OUT }:MapMutation) </currentDeployedCodeMutations>
+      [priority(49)]
+
+    rule <k> loadAccount ACCT { "code" : (CODE:Bytes), REST => REST } ... </k>
+         <account> <acctID> ACCT </acctID> <code> _ => CODE </code> ... </account>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | CODE }:MapMutation) </currentDeployedCodeMutations>
+      [priority(49)]
+
+    // trace program changes by cheatcodes as well
+    rule <k> #setCode ACCTID CODE => .K ... </k>
+         <traceDeployedCode> true </traceDeployedCode>
+         <account>
+           <acctID> ACCTID </acctID>
+           <code> _ => #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi </code>
+           ...
+         </account>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCTID | #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi }:MapMutation) </currentDeployedCodeMutations>
+      [priority(49)]
+
+    rule <k> #etchAccountIfEmpty ACCT => .K ... </k>
+         <traceDeployedCode> true </traceDeployedCode>
+         <accounts>
+           <account>
+             <acctID> ACCT </acctID>
+             <code> CODE => #bufStrict(1,0) </code>
+             ...
+           </account>
+           ...
+         </accounts>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | #bufStrict(1,0) }:MapMutation) </currentDeployedCodeMutations>
+      requires lengthBytes(CODE) ==Int 0
+      [priority(49)]
+
+ // ---------------------------------------------------------------------------------------------------------------
+    // trace init program code changes
+    // init programs are passed to `#create` and `#mkCreate`
+    // as a `#create` is always followed by `#mkCreate`, we can make use of a call
+    // that is set on `#create` and reset on `#mkCreate` without relying on re-implementing 
+    // the respective rules for tracing
+    rule <k> #create _ ACCTTO _ INITCODE ... </k>
+         <traceInitCode> true </traceInitCode>
+         <currentInitCodeMutations> ... .List => ListItem({ ACCTTO | INITCODE }:MapMutation) </currentInitCodeMutations>
+         <recordedCreate> false => true </recordedCreate>
+      [priority(49)]
+
+ // ---------------------------------------------------------------------------------------------------------------
+    // trace memory changes to reduce the size of traces
+    // when memory change, we trace the entire memory contents
+    // the <localMemory> cell is also changed at `#popTracesCallStack`
+    rule <k> MSTORE _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> MSTORE8 _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> MCOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> CODECOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> CALLDATACOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> RETURNDATACOPY _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> EXTCODECOPY _ _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> #initVM ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> #setLocalMem _ _ _ ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+    rule <k> clearTX ... </k>
+         <traceMemory> true </traceMemory>
+         <localMemoryChanged> false => true </localMemoryChanged>
+      [priority(49)]
+
+  // ---------------------------------------------------------------------------------------------------------------
+    // the `#setMockCall` rules in kontrol are unsound and cause execution issues when run using the llvm-backend
+    // TODO: remove this once the fixes (using [owise]) were upstreamed to kontrol
+    rule <k> #setMockCall MOCKADDRESS MOCKCALLDATA MOCKRETURN => .K ... </k>
+         <mockCall>
+            <mockAddress> MOCKADDRESS </mockAddress>
+            <mockValues>  MOCKVALUES => MOCKVALUES [ MOCKCALLDATA <- MOCKRETURN ] </mockValues>
+         </mockCall>
+      [priority(49)]
+
+    rule <k> #setMockCall MOCKADDRESS MOCKCALLDATA MOCKRETURN => .K ... </k>
+         <mockCalls>
+           ( .Bag
+            => <mockCall>
+                  <mockAddress> MOCKADDRESS </mockAddress>
+                  <mockValues> .Map [ MOCKCALLDATA <- MOCKRETURN ] </mockValues>
+               </mockCall>
+           )
+           ...
+         </mockCalls>
+      [owise,priority(49)]
+
+    // same issue with `#setMockFunction`
+    // TODO: remove this once the fixes (using [owise]) were upstreamed to kontrol
+    rule <k> #setMockFunction MOCKADDRESS MOCKTARGET MOCKCALLDATA => .K ... </k>
+         <mockFunction>
+            <mockFunctionAddress> MOCKADDRESS </mockFunctionAddress>
+            <mockFunctionValues>  MOCKVALUES => MOCKVALUES [ MOCKCALLDATA <- MOCKTARGET ] </mockFunctionValues>
+         </mockFunction>
+      [priority(49)]
+
+   rule <k> #setMockFunction MOCKADDRESS MOCKTARGET MOCKCALLDATA => .K ... </k>
+         <mockFunctions>
+           ( .Bag
+            => <mockFunction>
+                  <mockFunctionAddress> MOCKADDRESS </mockFunctionAddress>
+                  <mockFunctionValues> .Map [ MOCKCALLDATA <- MOCKTARGET ] </mockFunctionValues>
+               </mockFunction>
+           )
+           ...
+         </mockFunctions>
+      [owise,priority(49)]
 
 endmodule
  ```
