@@ -187,7 +187,7 @@ module TRACE-JSON
     rule mapMutationToJson( { A | B:Int } ) => [A, B]
     rule mapMutationToJson( { A | B:Bytes } ) => [A, B]
 
-    rule mapMutationsToJson( XS ) => [ mapMutationToJsons(XS) ] [priority(50)]
+    rule mapMutationsToJson( XS ) => [ mapMutationsToJsons(XS) ] [priority(50)]
     rule mapMutationsToJsons( .MapMutations ) => .JSONs
     rule mapMutationsToJsons( X, XS ) => mapMutationToJson( X ), mapMutationsToJsons( XS )
 
