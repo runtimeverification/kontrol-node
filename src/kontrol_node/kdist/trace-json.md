@@ -12,18 +12,18 @@ module TRACE-JSON
     imports EVM-TRACING
     imports JSON
 
-    syntax JSON ::= traceItemsToJson(TraceItems)      [function, symbol(traceItemsToJson)]
-                  | traceItemToJson(TraceItem)        [function, symbol(traceItemToJson)]
-                  | opcodeToJson(OpCode)              [function, symbol(opcodeToJson)]
-                  | wordstackToJson(WordStack)        [function, symbol(wordstackToJson)]
-                  | bytesToJson(Bytes)                [function, symbol(bytesToJson)]
-                  | mapMutationToJson(MapMutation)    [function, symbol(mapMutationToJson)]
-                  | mapMutationsToJson(MapMutations)  [function, symbol(mapMutationsToJson)]
-                  | accountToJson(Account)            [function, symbol(accountToJson)]
-                  | statusToJson(StatusCode)          [function, symbol(statusToJson)]
-    syntax JSONs ::= wordstackToJsons(WordStack)      [function, symbol(wordstackToJsons)]
-                  | mapMutationsToJsons(MapMutations) [function, symbol(mapMutationsToJsons)]
-                  | traceItemsToJsons(TraceItems)     [function, symbol(traceItemsToJsons)]
+    syntax JSON ::= traceItemsToJson(TraceItems)      [function, total, symbol(traceItemsToJson)]
+                  | traceItemToJson(TraceItem)        [function, total, symbol(traceItemToJson)]
+                  | opcodeToJson(OpCode)              [function, total, symbol(opcodeToJson)]
+                  | wordstackToJson(WordStack)        [function, total, symbol(wordstackToJson)]
+                  | bytesToJson(Bytes)                [function, total, symbol(bytesToJson)]
+                  | mapMutationToJson(MapMutation)    [function, total, symbol(mapMutationToJson)]
+                  | mapMutationsToJson(MapMutations)  [function, total, symbol(mapMutationsToJson)]
+                  | accountToJson(Account)            [function, total, symbol(accountToJson)]
+                  | statusToJson(StatusCode)          [function, total, symbol(statusToJson)]
+    syntax JSONs ::= wordstackToJsons(WordStack)      [function, total, symbol(wordstackToJsons)]
+                  | mapMutationsToJsons(MapMutations) [function, total, symbol(mapMutationsToJsons)]
+                  | traceItemsToJsons(TraceItems)     [function, total, symbol(traceItemsToJsons)]
 
     rule opcodeToJson( STOP ) => "STOP"
     rule opcodeToJson( ADD ) => "ADD"
@@ -177,7 +177,7 @@ module TRACE-JSON
     rule opcodeToJson( SELFDESTRUCT ) => "SELFDESTRUCT"
     rule opcodeToJson( W ) => "INVALID" [owise]
 
-    // rule wordstackToJson( WS ) => [ wordstackToJsons( WS ) ]
+    rule wordstackToJson( WS ) => [ wordstackToJsons( WS ) ] [priority(50)]
     rule wordstackToJsons( .WordStack ) => .JSONs
     rule wordstackToJsons( W:WS ) => W, wordstackToJsons( WS )
 
@@ -187,7 +187,7 @@ module TRACE-JSON
     rule mapMutationToJson( { A | B:Int } ) => [A, B]
     rule mapMutationToJson( { A | B:Bytes } ) => [A, B]
 
-    // rule mapMutationsToJson( XS ) => [ mapMutationToJsons(XS) ]
+    rule mapMutationsToJson( XS ) => [ mapMutationToJsons(XS) ] [priority(50)]
     rule mapMutationsToJsons( .MapMutations ) => .JSONs
     rule mapMutationsToJsons( X, XS ) => mapMutationToJson( X ), mapMutationsToJsons( XS )
 
@@ -239,13 +239,14 @@ module TRACE-JSON
         "blocknumber": VAR_BLOCK_NUMBER,
         "timestamp": VAR_TIMESTAMP,
         "target_address": accountToJson( VAR_TARGET_ADDRESS ),
+        "code_address": accountToJson( VAR_CODE_ADDRESS),
         "msg_sender": accountToJson( VAR_MESSAGE_SENDER ),
         "msg_value": VAR_MESSAGE_VALUE,
         "tx_origin": accountToJson( VAR_TX_ORIGIN ),
         "status_code": statusToJson( VAR_STATUS_CODE )
       }
 
-    // rule traceItemsToJson( TRACE ) => [ traceItemsToJson( TRACE ) ]
+    rule traceItemsToJson( TRACE ) => [ traceItemsToJsons( TRACE ) ] [priority(50)]
     rule traceItemsToJsons( .TraceItems ) => .JSONs
     rule traceItemsToJsons( TI, REST) => traceItemToJson( TI ), traceItemsToJsons( REST )
 
