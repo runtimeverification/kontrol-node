@@ -57,7 +57,7 @@ jobs:
       - name: 'Update uv files'
         run: |
           KONTROL_VERSION="$(cat deps/kontrol_release)"
-          sed -i 's!    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v[0-9\.]*",!    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v'${KONTROL_VERSION}',!' pyproject.toml
+          sed -i 's!    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v[0-9\.]*",!    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v'${KONTROL_VERSION}'",!' pyproject.toml
           uv lock --upgrade
           git add . && git commit -m "Sync uv files: kontrol ${KONTROL_VERSION}" || true
       - name: 'Update K release'
