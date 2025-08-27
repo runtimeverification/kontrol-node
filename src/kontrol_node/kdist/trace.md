@@ -12,8 +12,6 @@ This module handles the tracing of EVM opcodes during an execution.
 module EVM-TRACING
     imports EVM
     imports FOUNDRY
-    imports K-IO
-    imports K-REFLECTION
     imports ETHEREUM-SIMULATION
 
 
@@ -79,6 +77,13 @@ The configuration of the KEVMTracing is defined as following:
 
     rule .MapMutations B:MapMutations => B
     rule (A:MapMutation, AS:MapMutations) B:MapMutations => A, (AS B)
+
+   syntax KItem ::= "#openTraceLogsFile"            [symbol(openTraceLogsFile)]
+                  | "#closeTraceLogsFile"           [symbol(closeTraceLogsFile)]
+                  | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
+
+   
+   syntax FILEDESCR ::= Int | ".FileDescr"
  // ----------------------------------------------------------------------------------
 ```
 
@@ -121,118 +126,6 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     rule .TraceItems B:TraceItems => B
     rule (A:TraceItem, AS:TraceItems) B:TraceItems => A, (AS B)
 
-    syntax FILEDESCR ::= Int | ".FileDescr"
- // --------------------------------------
-
-    rule <k> #execute ... </k>
-         <recordedTrace> true => false </recordedTrace>
-      [priority(25)]
-
-    syntax KItem ::= "#storeTraceItem" TraceItem
- // ---------------------------------------------------------------------------------------------------------------
-    rule <k> (.K => #storeTraceItem { PCOUNT
-                                    | OPC
-                                    | #if DSTK ==K true #then WS      #else .WordStack #fi
-                                    | #if (DMEM andBool MEMCH)          ==K true #then MEM  #else .DataChange #fi
-                                    | STORCH
-                                    | NONCECH
-                                    | BALCH
-                                    | #if (DCADA andBool CONTEXTSWITCH) ==K true #then CADA #else .DataChange #fi
-                                    | #if (DREDA andBool CONTEXTSWITCH) ==K true #then REDA #else .DataChange #fi
-                                    | #if PROGCHANGED                   ==K true #then PROG #else .DataChange #fi
-                                    | DEPLCODECH
-                                    | INITCODECH
-                                    | CD
-                                    | GA
-                                    | COINB
-                                    | GASPR
-                                    | DIFF
-                                    | NUM
-                                    | TIMEST
-                                    | ACCT
-                                    | CODEADDR
-                                    | SENDER
-                                    | MSGVAL
-                                    | TXORIG
-                                    | ISINIT
-                                    | STATUS
-                                    })
-             ~> #next [ OPC ] ...
-         </k>
-         <activeTracing>                true                   </activeTracing>
-         <traceWordStack>               DSTK                   </traceWordStack>
-         <traceMemory>                  DMEM                   </traceMemory>
-         <traceCallData>                DCADA                  </traceCallData>
-         <traceReturnData>              DREDA                  </traceReturnData>
-         <recordedTrace>                false => true          </recordedTrace>
-         <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
-         <recordedCreate>               _ => false             </recordedCreate>
-         <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
-         <currentNonceMutations>        NONCECH => .MapMutations       </currentNonceMutations>          
-         <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
-         <currentBalanceMutations>      BALCH => .MapMutations         </currentBalanceMutations>          
-         <currentStorageMutations>      STORCH => .MapMutations        </currentStorageMutations>
-         <programChanged>               PROGCHANGED => false   </programChanged>
-         <currentDeployedCodeMutations> DEPLCODECH => .MapMutations    </currentDeployedCodeMutations>
-         <currentInitCodeMutations>     INITCODECH => .MapMutations    </currentInitCodeMutations>
-         <callData>                     CADA                   </callData>
-         <output>                       REDA                   </output>
-         <pc>                           PCOUNT                 </pc>
-         <wordStack>                    WS                     </wordStack>
-         <callDepth>                    CD                     </callDepth>
-         <localMem>                     MEM                    </localMem>
-         <program>                      PROG                   </program>
-         <id>                           ACCT                   </id>
-         <codeAddr>                     CODEADDR               </codeAddr>
-         <gas>                          GA                     </gas>
-         <coinbase>                     COINB                  </coinbase>
-         <gasPrice>                     GASPR                  </gasPrice>
-         <difficulty>                   DIFF                   </difficulty>
-         <number>                       NUM                    </number>
-         <timestamp>                    TIMEST                 </timestamp>
-         <caller>                       SENDER                 </caller>
-         <callValue>                    MSGVAL                 </callValue>
-         <origin>                       TXORIG                 </origin>
-         <isInitCode>                   ISINIT                 </isInitCode>
-         <statusCode>                   STATUS                 </statusCode>
-      [priority(24)]
-
-    rule <k> #storeTraceItem TRITEM => .K ... </k>
-         <writeTraceLogsToFile> false </writeTraceLogsToFile>
-         <traceData>
-           ...
-           .TraceItems => TRITEM
-         </traceData>
-
-    rule <k> #storeTraceItem TRITEM => #write (TRFILEDESCR, 
-               #unparseKORE( TRITEM ) +String "\n"
-             ) ... </k>
-         <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
-         <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
-      requires TRFILEDESCR =/=K .FileDescr
-
- // ---------------------------------------------------------------------------------------------------------------
-
-    syntax KItem ::= "#openTraceLogsFile"            [symbol(openTraceLogsFile)]
-                   | "#closeTraceLogsFile"           [symbol(closeTraceLogsFile)]
-                   | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
- // ---------------------------------------------------------------------------------------
-rule <k> #openTraceLogsFile => #open(TRFILEPATH, "w") ~> #storeTraceLogsFileDescriptor ... </k>
-     <traceLogsFilePath> TRFILEPATH </traceLogsFilePath>
-     <writeTraceLogsToFile> true </writeTraceLogsToFile>
-
-rule <k> #openTraceLogsFile => .K ... </k>
-     <writeTraceLogsToFile> false </writeTraceLogsToFile>
-
-rule <k> TRFILEDESCR ~> #storeTraceLogsFileDescriptor => .K ... </k>
-     <traceLogsFileDescriptor> _ => TRFILEDESCR </traceLogsFileDescriptor>
-
-rule <k> #closeTraceLogsFile => #close(TRFILEDESCR) ... </k>
-     <traceLogsFileDescriptor> TRFILEDESCR => .FileDescr </traceLogsFileDescriptor>
-  requires TRFILEDESCR =/=K .FileDescr
-
-rule <k> #closeTraceLogsFile => .K ... </k> [owise]
- // ---------------------------------------------------------------------------------------------------------------
 
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
     // due to this, Map hooks cannot be used

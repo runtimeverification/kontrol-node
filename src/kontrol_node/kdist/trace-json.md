@@ -11,9 +11,9 @@ module TRACE-JSON
     imports FOUNDRY
     imports EVM-TRACING
     imports JSON
+    imports K-IO
 
-    syntax JSON ::= traceItemsToJson(TraceItems)      [function, total, symbol(traceItemsToJson)]
-                  | traceItemToJson(TraceItem)        [function, total, symbol(traceItemToJson)]
+    syntax JSON ::= traceItemToJson(TraceItem)        [function, total, symbol(traceItemToJson)]
                   | opcodeToJson(OpCode)              [function, total, symbol(opcodeToJson)]
                   | wordstackToJson(WordStack)        [function, total, symbol(wordstackToJson)]
                   | bytesToJson(Bytes)                [function, total, symbol(bytesToJson)]
@@ -23,7 +23,6 @@ module TRACE-JSON
                   | statusToJson(StatusCode)          [function, total, symbol(statusToJson)]
     syntax JSONs ::= wordstackToJsons(WordStack)      [function, total, symbol(wordstackToJsons)]
                   | mapMutationsToJsons(MapMutations) [function, total, symbol(mapMutationsToJsons)]
-                  | traceItemsToJsons(TraceItems)     [function, total, symbol(traceItemsToJsons)]
 
     rule opcodeToJson( STOP ) => "STOP"
     rule opcodeToJson( ADD ) => "ADD"
@@ -246,9 +245,110 @@ module TRACE-JSON
         "status_code": statusToJson( VAR_STATUS_CODE )
       }
 
-    rule traceItemsToJson( TRACE ) => [ traceItemsToJsons( TRACE ) ] [priority(50)]
-    rule traceItemsToJsons( .TraceItems ) => .JSONs
-    rule traceItemsToJsons( TI, REST) => traceItemToJson( TI ), traceItemsToJsons( REST )
+    // IO
+
+    rule <k> #execute ... </k>
+         <recordedTrace> true => false </recordedTrace>
+      [priority(25)]
+
+    syntax KItem ::= "#storeTraceItem" TraceItem
+
+    rule <k> (.K => #storeTraceItem { PCOUNT
+                                    | OPC
+                                    | #if DSTK ==K true #then WS      #else .WordStack #fi
+                                    | #if (DMEM andBool MEMCH)          ==K true #then MEM  #else .DataChange #fi
+                                    | STORCH
+                                    | NONCECH
+                                    | BALCH
+                                    | #if (DCADA andBool CONTEXTSWITCH) ==K true #then CADA #else .DataChange #fi
+                                    | #if (DREDA andBool CONTEXTSWITCH) ==K true #then REDA #else .DataChange #fi
+                                    | #if PROGCHANGED                   ==K true #then PROG #else .DataChange #fi
+                                    | DEPLCODECH
+                                    | INITCODECH
+                                    | CD
+                                    | GA
+                                    | COINB
+                                    | GASPR
+                                    | DIFF
+                                    | NUM
+                                    | TIMEST
+                                    | ACCT
+                                    | CODEADDR
+                                    | SENDER
+                                    | MSGVAL
+                                    | TXORIG
+                                    | ISINIT
+                                    | STATUS
+                                    })
+             ~> #next [ OPC ] ...
+         </k>
+         <activeTracing>                true                   </activeTracing>
+         <traceWordStack>               DSTK                   </traceWordStack>
+         <traceMemory>                  DMEM                   </traceMemory>
+         <traceCallData>                DCADA                  </traceCallData>
+         <traceReturnData>              DREDA                  </traceReturnData>
+         <recordedTrace>                false => true          </recordedTrace>
+         <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
+         <recordedCreate>               _ => false             </recordedCreate>
+         <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
+         <currentNonceMutations>        NONCECH => .MapMutations       </currentNonceMutations>          
+         <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
+         <currentBalanceMutations>      BALCH => .MapMutations         </currentBalanceMutations>          
+         <currentStorageMutations>      STORCH => .MapMutations        </currentStorageMutations>
+         <programChanged>               PROGCHANGED => false   </programChanged>
+         <currentDeployedCodeMutations> DEPLCODECH => .MapMutations    </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     INITCODECH => .MapMutations    </currentInitCodeMutations>
+         <callData>                     CADA                   </callData>
+         <output>                       REDA                   </output>
+         <pc>                           PCOUNT                 </pc>
+         <wordStack>                    WS                     </wordStack>
+         <callDepth>                    CD                     </callDepth>
+         <localMem>                     MEM                    </localMem>
+         <program>                      PROG                   </program>
+         <id>                           ACCT                   </id>
+         <codeAddr>                     CODEADDR               </codeAddr>
+         <gas>                          GA                     </gas>
+         <coinbase>                     COINB                  </coinbase>
+         <gasPrice>                     GASPR                  </gasPrice>
+         <difficulty>                   DIFF                   </difficulty>
+         <number>                       NUM                    </number>
+         <timestamp>                    TIMEST                 </timestamp>
+         <caller>                       SENDER                 </caller>
+         <callValue>                    MSGVAL                 </callValue>
+         <origin>                       TXORIG                 </origin>
+         <isInitCode>                   ISINIT                 </isInitCode>
+         <statusCode>                   STATUS                 </statusCode>
+      [priority(24)]
+
+    rule <k> #storeTraceItem TRITEM => .K ... </k>
+         <writeTraceLogsToFile> false </writeTraceLogsToFile>
+         <traceData>
+           ...
+           .TraceItems => TRITEM
+         </traceData>
+
+    rule <k> #storeTraceItem TRITEM => #write (TRFILEDESCR, 
+               JSON2String( traceItemToJson( TRITEM ) ) +String "\n"
+             ) ... </k>
+         <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
+         <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
+      requires TRFILEDESCR =/=K .FileDescr
+
+    rule <k> #openTraceLogsFile => #open(TRFILEPATH, "w") ~> #storeTraceLogsFileDescriptor ... </k>
+        <traceLogsFilePath> TRFILEPATH </traceLogsFilePath>
+        <writeTraceLogsToFile> true </writeTraceLogsToFile>
+
+    rule <k> #openTraceLogsFile => .K ... </k>
+        <writeTraceLogsToFile> false </writeTraceLogsToFile>
+
+    rule <k> TRFILEDESCR ~> #storeTraceLogsFileDescriptor => .K ... </k>
+        <traceLogsFileDescriptor> _ => TRFILEDESCR </traceLogsFileDescriptor>
+
+    rule <k> #closeTraceLogsFile => #close(TRFILEDESCR) ... </k>
+        <traceLogsFileDescriptor> TRFILEDESCR => .FileDescr </traceLogsFileDescriptor>
+      requires TRFILEDESCR =/=K .FileDescr
+
+    rule <k> #closeTraceLogsFile => .K ... </k> [owise]
 
 endmodule
 ```
