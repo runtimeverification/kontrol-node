@@ -29,21 +29,21 @@ The configuration of the KEVMTracing is defined as following:
 ```k
     configuration
       <KEVMTracing>
-        <activeTracing>           false      </activeTracing>
-        <traceStorage>            false      </traceStorage>
-        <traceWordStack>          false      </traceWordStack>
-        <traceMemory>             false      </traceMemory>
-        <recordedTrace>           false      </recordedTrace>
-        <traceData>               .List      </traceData>
-        <traceLogsFileDescriptor> .FileDescr </traceLogsFileDescriptor>
-        <traceLogsFilePath>       "":String  </traceLogsFilePath>
-        <writeTraceLogsToFile>    false      </writeTraceLogsToFile>
+        <activeTracing>           false       </activeTracing>
+        <traceStorage>            false       </traceStorage>
+        <traceWordStack>          false       </traceWordStack>
+        <traceMemory>             false       </traceMemory>
+        <recordedTrace>           false       </recordedTrace>
+        <traceData>               .TraceItems </traceData>
+        <traceLogsFileDescriptor> .FileDescr  </traceLogsFileDescriptor>
+        <traceLogsFilePath>       "":String   </traceLogsFilePath>
+        <writeTraceLogsToFile>    false       </writeTraceLogsToFile>
 
-        <currentNonceMutations>   .List </currentNonceMutations>
+        <currentNonceMutations>   .MapMutations </currentNonceMutations>
         <traceNonce>              false </traceNonce>
-        <currentBalanceMutations> .List </currentBalanceMutations>
+        <currentBalanceMutations> .MapMutations </currentBalanceMutations>
         <traceBalance>            false </traceBalance>
-        <currentStorageMutations> .List </currentStorageMutations>
+        <currentStorageMutations> .MapMutations </currentStorageMutations>
 
         <localMemoryChanged>      true  </localMemoryChanged>
 
@@ -61,10 +61,10 @@ The configuration of the KEVMTracing is defined as following:
         <programChanged> true </programChanged>
 
         <traceDeployedCode> false </traceDeployedCode>
-        <currentDeployedCodeMutations> .List </currentDeployedCodeMutations>
+        <currentDeployedCodeMutations> .MapMutations </currentDeployedCodeMutations>
 
         <traceInitCode> false </traceInitCode>
-        <currentInitCodeMutations> .List </currentInitCodeMutations>
+        <currentInitCodeMutations> .MapMutations </currentInitCodeMutations>
         <recordedCreate> false </recordedCreate>
       </KEVMTracing>
 ```
@@ -73,41 +73,53 @@ The configuration of the KEVMTracing is defined as following:
     syntax MapMutation ::= "{" Int "|" Int "|" Int "}" [symbol(node_intDoubleMapMutation)]
                          | "{" Int "|" Int "}"         [symbol(node_intMapMutation)]
                          | "{" Int "|" Bytes "}"       [symbol(node_bytesMapMutation)]
+
+    syntax MapMutations ::= List{MapMutation, ","}
+                         | MapMutations MapMutations [function, total, assoc, left]
+
+    rule .MapMutations B:MapMutations => B
+    rule (A:MapMutation, AS:MapMutations) B:MapMutations => A, (AS B)
  // ----------------------------------------------------------------------------------
 ```
 
 The `TraceItem` is a sort used to serialize information from the configuration about the executed opcodes.
 
 ```k
+
     syntax TraceItem ::= "{" 
-          Int        // program counter 
-      "|" OpCode     // opcode
-      "|" WordStack  // stack
-      "|" DataChange // memory
-      "|" List       // storage changes
-      "|" List       // nonce changes
-      "|" List       // balance changes
-      "|" DataChange // call data change
-      "|" DataChange // return data change
-      "|" DataChange // program change
-      "|" List       // deployed code changes
-      "|" List       // init code changes
-      "|" Int        // call depth
-      "|" Int        // gas
-      "|" Account    // coinbase
-      "|" Int        // gas price
-      "|" Int        // difficulty
-      "|" Int        // block number
-      "|" Int        // block timestamp
-      "|" Account    // target address
-      "|" Account    // code address
-      "|" Account    // message sender
-      "|" Int        // message value
-      "|" Account    // transaction origin
-      "|" Bool       // is init code
-      "|" StatusCode // status
+          Int          // program counter 
+      "|" OpCode       // opcode
+      "|" WordStack    // stack
+      "|" DataChange   // memory
+      "|" MapMutations // storage changes
+      "|" MapMutations // nonce changes
+      "|" MapMutations // balance changes
+      "|" DataChange   // call data change
+      "|" DataChange   // return data change
+      "|" DataChange   // program change
+      "|" MapMutations // deployed code changes
+      "|" MapMutations // init code changes
+      "|" Int          // call depth
+      "|" Int          // gas
+      "|" Account      // coinbase
+      "|" Int          // gas price
+      "|" Int          // difficulty
+      "|" Int          // block number
+      "|" Int          // block timestamp
+      "|" Account      // target address
+      "|" Account      // code address
+      "|" Account      // message sender
+      "|" Int          // message value
+      "|" Account      // transaction origin
+      "|" Bool         // is init code
+      "|" StatusCode   // status
     "}" [symbol(traceItem)]
 
+    syntax TraceItems ::= List{TraceItem, ","}
+                         | TraceItems TraceItems [function, total, assoc, left]
+
+    rule .TraceItems B:TraceItems => B
+    rule (A:TraceItem, AS:TraceItems) B:TraceItems => A, (AS B)
 
     syntax FILEDESCR ::= Int | ".FileDescr"
  // --------------------------------------
@@ -115,35 +127,6 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     rule <k> #execute ... </k>
          <recordedTrace> true => false </recordedTrace>
       [priority(25)]
-
-    syntax TraceItem ::= "{" 
-          Int        // program counter 
-      "|" OpCode     // opcode
-      "|" WordStack  // stack
-      "|" DataChange // memory
-      "|" List       // storage changes
-      "|" List       // nonce changes
-      "|" List       // balance changes
-      "|" DataChange // call data change
-      "|" DataChange // return data change
-      "|" DataChange // program change
-      "|" List       // deployed code changes
-      "|" List       // init code changes
-      "|" Int        // call depth
-      "|" Int        // gas
-      "|" Account    // coinbase
-      "|" Int        // gas price
-      "|" Int        // difficulty
-      "|" Int        // block number
-      "|" Int        // block timestamp
-      "|" Account    // target address
-      "|" Account    // code address
-      "|" Account    // message sender
-      "|" Int        // message value
-      "|" Account    // transaction origin
-      "|" Bool       // is init code
-      "|" StatusCode // status
-    "}" [symbol(traceItem)]
 
     syntax KItem ::= "#storeTraceItem" TraceItem
  // ---------------------------------------------------------------------------------------------------------------
@@ -185,13 +168,13 @@ The `TraceItem` is a sort used to serialize information from the configuration a
          <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
          <recordedCreate>               _ => false             </recordedCreate>
          <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
-         <currentNonceMutations>        NONCECH => .List       </currentNonceMutations>          
+         <currentNonceMutations>        NONCECH => .MapMutations       </currentNonceMutations>          
          <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
-         <currentBalanceMutations>      BALCH => .List         </currentBalanceMutations>          
-         <currentStorageMutations>      STORCH => .List        </currentStorageMutations>
+         <currentBalanceMutations>      BALCH => .MapMutations         </currentBalanceMutations>          
+         <currentStorageMutations>      STORCH => .MapMutations        </currentStorageMutations>
          <programChanged>               PROGCHANGED => false   </programChanged>
-         <currentDeployedCodeMutations> DEPLCODECH => .List    </currentDeployedCodeMutations>
-         <currentInitCodeMutations>     INITCODECH => .List    </currentInitCodeMutations>
+         <currentDeployedCodeMutations> DEPLCODECH => .MapMutations    </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     INITCODECH => .MapMutations    </currentInitCodeMutations>
          <callData>                     CADA                   </callData>
          <output>                       REDA                   </output>
          <pc>                           PCOUNT                 </pc>
@@ -218,7 +201,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
          <writeTraceLogsToFile> false </writeTraceLogsToFile>
          <traceData>
            ...
-           .List => ListItem(TRITEM)
+           .TraceItems => TRITEM
          </traceData>
 
     rule <k> #storeTraceItem TRITEM => #write (TRFILEDESCR, 
@@ -273,7 +256,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <storage> STORAGE => STORAGE [ INDEX <- NEW ] </storage>
            ...
          </account>
-         <currentStorageMutations> ... .List => ListItem({ ACCT | INDEX | NEW }) </currentStorageMutations>
+         <currentStorageMutations> ... .MapMutations => { ACCT | INDEX | NEW }:MapMutation, .MapMutations </currentStorageMutations>
       [preserves-definedness,priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -285,7 +268,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <storage> STORAGE => STORAGE [ LOC <- VALUE ] </storage>
              ...
          </account>
-         <currentStorageMutations> ... .List => ListItem({ ACCTID | LOC | VALUE }) </currentStorageMutations>
+         <currentStorageMutations> ... .MapMutations => { ACCTID | LOC | VALUE }:MapMutation, .MapMutations </currentStorageMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -315,7 +298,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            ...
          </account>
          <createdAccounts> ACCTS => ACCTS |Set SetItem(ACCTTO) </createdAccounts>
-         <currentNonceMutations> ... .List => ListItem({ACCTTO | #if Gemptyisnonexistent << SCHED >> #then NONCE +Int 1 #else NONCE #fi }:MapMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .MapMutations => {ACCTTO | #if Gemptyisnonexistent << SCHED >> #then NONCE +Int 1 #else NONCE #fi }:MapMutation, .MapMutations </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -327,7 +310,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <nonce> NONCE => NONCE +Int 1 </nonce>
            ...
          </account>
-         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE +Int 1 }:MapMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .MapMutations => { ACCT | NONCE +Int 1 }:MapMutation, .MapMutations </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -335,7 +318,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
     rule <k> loadAccount ACCT { "nonce" : (NONCE:Int), REST => REST } ... </k>
          <traceNonce> true </traceNonce>
          <account> <acctID> ACCT </acctID> <nonce> _ => NONCE </nonce> ... </account>
-         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE }:MapMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .MapMutations => { ACCT | NONCE }:MapMutation, .MapMutations </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -347,7 +330,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
              <nonce> _ => NONCE </nonce>
              ...
          </account>
-         <currentNonceMutations> ... .List => ListItem({ ACCTID | NONCE }:MapMutation) </currentNonceMutations>
+         <currentNonceMutations> ... .MapMutations => { ACCTID | NONCE }:MapMutation, .MapMutations </currentNonceMutations>
       [priority(49)]
 
 
@@ -370,7 +353,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <txType>            Blob         </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .List => ListItem({ ACCTFROM | BAL -Int Cblobfee(SCHED, EXCESS_BLOB_GAS, size(TVH)) }:MapMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => { ACCTFROM | BAL -Int Cblobfee(SCHED, EXCESS_BLOB_GAS, size(TVH)) }:MapMutation, .MapMutations </currentBalanceMutations>
       requires Ghasblobbasefee << SCHED >>
       [priority(49)]
 
@@ -390,7 +373,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <balance> B => B +Int #gweiToWei(VALUE) </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | B +Int #gweiToWei(VALUE) }:MapMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => { ACCT | B +Int #gweiToWei(VALUE) }:MapMutation, .MapMutations </currentBalanceMutations>
       [priority(49)]
 
 
@@ -426,9 +409,9 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <txType> TXTYPE </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .List => 
-            ListItem({ ORG | ORGBAL +Int minInt(GAVAIL, GLIMIT -Int GFLOOR) *Int GPRICE }:MapMutation) 
-            ListItem({ MINER | MINBAL +Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int (GPRICE -Int BFEE) }:MapMutation) 
+         <currentBalanceMutations> ... .MapMutations => 
+            { ORG | ORGBAL +Int minInt(GAVAIL, GLIMIT -Int GFLOOR) *Int GPRICE },
+            { MINER | MINBAL +Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int (GPRICE -Int BFEE) }
          </currentBalanceMutations>
       requires ORG =/=Int MINER
       [priority(49)]
@@ -460,7 +443,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <txType> TXTYPE </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL +Int GLIMIT *Int GPRICE -Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int BFEE }:MapMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => { ACCT | BAL +Int GLIMIT *Int GPRICE -Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int BFEE }:MapMutation, .MapMutations </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -483,7 +466,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          </account>
          <log> LOGS </log>
          <logsBloom> _ => #bloomFilter(LOGS) </logsBloom>
-         <currentBalanceMutations> ... .List => ListItem({ MINER | MINBAL +Int Rb < SCHED > }:MapMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => { MINER | MINBAL +Int Rb < SCHED > }:MapMutation, .MapMutations </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -503,9 +486,9 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <balance> OMMBAL => OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) </balance>
           ...
          </account>
-         <currentBalanceMutations> ... .List =>
-            ListItem({ MINER | MINBAL +Int Rb < SCHED > /Int 32 }:MapMutation)
-            ListItem({ OMMER | OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) }:MapMutation)
+         <currentBalanceMutations> ... .MapMutations =>
+            { MINER | MINBAL +Int Rb < SCHED > /Int 32 },
+            { OMMER | OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) }
          </currentBalanceMutations>
       [priority(49)]
 
@@ -524,9 +507,9 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <balance> ORIGTO => ORIGTO +Word VALUE </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .List =>
-            ListItem({ ACCTFROM | ORIGFROM -Word VALUE }:MapMutation)
-            ListItem({ ACCTTO | ORIGTO +Word VALUE }:MapMutation)
+         <currentBalanceMutations> ... .MapMutations =>
+            { ACCTFROM | ORIGFROM -Word VALUE },
+            { ACCTTO | ORIGTO +Word VALUE }
          </currentBalanceMutations>
       requires ACCTFROM =/=K ACCTTO andBool VALUE <=Int ORIGFROM
       [preserves-definedness, priority(49)]
@@ -546,7 +529,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
          </account>
          <output> _ => .Bytes </output>
          <createdAccounts> CA </createdAccounts>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | 0 }:MapMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => { ACCT | 0 }:MapMutation, .MapMutations </currentBalanceMutations>
       requires ((notBool Ghaseip6780 << SCHED >>) orBool ACCT in CA)
       [priority(49)]
 
@@ -555,7 +538,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
     rule <k> loadAccount ACCT { "balance" : (BAL:Int), REST => REST } ... </k>
          <traceBalance> true </traceBalance>
          <account> <acctID> ACCT </acctID> <balance> _ => BAL </balance> ... </account>
-         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL }:MapMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => { ACCT | BAL }:MapMutation, .MapMutations </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -567,7 +550,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <balance> _ => NEWBAL </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .List => ListItem({ ACCTID | NEWBAL }:MapMutation) </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => { ACCTID | NEWBAL }:MapMutation, .MapMutations </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -652,12 +635,12 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <code> _ => OUT </code>
            ...
          </account>
-         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | OUT }:MapMutation) </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .MapMutations => { ACCT | OUT }:MapMutation, .MapMutations </currentDeployedCodeMutations>
       [priority(49)]
 
     rule <k> loadAccount ACCT { "code" : (CODE:Bytes), REST => REST } ... </k>
          <account> <acctID> ACCT </acctID> <code> _ => CODE </code> ... </account>
-         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | CODE }:MapMutation) </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .MapMutations => { ACCT | CODE }:MapMutation, .MapMutations </currentDeployedCodeMutations>
       [priority(49)]
 
     // trace program changes by cheatcodes as well
@@ -668,7 +651,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            <code> _ => #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi </code>
            ...
          </account>
-         <currentDeployedCodeMutations> ... .List => ListItem({ ACCTID | #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi }:MapMutation) </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .MapMutations => { ACCTID | #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi }:MapMutation, .MapMutations </currentDeployedCodeMutations>
       [priority(49)]
 
     rule <k> #etchAccountIfEmpty ACCT => .K ... </k>
@@ -681,7 +664,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
            </account>
            ...
          </accounts>
-         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | #bufStrict(1,0) }:MapMutation) </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .MapMutations => { ACCT | #bufStrict(1,0) }:MapMutation, .MapMutations </currentDeployedCodeMutations>
       requires lengthBytes(CODE) ==Int 0
       [priority(49)]
 
@@ -693,7 +676,7 @@ rule <k> #closeTraceLogsFile => .K ... </k> [owise]
     // the respective rules for tracing
     rule <k> #create _ ACCTTO _ INITCODE ... </k>
          <traceInitCode> true </traceInitCode>
-         <currentInitCodeMutations> ... .List => ListItem({ ACCTTO | INITCODE }:MapMutation) </currentInitCodeMutations>
+         <currentInitCodeMutations> ... .MapMutations => { ACCTTO | INITCODE }:MapMutation, .MapMutations </currentInitCodeMutations>
          <recordedCreate> false => true </recordedCreate>
       [priority(49)]
 

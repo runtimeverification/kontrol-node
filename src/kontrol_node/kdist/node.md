@@ -3,6 +3,7 @@ requires "foundry.md"
 requires "driver.md"
 requires "no_code_size_checks.md"
 requires "trace.md"
+requires "trace-json.md"
 
 module KONTROL-NODE
     imports FOUNDRY
@@ -64,7 +65,7 @@ module KONTROL-NODE
           ~> #finalizeBlock
           ~> #computeHeaderHash
           ... </k>
-          <traceData> _ => .List </traceData>
+          <traceData> _ => .TraceItems </traceData>
 
     syntax KItem ::= "#loadTransaction" Int TxType Account Account Int Int Int Int Bytes
  // ------------------------------------------------------------------------------------
@@ -225,7 +226,7 @@ module KONTROL-NODE
            <nonce> NONCE </nonce>
            ...
          </account>
-         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation) #else .List #fi </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => #if TRBAL #then { ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation #else .MapMutations #fi </currentBalanceMutations>
 
     rule <k> #executeTx TXID:Int
           => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
@@ -258,8 +259,8 @@ module KONTROL-NODE
            <nonce> NONCE => NONCE +Int 1 </nonce>
            ...
          </account>
-         <currentNonceMutations> ... .List => #if TRNONCE #then ListItem({ ACCTFROM | NONCE +Int 1 }:MapMutation) #else .List #fi </currentNonceMutations>
-         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation) #else .List #fi </currentBalanceMutations>
+         <currentNonceMutations> ... .MapMutations => #if TRNONCE #then { ACCTFROM | NONCE +Int 1 }:MapMutation #else .MapMutations #fi </currentNonceMutations>
+         <currentBalanceMutations> ... .MapMutations => #if TRBAL #then { ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation #else .MapMutations #fi </currentBalanceMutations>
       requires ACCTTO =/=K .Account
 
     syntax KItem ::= "#makeTxReceipt" Int
@@ -381,7 +382,7 @@ module KONTROL-NODE
            </account>
            ...
          </accounts>
-         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ KEY | BAL }:MapMutation) #else .List #fi </currentBalanceMutations>
+         <currentBalanceMutations> ... .MapMutations => #if TRBAL #then { KEY | BAL }:MapMutation #else .MapMutations #fi </currentBalanceMutations>
 endmodule
 
 ```

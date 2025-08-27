@@ -10,17 +10,20 @@ module TRACE-JSON
     imports EVM
     imports FOUNDRY
     imports EVM-TRACING
+    imports JSON
 
-    syntax JSON ::= traceToJson(List)               [function, symbol(traceToJson)]
-                  | traceItemToJson(TraceItem)      [function, symbol(traceItemToJson)]
-                  | opcodeToJson(OpCode)            [function, symbol(opcodeToJson)]
-                  | wordstackToJson(WordStack)      [function, symbol(wordstackToJson)]
-                  | bytesToJson(Bytes)              [function, symbol(bytesToJson)]
-                  | mapMutationToJson(MapMutation)  [function, symbol(mapMutationToJson)]
-                  | mapMutationsToJson(List)        [function, symbol(mapMutationsToJson)]
-                  | accountToJson(Account)          [function, symbol(accountToJson)]
-                  | statusToJson(StatusCode)        [function, symbol(statusToJson)]
-    syntax JSONs ::= wordstackToJsons(WordStack)    [function, symbol(wordstackToJsons)]
+    syntax JSON ::= traceItemsToJson(TraceItems)      [function, symbol(traceItemsToJson)]
+                  | traceItemToJson(TraceItem)        [function, symbol(traceItemToJson)]
+                  | opcodeToJson(OpCode)              [function, symbol(opcodeToJson)]
+                  | wordstackToJson(WordStack)        [function, symbol(wordstackToJson)]
+                  | bytesToJson(Bytes)                [function, symbol(bytesToJson)]
+                  | mapMutationToJson(MapMutation)    [function, symbol(mapMutationToJson)]
+                  | mapMutationsToJson(MapMutations)  [function, symbol(mapMutationsToJson)]
+                  | accountToJson(Account)            [function, symbol(accountToJson)]
+                  | statusToJson(StatusCode)          [function, symbol(statusToJson)]
+    syntax JSONs ::= wordstackToJsons(WordStack)      [function, symbol(wordstackToJsons)]
+                  | mapMutationsToJsons(MapMutations) [function, symbol(mapMutationsToJsons)]
+                  | traceItemsToJsons(TraceItems)     [function, symbol(traceItemsToJsons)]
 
     rule opcodeToJson( STOP ) => "STOP"
     rule opcodeToJson( ADD ) => "ADD"
@@ -174,67 +177,77 @@ module TRACE-JSON
     rule opcodeToJson( SELFDESTRUCT ) => "SELFDESTRUCT"
     rule opcodeToJson( W ) => "INVALID" [owise]
 
-    rule wordstackToJson( WS ) => [ wordstackToJsons( WS ) ]
-    rule wordstackToJsons( .WordStack ) => .List
-    rule wordstackToJsons( W:WS ) => W,WS
+    // rule wordstackToJson( WS ) => [ wordstackToJsons( WS ) ]
+    rule wordstackToJsons( .WordStack ) => .JSONs
+    rule wordstackToJsons( W:WS ) => W, wordstackToJsons( WS )
 
     rule bytesToJson( BYTES ) => Bytes2String( BYTES ) 
 
     rule mapMutationToJson( { A | B | C } ) => [ A, B, C]
-    rule mapMutationToJson( { A | B } ) => [A, B]
+    rule mapMutationToJson( { A | B:Int } ) => [A, B]
+    rule mapMutationToJson( { A | B:Bytes } ) => [A, B]
 
-    rule mapMutationsToJson( .List ) => .List
-    rule mapMutationsToJson( UPDATE:REST ) => ListItem( mapMutationToJson( UPDATE ) ) mapMutationsToJson( REST )
+    // rule mapMutationsToJson( XS ) => [ mapMutationToJsons(XS) ]
+    rule mapMutationsToJsons( .MapMutations ) => .JSONs
+    rule mapMutationsToJsons( X, XS ) => mapMutationToJson( X ), mapMutationsToJsons( XS )
 
     rule accountToJson( .Account ) => null
-    rule accountToJson( ID ) => ID
+    rule accountToJson( ACC ) => ACC
 
     rule statusToJson( STATUS ) => StatusCode2String( STATUS )
 
     rule traceItemToJson (
-      { PC
-      | OPCODE
-      | WORDSTACK
-      | MEMORY
-      | STORAGE_CHANGES
-      | NONCE_CHANGES
-      | BALANCE_CHANGES
-      | CALL_DEPTH
-      | GAS_LEFT
-      | COINBASE
-      | GAS_PRICE
-      | DIFFICULTY
-      | BLOCK_NUMBER
-      | TIMESTAMP
-      | TARGET_ADDRESS
-      | MESSAGE_SENDER
-      | MESSAGE_VALUE
-      | TX_ORIGIN
-      | STATUS_CODE
+      { VAR_PC
+      | VAR_OPCODE
+      | VAR_WORDSTACK
+      | VAR_MEMORY
+      | VAR_STORAGE_CHANGES
+      | VAR_NONCE_CHANGES
+      | VAR_BALANCE_CHANGES
+      | VAR_CALLDATA_CHANGE
+      | VAR_RETURNDATA_CHANGE
+      | VAR_PROGRAM_CHANGE
+      | VAR_CODE_CHANGE
+      | VAR_INIT_CODE_CHANGE
+      | VAR_CALL_DEPTH
+      | VAR_GAS_LEFT
+      | VAR_COINBASE
+      | VAR_GAS_PRICE
+      | VAR_DIFFICULTY
+      | VAR_BLOCK_NUMBER
+      | VAR_TIMESTAMP
+      | VAR_TARGET_ADDRESS
+      | VAR_CODE_ADDRESS
+      | VAR_MESSAGE_SENDER
+      | VAR_MESSAGE_VALUE
+      | VAR_TX_ORIGIN
+      | VAR_IS_INIT_CODE
+      | VAR_STATUS_CODE
       } ) => {
-        "pc": PC,
-        "opcode": opcodeToJson( OPCODE ),
-        "stack": wordstackToJson( WORDSTACK ),
-        "memory": bytestoJson( MEMORY ),
-        "storage": mapMutationsToJson( STORAGE_CHANGES ),
-        "nonce_changes": mapMutationsToJson( NONCE_CHANGES ),
-        "balance_changes": mapMutationsToJson( BALANCE_CHANGES),
-        "call_depth": CALL_DEPTH,
-        "gas_left": GAS_LEFT,
-        "coinbase": accountToJson( COINBASE ),
-        "gasprice": GAS_PRICE,
-        "difficulty": DIFFICULTY,
-        "blocknumber": BLOCK_NUMBER,
-        "timestamp": TIMESTAMP,
-        "target_address": accountToJson( TARGET_ADDRESS ),
-        "msg_sender": accountToJson( MESSAGE_SENDER ),
-        "msg_value": MESSAGE_VALUE,
-        "tx_origin": accountToJson( TX_ORIGIN ),
-        "status_code": statusToJson( STATUS_CODE )
+        "pc": VAR_PC,
+        "opcode": opcodeToJson( VAR_OPCODE ),
+        "stack": wordstackToJson( VAR_WORDSTACK ),
+        "memory": bytesToJson( VAR_MEMORY ),
+        "storage": mapMutationsToJson( VAR_STORAGE_CHANGES ),
+        "nonce_changes": mapMutationsToJson( VAR_NONCE_CHANGES ),
+        "balance_changes": mapMutationsToJson( VAR_BALANCE_CHANGES),
+        "call_depth": VAR_CALL_DEPTH,
+        "gas_left": VAR_GAS_LEFT,
+        "coinbase": accountToJson( VAR_COINBASE ),
+        "gasprice": VAR_GAS_PRICE,
+        "difficulty": VAR_DIFFICULTY,
+        "blocknumber": VAR_BLOCK_NUMBER,
+        "timestamp": VAR_TIMESTAMP,
+        "target_address": accountToJson( VAR_TARGET_ADDRESS ),
+        "msg_sender": accountToJson( VAR_MESSAGE_SENDER ),
+        "msg_value": VAR_MESSAGE_VALUE,
+        "tx_origin": accountToJson( VAR_TX_ORIGIN ),
+        "status_code": statusToJson( VAR_STATUS_CODE )
       }
 
-    rule traceToJson( .List ) => []
-    rule traceToJson( TI:REST ) => ListItem( traceItemToJson( TI ) ) traceToJson( REST )
+    // rule traceItemsToJson( TRACE ) => [ traceItemsToJson( TRACE ) ]
+    rule traceItemsToJsons( .TraceItems ) => .JSONs
+    rule traceItemsToJsons( TI, REST) => traceItemToJson( TI ), traceItemsToJsons( REST )
 
 endmodule
 ```
