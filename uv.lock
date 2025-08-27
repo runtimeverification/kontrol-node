@@ -617,16 +617,16 @@ wheels = [
 
 [[package]]
 name = "hypothesis"
-version = "6.138.3"
+version = "6.138.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
     { name = "sortedcontainers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/19/28/9aa38d1cf2b00d385926fd44318d2b49948c060969ab29e82e8bb654b16c/hypothesis-6.138.3.tar.gz", hash = "sha256:9bffd1382b99e67c46512dac45ec013bae4b39d3d0ef98f0d87535f06d8efc9e", size = 463165, upload-time = "2025-08-24T07:29:16.34Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/bb/63df72a1ef2b9acb04f21a74e84484300ef075c79cda922c53bb4b89bbb5/hypothesis-6.138.4.tar.gz", hash = "sha256:276a8fe109247b94588dc8a69cbe374a9debbe040f3e4893f43635b1147c0dc1", size = 463343, upload-time = "2025-08-27T05:26:51.574Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/60/7db4d683d27b24a6dfd8f82ef28332d20b0d99a976ae696569622383c900/hypothesis-6.138.3-py3-none-any.whl", hash = "sha256:19291d3ba478527155c34704b038a21ba86b2f31d36673446f981a67f705b3f4", size = 530081, upload-time = "2025-08-24T07:29:12.862Z" },
+    { url = "https://files.pythonhosted.org/packages/16/4d/fdf915a577b082baf3c3722cbbb96f2898df35fcf15588ddc977da55de60/hypothesis-6.138.4-py3-none-any.whl", hash = "sha256:b53944dd41f4c9f18f3b9846004ba64b84fdfa716815e6a971b0b568863aa18a", size = 530247, upload-time = "2025-08-27T05:26:47.798Z" },
 ]
 
 [[package]]
@@ -670,8 +670,8 @@ wheels = [
 
 [[package]]
 name = "kevm-pyk"
-version = "1.0.860"
-source = { git = "https://github.com/runtimeverification/evm-semantics.git?subdirectory=kevm-pyk&rev=v1.0.860#4829d259e7fced7a5142df6ebe70643ea5a47757" }
+version = "1.0.861"
+source = { git = "https://github.com/runtimeverification/evm-semantics.git?subdirectory=kevm-pyk&rev=v1.0.861#245c8838f924aef54c19d46cd05a5ff3623fac53" }
 dependencies = [
     { name = "frozendict" },
     { name = "kframework" },
@@ -705,8 +705,8 @@ wheels = [
 
 [[package]]
 name = "kontrol"
-version = "1.0.183"
-source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.183#03f0f703822629ca45798bf592c0a67c3e23ee97" }
+version = "1.0.184"
+source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.184#f54abdf7a15472cf4ddddda63eead8bdc8d9fe04" }
 dependencies = [
     { name = "eth-abi" },
     { name = "eth-utils" },
@@ -746,7 +746,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.183" }]
+requires-dist = [{ name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.184" }]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1050,11 +1050,11 @@ wheels = [
 
 [[package]]
 name = "platformdirs"
-version = "4.3.8"
+version = "4.4.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fe/8b/3c73abc9c759ecd3f1f7ceff6685840859e8070c4d947c93fae71f6a0bf2/platformdirs-4.3.8.tar.gz", hash = "sha256:3d512d96e16bcb959a814c9f348431070822a6496326a4be0911c40b5a74c2bc", size = 21362, upload-time = "2025-05-07T22:47:42.121Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/23/e8/21db9c9987b0e728855bd57bff6984f67952bea55d6f75e055c46b5383e8/platformdirs-4.4.0.tar.gz", hash = "sha256:ca753cf4d81dc309bc67b0ea38fd15dc97bc30ce419a7f58d13eb3bf14c4febf", size = 21634, upload-time = "2025-08-26T14:32:04.268Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fe/39/979e8e21520d4e47a0bbe349e2713c0aac6f3d853d0e5b34d76206c439aa/platformdirs-4.3.8-py3-none-any.whl", hash = "sha256:ff7059bb7eb1179e2685604f4aaf157cfd9535242bd23742eadc3c13542139b4", size = 18567, upload-time = "2025-05-07T22:47:40.376Z" },
+    { url = "https://files.pythonhosted.org/packages/40/4b/2028861e724d3bd36227adfa20d3fd24c3fc6d52032f4a93c133be5d17ce/platformdirs-4.4.0-py3-none-any.whl", hash = "sha256:abd01743f24e5287cd7a5db3752faf1a2d65353f38ec26d98e25a6db65958c85", size = 18654, upload-time = "2025-08-26T14:32:02.735Z" },
 ]
 
 [[package]]
