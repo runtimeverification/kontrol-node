@@ -22,7 +22,7 @@ The configuration of the KEVMTracing is defined as following:
 - `<traceWordStack>` signals if the storage should be recorded in the `TraceItem`.
 - `<traceMemory>` signals if the storage should be recorded in the `TraceItem`.
 - `<recordedTrace>` is an auxiliary cell that is used to determine if the current step has been recorded or not.
-- `<traceData>` is a collection of `TraceItems`.
+- `<traceData>` is a collection of `TraceItem`s.
 
 ```k
     configuration
@@ -32,16 +32,16 @@ The configuration of the KEVMTracing is defined as following:
         <traceWordStack>          false       </traceWordStack>
         <traceMemory>             false       </traceMemory>
         <recordedTrace>           false       </recordedTrace>
-        <traceData>               .TraceItems </traceData>
+        <traceData>               .List       </traceData>
         <traceLogsFileDescriptor> .FileDescr  </traceLogsFileDescriptor>
         <traceLogsFilePath>       "":String   </traceLogsFilePath>
         <writeTraceLogsToFile>    false       </writeTraceLogsToFile>
 
-        <currentNonceMutations>   .MapMutations </currentNonceMutations>
+        <currentNonceMutations>   .List </currentNonceMutations>
         <traceNonce>              false </traceNonce>
-        <currentBalanceMutations> .MapMutations </currentBalanceMutations>
+        <currentBalanceMutations> .List </currentBalanceMutations>
         <traceBalance>            false </traceBalance>
-        <currentStorageMutations> .MapMutations </currentStorageMutations>
+        <currentStorageMutations> .List </currentStorageMutations>
 
         <localMemoryChanged>      true  </localMemoryChanged>
 
@@ -59,10 +59,10 @@ The configuration of the KEVMTracing is defined as following:
         <programChanged> true </programChanged>
 
         <traceDeployedCode> false </traceDeployedCode>
-        <currentDeployedCodeMutations> .MapMutations </currentDeployedCodeMutations>
+        <currentDeployedCodeMutations> .List </currentDeployedCodeMutations>
 
         <traceInitCode> false </traceInitCode>
-        <currentInitCodeMutations> .MapMutations </currentInitCodeMutations>
+        <currentInitCodeMutations> .List </currentInitCodeMutations>
         <recordedCreate> false </recordedCreate>
       </KEVMTracing>
 ```
@@ -71,12 +71,6 @@ The configuration of the KEVMTracing is defined as following:
     syntax MapMutation ::= "{" Int "|" Int "|" Int "}" [symbol(node_intDoubleMapMutation)]
                          | "{" Int "|" Int "}"         [symbol(node_intMapMutation)]
                          | "{" Int "|" Bytes "}"       [symbol(node_bytesMapMutation)]
-
-    syntax MapMutations ::= List{MapMutation, ","}
-                         | MapMutations MapMutations [function, total, assoc, left]
-
-    rule .MapMutations B:MapMutations => B
-    rule (A:MapMutation, AS:MapMutations) B:MapMutations => A, (AS B)
 
    syntax KItem ::= "#openTraceLogsFile"            [symbol(openTraceLogsFile)]
                   | "#closeTraceLogsFile"           [symbol(closeTraceLogsFile)]
@@ -96,14 +90,14 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       "|" OpCode       // opcode
       "|" WordStack    // stack
       "|" DataChange   // memory
-      "|" MapMutations // storage changes
-      "|" MapMutations // nonce changes
-      "|" MapMutations // balance changes
+      "|" List // storage changes
+      "|" List // nonce changes
+      "|" List // balance changes
       "|" DataChange   // call data change
       "|" DataChange   // return data change
       "|" DataChange   // program change
-      "|" MapMutations // deployed code changes
-      "|" MapMutations // init code changes
+      "|" List // deployed code changes
+      "|" List // init code changes
       "|" Int          // call depth
       "|" Int          // gas
       "|" Account      // coinbase
@@ -119,13 +113,6 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       "|" Bool         // is init code
       "|" StatusCode   // status
     "}" [symbol(traceItem)]
-
-    syntax TraceItems ::= List{TraceItem, ","}
-                         | TraceItems TraceItems [function, total, assoc, left]
-
-    rule .TraceItems B:TraceItems => B
-    rule (A:TraceItem, AS:TraceItems) B:TraceItems => A, (AS B)
-
 
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
     // due to this, Map hooks cannot be used
@@ -149,7 +136,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <storage> STORAGE => STORAGE [ INDEX <- NEW ] </storage>
            ...
          </account>
-         <currentStorageMutations> ... .MapMutations => { ACCT | INDEX | NEW }:MapMutation, .MapMutations </currentStorageMutations>
+         <currentStorageMutations> ... .List => ListItem({ ACCT | INDEX | NEW }:MapMutation) </currentStorageMutations>
       [preserves-definedness,priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -161,7 +148,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <storage> STORAGE => STORAGE [ LOC <- VALUE ] </storage>
              ...
          </account>
-         <currentStorageMutations> ... .MapMutations => { ACCTID | LOC | VALUE }:MapMutation, .MapMutations </currentStorageMutations>
+         <currentStorageMutations> ... .List => ListItem({ ACCTID | LOC | VALUE }:MapMutation) </currentStorageMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -191,7 +178,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            ...
          </account>
          <createdAccounts> ACCTS => ACCTS |Set SetItem(ACCTTO) </createdAccounts>
-         <currentNonceMutations> ... .MapMutations => {ACCTTO | #if Gemptyisnonexistent << SCHED >> #then NONCE +Int 1 #else NONCE #fi }:MapMutation, .MapMutations </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ACCTTO | #if Gemptyisnonexistent << SCHED >> #then NONCE +Int 1 #else NONCE #fi }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -203,7 +190,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <nonce> NONCE => NONCE +Int 1 </nonce>
            ...
          </account>
-         <currentNonceMutations> ... .MapMutations => { ACCT | NONCE +Int 1 }:MapMutation, .MapMutations </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE +Int 1 }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -211,7 +198,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     rule <k> loadAccount ACCT { "nonce" : (NONCE:Int), REST => REST } ... </k>
          <traceNonce> true </traceNonce>
          <account> <acctID> ACCT </acctID> <nonce> _ => NONCE </nonce> ... </account>
-         <currentNonceMutations> ... .MapMutations => { ACCT | NONCE }:MapMutation, .MapMutations </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ ACCT | NONCE }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -223,7 +210,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
              <nonce> _ => NONCE </nonce>
              ...
          </account>
-         <currentNonceMutations> ... .MapMutations => { ACCTID | NONCE }:MapMutation, .MapMutations </currentNonceMutations>
+         <currentNonceMutations> ... .List => ListItem({ ACCTID | NONCE }:MapMutation) </currentNonceMutations>
       [priority(49)]
 
 
@@ -246,7 +233,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <txType>            Blob         </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .MapMutations => { ACCTFROM | BAL -Int Cblobfee(SCHED, EXCESS_BLOB_GAS, size(TVH)) }:MapMutation, .MapMutations </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCTFROM | BAL -Int Cblobfee(SCHED, EXCESS_BLOB_GAS, size(TVH)) }:MapMutation) </currentBalanceMutations>
       requires Ghasblobbasefee << SCHED >>
       [priority(49)]
 
@@ -266,7 +253,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <balance> B => B +Int #gweiToWei(VALUE) </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .MapMutations => { ACCT | B +Int #gweiToWei(VALUE) }:MapMutation, .MapMutations </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | B +Int #gweiToWei(VALUE) }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
 
@@ -302,9 +289,9 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <txType> TXTYPE </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .MapMutations => 
-            { ORG | ORGBAL +Int minInt(GAVAIL, GLIMIT -Int GFLOOR) *Int GPRICE },
-            { MINER | MINBAL +Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int (GPRICE -Int BFEE) }
+         <currentBalanceMutations> ... .List => 
+            ListItem({ ORG | ORGBAL +Int minInt(GAVAIL, GLIMIT -Int GFLOOR) *Int GPRICE }:MapMutation)
+            ListItem({ MINER | MINBAL +Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int (GPRICE -Int BFEE) }:MapMutation)
          </currentBalanceMutations>
       requires ORG =/=Int MINER
       [priority(49)]
@@ -336,7 +323,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <txType> TXTYPE </txType>
            ...
          </message>
-         <currentBalanceMutations> ... .MapMutations => { ACCT | BAL +Int GLIMIT *Int GPRICE -Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int BFEE }:MapMutation, .MapMutations </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL +Int GLIMIT *Int GPRICE -Int maxInt(GLIMIT -Int GAVAIL, GFLOOR) *Int BFEE }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -359,7 +346,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
          </account>
          <log> LOGS </log>
          <logsBloom> _ => #bloomFilter(LOGS) </logsBloom>
-         <currentBalanceMutations> ... .MapMutations => { MINER | MINBAL +Int Rb < SCHED > }:MapMutation, .MapMutations </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ MINER | MINBAL +Int Rb < SCHED > }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -379,9 +366,9 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <balance> OMMBAL => OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) </balance>
           ...
          </account>
-         <currentBalanceMutations> ... .MapMutations =>
-            { MINER | MINBAL +Int Rb < SCHED > /Int 32 },
-            { OMMER | OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) }
+         <currentBalanceMutations> ... .List =>
+            ListItem({ MINER | MINBAL +Int Rb < SCHED > /Int 32 }:MapMutation)
+            ListItem({ OMMER | OMMBAL +Int Rb < SCHED > +Int (OMMNUM -Int CURNUM) *Int (Rb < SCHED > /Int 8) }:MapMutation)
          </currentBalanceMutations>
       [priority(49)]
 
@@ -400,9 +387,9 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <balance> ORIGTO => ORIGTO +Word VALUE </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .MapMutations =>
-            { ACCTFROM | ORIGFROM -Word VALUE },
-            { ACCTTO | ORIGTO +Word VALUE }
+         <currentBalanceMutations> ... .List =>
+            ListItem({ ACCTFROM | ORIGFROM -Word VALUE }:MapMutation)
+            ListItem({ ACCTTO | ORIGTO +Word VALUE }:MapMutation)
          </currentBalanceMutations>
       requires ACCTFROM =/=K ACCTTO andBool VALUE <=Int ORIGFROM
       [preserves-definedness, priority(49)]
@@ -422,7 +409,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
          </account>
          <output> _ => .Bytes </output>
          <createdAccounts> CA </createdAccounts>
-         <currentBalanceMutations> ... .MapMutations => { ACCT | 0 }:MapMutation, .MapMutations </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | 0 }:MapMutation) </currentBalanceMutations>
       requires ((notBool Ghaseip6780 << SCHED >>) orBool ACCT in CA)
       [priority(49)]
 
@@ -431,7 +418,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     rule <k> loadAccount ACCT { "balance" : (BAL:Int), REST => REST } ... </k>
          <traceBalance> true </traceBalance>
          <account> <acctID> ACCT </acctID> <balance> _ => BAL </balance> ... </account>
-         <currentBalanceMutations> ... .MapMutations => { ACCT | BAL }:MapMutation, .MapMutations </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCT | BAL }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -443,7 +430,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <balance> _ => NEWBAL </balance>
            ...
          </account>
-         <currentBalanceMutations> ... .MapMutations => { ACCTID | NEWBAL }:MapMutation, .MapMutations </currentBalanceMutations>
+         <currentBalanceMutations> ... .List => ListItem({ ACCTID | NEWBAL }:MapMutation) </currentBalanceMutations>
       [priority(49)]
 
  // ---------------------------------------------------------------------------------------------------------------
@@ -528,12 +515,12 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <code> _ => OUT </code>
            ...
          </account>
-         <currentDeployedCodeMutations> ... .MapMutations => { ACCT | OUT }:MapMutation, .MapMutations </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | OUT }:MapMutation) </currentDeployedCodeMutations>
       [priority(49)]
 
     rule <k> loadAccount ACCT { "code" : (CODE:Bytes), REST => REST } ... </k>
          <account> <acctID> ACCT </acctID> <code> _ => CODE </code> ... </account>
-         <currentDeployedCodeMutations> ... .MapMutations => { ACCT | CODE }:MapMutation, .MapMutations </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | CODE }:MapMutation) </currentDeployedCodeMutations>
       [priority(49)]
 
     // trace program changes by cheatcodes as well
@@ -544,7 +531,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            <code> _ => #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi </code>
            ...
          </account>
-         <currentDeployedCodeMutations> ... .MapMutations => { ACCTID | #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi }:MapMutation, .MapMutations </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCTID | #if #asWord(CODE) ==Int 0 #then .Bytes #else CODE #fi }:MapMutation) </currentDeployedCodeMutations>
       [priority(49)]
 
     rule <k> #etchAccountIfEmpty ACCT => .K ... </k>
@@ -557,7 +544,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
            </account>
            ...
          </accounts>
-         <currentDeployedCodeMutations> ... .MapMutations => { ACCT | #bufStrict(1,0) }:MapMutation, .MapMutations </currentDeployedCodeMutations>
+         <currentDeployedCodeMutations> ... .List => ListItem({ ACCT | #bufStrict(1,0) }:MapMutation) </currentDeployedCodeMutations>
       requires lengthBytes(CODE) ==Int 0
       [priority(49)]
 
@@ -569,7 +556,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // the respective rules for tracing
     rule <k> #create _ ACCTTO _ INITCODE ... </k>
          <traceInitCode> true </traceInitCode>
-         <currentInitCodeMutations> ... .MapMutations => { ACCTTO | INITCODE }:MapMutation, .MapMutations </currentInitCodeMutations>
+         <currentInitCodeMutations> ... .List => ListItem({ ACCTTO | INITCODE }:MapMutation) </currentInitCodeMutations>
          <recordedCreate> false => true </recordedCreate>
       [priority(49)]
 

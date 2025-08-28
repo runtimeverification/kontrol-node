@@ -18,11 +18,12 @@ module TRACE-JSON
                   | wordstackToJson(WordStack)        [function, total, symbol(wordstackToJson)]
                   | bytesToJson(Bytes)                [function, total, symbol(bytesToJson)]
                   | mapMutationToJson(MapMutation)    [function, total, symbol(mapMutationToJson)]
-                  | mapMutationsToJson(MapMutations)  [function, total, symbol(mapMutationsToJson)]
+                  | mapMutationsToJson(List)          [function, total, symbol(mapMutationsToJson)]
                   | accountToJson(Account)            [function, total, symbol(accountToJson)]
                   | statusToJson(StatusCode)          [function, total, symbol(statusToJson)]
+                  | dataChangeToJson(DataChange)      [function, total, symbol(dataChangeToJson)]
     syntax JSONs ::= wordstackToJsons(WordStack)      [function, total, symbol(wordstackToJsons)]
-                  | mapMutationsToJsons(MapMutations) [function, total, symbol(mapMutationsToJsons)]
+                  | mapMutationsToJsons(List)         [function, total, symbol(mapMutationsToJsons)]
 
     rule opcodeToJson( STOP ) => "STOP"
     rule opcodeToJson( ADD ) => "ADD"
@@ -174,7 +175,7 @@ module TRACE-JSON
     rule opcodeToJson( REVERT ) => "REVERT"
     rule opcodeToJson( INVALID ) => "INVALID"
     rule opcodeToJson( SELFDESTRUCT ) => "SELFDESTRUCT"
-    rule opcodeToJson( W ) => "INVALID" [owise]
+    rule opcodeToJson( _ ) => "INVALID" [owise]
 
     rule wordstackToJson( WS ) => [ wordstackToJsons( WS ) ] [priority(50)]
     rule wordstackToJsons( .WordStack ) => .JSONs
@@ -187,13 +188,16 @@ module TRACE-JSON
     rule mapMutationToJson( { A | B:Bytes } ) => [A, B]
 
     rule mapMutationsToJson( XS ) => [ mapMutationsToJsons(XS) ] [priority(50)]
-    rule mapMutationsToJsons( .MapMutations ) => .JSONs
-    rule mapMutationsToJsons( X, XS ) => mapMutationToJson( X ), mapMutationsToJsons( XS )
+    rule mapMutationsToJsons( .List ) => .JSONs
+    rule mapMutationsToJsons( ListItem(X) XS ) => mapMutationToJson( X ), mapMutationsToJsons( XS )
 
     rule accountToJson( .Account ) => null
-    rule accountToJson( ACC ) => ACC
+    rule accountToJson( ACC ) => ACC [owise]
 
     rule statusToJson( STATUS ) => StatusCode2String( STATUS )
+
+    rule dataChangeToJson( .DataChange ) => null
+    rule dataChangeToJson( BYTES ) => bytesToJson( BYTES) [owise]
 
     rule traceItemToJson (
       { VAR_PC
@@ -226,7 +230,7 @@ module TRACE-JSON
         "pc": VAR_PC,
         "opcode": opcodeToJson( VAR_OPCODE ),
         "stack": wordstackToJson( VAR_WORDSTACK ),
-        "memory": bytesToJson( VAR_MEMORY ),
+        // "memory": bytesToJson( VAR_MEMORY ),
         "storage": mapMutationsToJson( VAR_STORAGE_CHANGES ),
         "nonce_changes": mapMutationsToJson( VAR_NONCE_CHANGES ),
         "balance_changes": mapMutationsToJson( VAR_BALANCE_CHANGES),
@@ -291,13 +295,13 @@ module TRACE-JSON
          <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
          <recordedCreate>               _ => false             </recordedCreate>
          <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
-         <currentNonceMutations>        NONCECH => .MapMutations       </currentNonceMutations>          
+         <currentNonceMutations>        NONCECH => .List       </currentNonceMutations>          
          <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
-         <currentBalanceMutations>      BALCH => .MapMutations         </currentBalanceMutations>          
-         <currentStorageMutations>      STORCH => .MapMutations        </currentStorageMutations>
+         <currentBalanceMutations>      BALCH => .List         </currentBalanceMutations>          
+         <currentStorageMutations>      STORCH => .List        </currentStorageMutations>
          <programChanged>               PROGCHANGED => false   </programChanged>
-         <currentDeployedCodeMutations> DEPLCODECH => .MapMutations    </currentDeployedCodeMutations>
-         <currentInitCodeMutations>     INITCODECH => .MapMutations    </currentInitCodeMutations>
+         <currentDeployedCodeMutations> DEPLCODECH => .List    </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     INITCODECH => .List    </currentInitCodeMutations>
          <callData>                     CADA                   </callData>
          <output>                       REDA                   </output>
          <pc>                           PCOUNT                 </pc>
@@ -322,14 +326,14 @@ module TRACE-JSON
 
     rule <k> #storeTraceItem TRITEM => .K ... </k>
          <writeTraceLogsToFile> false </writeTraceLogsToFile>
-         <traceData>
-           ...
-           .TraceItems => TRITEM
-         </traceData>
+         <traceData> ... .List => ListItem(TRITEM) </traceData>
 
-    rule <k> #storeTraceItem TRITEM => #write (TRFILEDESCR, 
-               JSON2String( traceItemToJson( TRITEM ) ) +String "\n"
-             ) ... </k>
+    rule <k> #storeTraceItem TRITEM
+             => #write (
+              TRFILEDESCR, 
+              JSON2String( traceItemToJson( TRITEM ) ) +String "\n"
+             ) ...
+         </k>
          <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
          <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
       requires TRFILEDESCR =/=K .FileDescr

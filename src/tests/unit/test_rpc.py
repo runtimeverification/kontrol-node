@@ -5,7 +5,7 @@ from typing import Any, Final
 import pytest
 from pyk.kast.inner import KApply, KLabel, KSort, KToken
 
-from kontrol_node.rpc import extract_message, extract_receipt, extract_trace_item, get_address_from_private_key
+from kontrol_node.rpc import extract_message, extract_receipt, get_address_from_private_key
 
 EXTRACT_TRACE_ITEM_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
     (

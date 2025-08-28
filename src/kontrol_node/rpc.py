@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Final
 from eth_keys import keys
 from kevm_pyk.kevm import KEVM
 from kontrol.foundry import Foundry
+from pydantic import BaseModel
 from pyk.cterm import CTerm
 from pyk.kast.inner import KApply, KLabel, KSequence, KToken, Subst, build_assoc, flatten_label
 from pyk.kast.manip import set_cell
@@ -74,12 +75,11 @@ def pool_parse_kore_to_kast_forkserver(trace_index: int) -> KInner:
 class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
     cterm: CTerm
-    traced_transactions: dict[str, Any]
+    traced_transactions: dict[str, tuple[TraceItem, ...]]
     transaction_return_data: dict[str, str]
     transaction_hashes: dict[int, str]
     default_sender_address: Final[int]
     block_storage: BlockStore
-    multiproc_ctx: multiprocessing.context.ForkServerContext
 
     def __init__(self, options: VMOptions) -> None:
         super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
@@ -95,24 +95,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self.default_sender_address = self._get_account_addresses()[0]
         end_time = datetime.now()
         self.block_storage = BlockStore()
-
-        self.multiproc_ctx = multiprocessing.get_context('forkserver')
-        self.multiproc_ctx.set_forkserver_preload(
-            [
-                'eth_keys',
-                'kevm_pyk.kevm',
-                'kontrol.foundry',
-                'pyk.cterm',
-                'pyk.kast.inner',
-                'pyk.kast.manip',
-                'pyk.kore.parser',
-                'pyk.kdist',
-                'pyk.ktool.krun',
-                'pyk.rpc.rpc',
-                'pyk.utils',
-            ]
-        )
-
         print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
 
     def exec_get_chain_id(self) -> int:
@@ -239,6 +221,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             )
         )
 
+        trace = None
         with tempfile.TemporaryDirectory() as tmpdir:
             tracelogs_path = Path(tmpdir).resolve() / 'tracelogs.kore'
             self.cterm = CTerm.from_kast(
@@ -249,41 +232,36 @@ class StatefulKJsonRpcServer(JsonRpcServer):
                 )
             )
             self._run_cterm()
-
             if tracelogs_path.exists() and self.active_tracing:
-                # TODO: this can be further optimized:
-                # - use a faster implementation, e.g. rust FFI
-                # - decode a custom binary serialization instead of KORE
-                kore_traces_len = tracelogs_path.read_text().count('\n')
-
-                with self.multiproc_ctx.Pool(
-                    initializer=pool_init_forkserver, initargs=(str(self.krun.definition_dir), str(tracelogs_path))
-                ) as pool:
-                    kast_traces = pool.map(
-                        pool_parse_kore_to_kast_forkserver, list(range(kore_traces_len)), chunksize=100
-                    )
-            else:
-                kast_traces = None
+                print("Hello World!")
+                print(tracelogs_path.read_text())
+                trace = tuple(TraceItem.model_validate_json(raw) for raw in tracelogs_path.read_text().split('\n'))
 
         transaction_hash = self._get_rpc_response()
         transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
         self.transaction_hashes[transaction_id] = transaction_hash
         if self.active_tracing:
-            self._collect_trace(transaction_hash, trace_data=kast_traces)
+            self._collect_trace(transaction_hash, trace=trace)
         self._save_block()
         return transaction_hash
 
-    def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict:
-        result: dict[str, Any] = {}
-        result['structLogs'] = self.traced_transactions[tx_hash]
+    def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> DebugTraceTransactionResponse | None:
+        struct_logs = self.traced_transactions[tx_hash]
         receipt = self._get_tx_receipt_by_hash(tx_hash)
         if receipt is None:
-            return {}
+            return None
+
+        return_value : str | None = None
         if '<contractAddress>' in receipt.keys():
-            result['returnValue'] = self.transaction_return_data[tx_hash]
-        result['failed'] = not bool(receipt['<txStatus>'])
-        result['gas'] = receipt['<txCumulativeGas>']
-        return result
+            return_value = self.transaction_return_data[tx_hash]
+        failed = not bool(receipt['<txStatus>'])
+        gas = receipt['<txCumulativeGas>']
+        return DebugTraceTransactionResponse(
+            gas=gas,
+            returnValue=return_value,
+            structLogs=struct_logs,
+            failed=failed,
+        )
 
     def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
         tx_receipt = self._get_tx_receipt_by_hash(tx_hash)
@@ -548,27 +526,10 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             account_dict[address] = {'nonce': nonce, 'balance': balance, 'code': code, 'storage': storage}
         return account_dict
 
-    def _collect_trace(self, transaction_hash: str, trace_data: list[KInner] | None = None) -> None:
+    def _collect_trace(self, transaction_hash: str, trace: tuple[TraceItem, ...] | None = None) -> None:
         return_data = '0x' + ast.literal_eval(self._parse_ktoken_cell('OUTPUT_CELL')).hex()
-
-        parsed_trace: list[dict[str, Any]] = []
-        if trace_data is None:
-            trace_data_cell = self.cterm.cell('TRACEDATA_CELL')
-            flattened_trace_data = flatten_label('_List_', trace_data_cell)
-            if len(flattened_trace_data) == 1 and flattened_trace_data[0] == list_empty():
-                return
-            trace_data = []
-            for flattened_trace_data_item in flattened_trace_data:
-                assert type(flattened_trace_data_item) is KApply
-                flattened_trace_item = single(flattened_trace_data_item.terms)
-                assert type(flattened_trace_item) is KApply
-                trace_data.append(flattened_trace_item)
-
-        for trace_item in trace_data:
-            assert type(trace_item) is KApply
-            parsed_trace.append(extract_trace_item(trace_item))
-
-        self.traced_transactions[transaction_hash] = parsed_trace
+        if trace is not None:
+            self.traced_transactions[transaction_hash] = trace
         self.transaction_return_data[transaction_hash] = return_data[2:]
 
     def _get_tx_receipt_by_msg_id(self, msg_id: int) -> dict | None:
@@ -1135,180 +1096,39 @@ def parse_kapply_list(kapply_list: KApply) -> list:
         values.append(t.token)
     return values
 
+class DebugTraceTransactionResponse(BaseModel):
+    gas: int
+    returnValue: str | None
+    structLogs: tuple[TraceItem, ...]
+    failed: bool
 
-@dataclass
-class TraceItem:
-    program_counter_token: KToken
-    opcode_kapply: KApply
-    wordstack_kapply: KApply
-    local_mem_change_kinner: KApply | KToken
-    storage_changes_kapply: KApply
-    nonce_changes_kapply: KApply
-    balance_changes_kapply: KApply
-    call_data_change_kinner: KApply | KToken
-    return_data_change_kinner: KApply | KToken
-    program_change_kinner: KApply | KToken
-    deployed_program_changes_kapply: KApply
-    init_code_changes_kapply: KApply
-    call_depth_token: KToken
-    gas_token: KToken
-    coinbase_token: KToken
-    gas_price_token: KToken
-    difficulty_token: KToken
-    block_number_token: KToken
-    block_timestamp_token: KToken
-    target_address_token: KToken
-    code_address_token: KToken
-    message_sender_token: KToken
-    message_value_token: KToken
-    transaction_origin_token: KToken
-    is_init_code_token: KToken
-    status_code_token: KToken
-
-
-def extract_trace_item(trace_item_kapply: KApply) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-
-    trace_item = TraceItem(*trace_item_kapply.terms)  # type: ignore[arg-type]
-
-    # program counter
-    assert type(trace_item.program_counter_token) is KToken
-    result['pc'] = int(trace_item.program_counter_token.token)
-
-    # opcode
-    assert type(trace_item.opcode_kapply) is KApply
-    opcode_size = ''
-    if len(trace_item.opcode_kapply.terms) > 0:
-        opcode_token = single(trace_item.opcode_kapply.terms)
-        assert type(opcode_token) is KToken
-        opcode_size = opcode_token.token
-    result['op'] = trace_item.opcode_kapply.label.name.split('_')[0] + opcode_size
-
-    # wordstack
-    assert type(trace_item.wordstack_kapply) is KApply
-    if trace_item.wordstack_kapply == WORDSTACK_EMPTY:
-        wordstack = []
-    else:
-        wordstack = [
-            hex(int(e.token)) for e in flatten_label(WORDSTACK_CONS, trace_item.wordstack_kapply) if type(e) is KToken
-        ]
-        wordstack.reverse()
-    result['stack'] = wordstack
-
-    # local_mem_change_kinner
-    if type(trace_item.local_mem_change_kinner) is KApply:
-        assert trace_item.local_mem_change_kinner == UNCHANGED_DATA
-    else:
-        assert type(trace_item.local_mem_change_kinner) is KToken
-        local_mem = ast.literal_eval(trace_item.local_mem_change_kinner.token).hex()
-        memory_chunks = [
-            (local_mem[i : i + CHUNK_SIZE]).ljust(CHUNK_SIZE, '0') for i in range(0, len(local_mem), CHUNK_SIZE)
-        ]
-        result['memoryChange'] = memory_chunks
-
-    # storage changes from previous step
-    assert type(trace_item.storage_changes_kapply) is KApply
-    result['storageChanges'] = _from_storage_changes_to_dict(trace_item.storage_changes_kapply)
-
-    # nonce changes from previous step
-    assert type(trace_item.nonce_changes_kapply) is KApply
-    result['nonceChanges'] = _from_balance_nonce_changes_to_dict(trace_item.nonce_changes_kapply)
-
-    # balance changes from previous step
-    assert type(trace_item.balance_changes_kapply) is KApply
-    result['balanceChanges'] = _from_balance_nonce_changes_to_dict(trace_item.balance_changes_kapply)
-
-    # call_data_change_kinner
-    if type(trace_item.call_data_change_kinner) is KApply:
-        assert trace_item.call_data_change_kinner == UNCHANGED_DATA
-    else:
-        assert type(trace_item.call_data_change_kinner) is KToken
-        result['callDataChange'] = '0x' + ast.literal_eval(trace_item.call_data_change_kinner.token).hex()
-
-    # return_data_change_kinner
-    if type(trace_item.return_data_change_kinner) is KApply:
-        assert trace_item.return_data_change_kinner == UNCHANGED_DATA
-    else:
-        assert type(trace_item.return_data_change_kinner) is KToken
-        result['returnDataChange'] = '0x' + ast.literal_eval(trace_item.return_data_change_kinner.token).hex()
-
-    # program_change_kinner
-    if type(trace_item.program_change_kinner) is KApply:
-        assert trace_item.program_change_kinner == UNCHANGED_DATA
-    else:
-        assert type(trace_item.program_change_kinner) is KToken
-        result['programChange'] = '0x' + ast.literal_eval(trace_item.program_change_kinner.token).hex()
-
-    # deployed_program_changes_kapply
-    assert type(trace_item.deployed_program_changes_kapply) is KApply
-    result['deployedCodeChanges'] = _from_code_changes_to_dict(trace_item.deployed_program_changes_kapply)
-
-    # init_code_changes_kapply
-    assert type(trace_item.init_code_changes_kapply) is KApply
-    result['initCodeChanges'] = _from_code_changes_to_dict(trace_item.init_code_changes_kapply)
-
-    # call depth
-    assert type(trace_item.call_depth_token) is KToken
-    result['depth'] = int(trace_item.call_depth_token.token) + 1
-
-    # gas available
-    assert type(trace_item.gas_token) is KToken
-    result['gas'] = int(trace_item.gas_token.token)
-
-    # coinbase
-    assert type(trace_item.coinbase_token) is KToken
-    assert trace_item.coinbase_token != ACCOUNT_EMPTY, 'target address empty'
-    result['coinbase'] = int(trace_item.coinbase_token.token)
-
-    # gas price
-    assert type(trace_item.gas_price_token) is KToken
-    result['gasCost'] = int(trace_item.gas_price_token.token)
-
-    # difficulty
-    assert type(trace_item.difficulty_token) is KToken
-    result['difficulty'] = int(trace_item.difficulty_token.token)
-
-    # block number
-    assert type(trace_item.block_number_token) is KToken
-    result['blockNumber'] = int(trace_item.block_number_token.token)
-
-    # block timestamp
-    assert type(trace_item.block_timestamp_token) is KToken
-    result['blockTimestamp'] = int(trace_item.block_timestamp_token.token)
-
-    # target address
-    assert type(trace_item.target_address_token) is KToken
-    assert trace_item.target_address_token != ACCOUNT_EMPTY, 'target address is empty'
-    result['targetAddress'] = int(trace_item.target_address_token.token)
-
-    # code address
-    assert type(trace_item.code_address_token) is KToken
-    assert trace_item.code_address_token != ACCOUNT_EMPTY, 'target address is empty'
-    result['codeAddress'] = int(trace_item.code_address_token.token)
-
-    # message sender
-    assert type(trace_item.message_sender_token) is KToken
-    assert trace_item.message_sender_token != ACCOUNT_EMPTY, 'message sender is empty'
-    result['msgSender'] = int(trace_item.message_sender_token.token)
-
-    # message value
-    assert type(trace_item.message_value_token) is KToken
-    result['msgValue'] = int(trace_item.message_value_token.token)
-
-    # transaction origin
-    assert type(trace_item.transaction_origin_token) is KToken
-    assert trace_item.transaction_origin_token != ACCOUNT_EMPTY, 'transaction origin is empty'
-    result['txOrigin'] = int(trace_item.transaction_origin_token.token)
-
-    # is init code
-    assert type(trace_item.is_init_code_token) is KToken
-    result['isInitCode'] = string_to_bool(trace_item.is_init_code_token.token)
-
-    # status
-    assert type(trace_item.status_code_token) is KApply
-    result['statusCode'] = _from_statuscode_to_str(trace_item.status_code_token)
-
-    return result
+class TraceItem(BaseModel):
+    pc: int
+    opcode: str
+    stack: list[int]
+    memory: bytes | None
+    storage: list[tuple[int, int, int]]
+    nonce_changes: list[tuple[int, int]]
+    balance_changes: list[tuple[int, int]]
+    calldata_change: bytes | None
+    returndata_change: bytes | None
+    program_change: list[tuple[int, bytes]] | None
+    deployed_program_changes: list[tuple[int, bytes]] | None
+    init_code_changes: list[tuple[int, bytes]] | None
+    call_depth: int
+    gas_left: int
+    coinbase: int # address
+    gasprice: int
+    difficulty: int
+    blocknumber: int
+    timestamp: int
+    target_address: int # address
+    code_address: int # address
+    msg_sender: int # address
+    msg_value: int
+    tx_origin: int # address
+    is_init_code: bool
+    status_code: str
 
 
 def extract_address(account_cell: KApply) -> int:
