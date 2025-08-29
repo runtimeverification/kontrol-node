@@ -9,7 +9,7 @@ description = "A local testnet node powered by KEVM"
 readme = "README.md"
 requires-python = ">=3.10,<4"
 dependencies = [
-    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v1.0.184",
+    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v1.0.185",
 ]
 
 [[project.authors]]
