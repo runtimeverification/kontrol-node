@@ -181,7 +181,7 @@ module TRACE-JSON
     rule wordstackToJsons( .WordStack ) => .JSONs
     rule wordstackToJsons( W:WS ) => W, wordstackToJsons( WS )
 
-    rule bytesToJson( BYTES ) => Bytes2String( BYTES ) 
+    rule bytesToJson( BYTES ) => Bytes2Hex( BYTES ) 
 
     rule mapMutationToJson( { A | B | C } ) => [ A, B, C]
     rule mapMutationToJson( { A | B:Int } ) => [A, B]
@@ -230,10 +230,15 @@ module TRACE-JSON
         "pc": VAR_PC,
         "opcode": opcodeToJson( VAR_OPCODE ),
         "stack": wordstackToJson( VAR_WORDSTACK ),
-        // "memory": bytesToJson( VAR_MEMORY ),
-        "storage": mapMutationsToJson( VAR_STORAGE_CHANGES ),
+        "memory": dataChangeToJson( VAR_MEMORY ),
+        "storage_changes": mapMutationsToJson( VAR_STORAGE_CHANGES ),
         "nonce_changes": mapMutationsToJson( VAR_NONCE_CHANGES ),
         "balance_changes": mapMutationsToJson( VAR_BALANCE_CHANGES),
+        "calldata_change": dataChangeToJson( VAR_CALLDATA_CHANGE),
+        "returndata_change": dataChangeToJson( VAR_RETURNDATA_CHANGE),
+        "program_change": null, // dataChangeToJson( VAR_PROGRAM_CHANGE),
+        "code_changes": [ .JSONs ], // mapMutationsToJson( VAR_CODE_CHANGE),
+        "init_code_changes": [ .JSONs ], // mapMutationsToJson( VAR_INIT_CODE_CHANGE),
         "call_depth": VAR_CALL_DEPTH,
         "gas_left": VAR_GAS_LEFT,
         "coinbase": accountToJson( VAR_COINBASE ),
@@ -246,6 +251,7 @@ module TRACE-JSON
         "msg_sender": accountToJson( VAR_MESSAGE_SENDER ),
         "msg_value": VAR_MESSAGE_VALUE,
         "tx_origin": accountToJson( VAR_TX_ORIGIN ),
+        "is_init_code": VAR_IS_INIT_CODE,
         "status_code": statusToJson( VAR_STATUS_CODE )
       }
 

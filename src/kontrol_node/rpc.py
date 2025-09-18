@@ -235,7 +235,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             if tracelogs_path.exists() and self.active_tracing:
                 print("Hello World!")
                 print(tracelogs_path.read_text())
-                trace = tuple(TraceItem.model_validate_json(raw) for raw in tracelogs_path.read_text().split('\n'))
+                trace = tuple(TraceItem.model_validate_json(raw) for raw in tracelogs_path.read_text().split('\n') if raw != '')
 
         transaction_hash = self._get_rpc_response()
         transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
@@ -1106,15 +1106,15 @@ class TraceItem(BaseModel):
     pc: int
     opcode: str
     stack: list[int]
-    memory: bytes | None
-    storage: list[tuple[int, int, int]]
+    memory: str | None
+    storage_changes: list[tuple[int, int, int]]
     nonce_changes: list[tuple[int, int]]
     balance_changes: list[tuple[int, int]]
-    calldata_change: bytes | None
-    returndata_change: bytes | None
-    program_change: list[tuple[int, bytes]] | None
-    deployed_program_changes: list[tuple[int, bytes]] | None
-    init_code_changes: list[tuple[int, bytes]] | None
+    calldata_change: str | None
+    returndata_change: str | None
+    program_change: str | None
+    code_changes: list[tuple[int, str]] | None
+    init_code_changes: list[tuple[int, str]] | None
     call_depth: int
     gas_left: int
     coinbase: int # address
