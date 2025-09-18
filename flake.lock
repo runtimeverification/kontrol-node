@@ -469,16 +469,16 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1752835635,
-        "narHash": "sha256-J0GVDFuRcq1jZ6wghuKMuahjzCkv2YRW4I0BBBCgyVw=",
+        "lastModified": 1757732649,
+        "narHash": "sha256-9zRowB4dAn1853R+SYaDUzEr/79FJqSgj133P5H2Ak4=",
         "owner": "runtimeverification",
         "repo": "k",
-        "rev": "ea08909b72f56615ab7dfe7a6e17218b6be01de4",
+        "rev": "83bbe2f155664e11bbba57f50432bf488da38fb0",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v7.1.280",
+        "ref": "v7.1.286",
         "repo": "k",
         "type": "github"
       }
@@ -514,16 +514,16 @@
         "uv2nix": "uv2nix_2"
       },
       "locked": {
-        "lastModified": 1755685688,
-        "narHash": "sha256-F3PVfZvXboPO+exmc/mgTdg13fRkxYv4soVu4gQ1WNU=",
+        "lastModified": 1757925923,
+        "narHash": "sha256-7h+1JadvHxZUN0tcbLTphbZfRyvJLvAeKb3zs8mcWOA=",
         "owner": "runtimeverification",
         "repo": "evm-semantics",
-        "rev": "4829d259e7fced7a5142df6ebe70643ea5a47757",
+        "rev": "a369cd7d521b8a88a14ea608a91b109bf16b298f",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v1.0.860",
+        "ref": "v1.0.864",
         "repo": "evm-semantics",
         "type": "github"
       }
@@ -556,16 +556,16 @@
         "uv2nix": "uv2nix_3"
       },
       "locked": {
-        "lastModified": 1756188136,
-        "narHash": "sha256-BRWxdv7e5xliw26FG3DAlirhnuoL4trnrXobZ5uUw/g=",
+        "lastModified": 1758104845,
+        "narHash": "sha256-lgANqJX17no6Mesi8cVY2OjN6X/sN4XJt8fefH2KCwc=",
         "owner": "runtimeverification",
         "repo": "kontrol",
-        "rev": "03f0f703822629ca45798bf592c0a67c3e23ee97",
+        "rev": "9d9bc64cffe853a0ecdabb52ecefff7694236038",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v1.0.183",
+        "ref": "v1.0.188",
         "repo": "kontrol",
         "type": "github"
       }
@@ -638,16 +638,16 @@
         "utils": "utils_2"
       },
       "locked": {
-        "lastModified": 1752521186,
-        "narHash": "sha256-lAON13tJkIWgQrPZ9jtmU73OIpisiiIkchUNXM1VhRs=",
+        "lastModified": 1756488369,
+        "narHash": "sha256-3JAXTwH41KnCUVT3O4wuQJ1Utz+aty5432whTW23rMk=",
         "owner": "runtimeverification",
         "repo": "llvm-backend",
-        "rev": "f1e8363e98264a449877672d5c21f674aeeb84cd",
+        "rev": "09a3d777393caba34e89d55916ac5046913dbedb",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v0.1.136",
+        "ref": "v0.1.137",
         "repo": "llvm-backend",
         "type": "github"
       }
@@ -719,8 +719,8 @@
         "type": "github"
       },
       "original": {
-        "owner": "runtimeverification",
-        "ref": "libmatch",
+        "owner": "nixos",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -1340,11 +1340,11 @@
         "solc-macos-amd64-list-json": "solc-macos-amd64-list-json"
       },
       "locked": {
-        "lastModified": 1748780655,
-        "narHash": "sha256-mradCdMvjXwKd7kVFACB/d1CP2LLCyEgUu4vJCSzNLU=",
+        "lastModified": 1756368702,
+        "narHash": "sha256-cqEHv7uCV0LibmQphyiXZ1+jYtGjMNb9Pae4tfcAcF8=",
         "owner": "hellwolf",
         "repo": "solc.nix",
-        "rev": "3b6f3223ace5a7bc400b01a434d86bb1cb2593fb",
+        "rev": "d83e90df2fa8359a690f6baabf76099432193c3f",
         "type": "github"
       },
       "original": {
@@ -1358,11 +1358,11 @@
       "locked": {
         "narHash": "sha256-AvITkfpNYgCypXuLJyqco0li+unVw39BAfdOZvd/SPE=",
         "type": "file",
-        "url": "https://github.com/ethereum/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
+        "url": "https://github.com/argotorg/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
       },
       "original": {
         "type": "file",
-        "url": "https://github.com/ethereum/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
+        "url": "https://github.com/argotorg/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
       }
     },
     "some-cabal-hashes-lib": {
