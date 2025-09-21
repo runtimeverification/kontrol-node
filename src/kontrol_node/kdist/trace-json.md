@@ -16,6 +16,7 @@ module TRACE-JSON
     syntax JSON ::= traceItemToJson(TraceItem)          [function, total, symbol(traceItemToJson)]
                   | opcodeToJson(OpCode)                [function, total, symbol(opcodeToJson)]
                   | wordstackToJson(WordStack)          [function, total, symbol(wordstackToJson)]
+                  | memoryToJson(DataChange)            [function, total, symbol(memoryToJson)]
                   | bytesToJson(Bytes)                  [function, total, symbol(bytesToJson)]
                   | intMapToJson(Map)                   [function, total, symbol(intMapToJson)]
                   | bytesMapToJson(Map)                 [function, total, symbol(bytesMapToJson)]
@@ -25,6 +26,7 @@ module TRACE-JSON
                   | dataChangeToJson(DataChange)        [function, total, symbol(dataChangeToJson)]
 
     syntax JSONs ::= wordstackToJsons(WordStack)        [function, total, symbol(wordstackToJsons)]
+                  | memoryToJsons(Bytes, JSONs)         [function, total, symbol(memoryToJsons)]
                   | intMapToJsons(Map)                  [function, total, symbol(intMapToJsons)]
                   | bytesMapToJsons(Map)                [function, total, symbol(bytesMapToJsons)]
                   | storageMapToJsons(Map)              [function, total, symbol(storageMapToJsons)]
@@ -187,14 +189,16 @@ module TRACE-JSON
 
     rule wordstackToJson( WS ) => [ wordstackToJsons( WS ) ] [priority(50)]
     rule wordstackToJsons( .WordStack ) => .JSONs
-    rule wordstackToJsons( W:WS ) => W, wordstackToJsons( WS )
+    rule wordstackToJsons( W:WS ) => intToHex( W ), wordstackToJsons( WS )
 
     rule bytesToJson( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
     rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
+      requires A >=Int 0
+    rule intToHex( A:Int ) => "-0x" +String Base2String( absInt(A), 16) [owise]
 
     rule intMapToJson( M:Map ) => { intMapToJsons(M) }
     rule intMapToJsons( .Map) => .JSONs
-    rule intMapToJsons( (ACC:Int |-> VAL:Int) REST:Map ) => intToHex( ACC) : VAL, intMapToJsons( REST )
+    rule intMapToJsons( (ACC:Int |-> VAL:Int) REST:Map ) => intToHex( ACC) : intToHex( VAL ), intMapToJsons( REST )
     
     rule bytesMapToJson( M:Map ) => { bytesMapToJsons( M ) }
     rule bytesMapToJsons( .Map) => .JSONs
@@ -203,6 +207,46 @@ module TRACE-JSON
     rule storageMapToJson( M:Map ) => { storageMapToJsons(M ) }
     rule storageMapToJsons( .Map ) => .JSONs
     rule storageMapToJsons( (ACC:Int |-> CONTRACT_STORAGE:Map) REST:Map ) => intToHex( ACC ) : intMapToJson( CONTRACT_STORAGE), storageMapToJsons( REST )
+
+    // split memory into 32 bytes chunks
+
+    syntax JSONs ::= prepend( JSON, JSONs ) [function, total]
+    rule prepend( X, XS ) => X, XS
+
+    rule memoryToJson(.DataChange) => null
+    rule memoryToJson( MEM:Bytes )      => [ .JSONs ]
+      requires lengthBytes(MEM) ==Int 0
+
+    rule memoryToJson(MEM:Bytes)
+      => [ memoryToJsons(MEM, maxInt(0, ((lengthBytes(MEM) -Int 1) /Int 32) *Int 32), .JSONs) ]
+      requires lengthBytes(MEM) >Int 0
+
+    rule memoryToJsons(MEM, OFFSET, ACC)
+      => memoryToJsons(
+          MEM,
+          OFFSET -Int 32,
+          prepend(
+            bytesToJson(
+              padRightBytes(
+                substrBytes(MEM, OFFSET, minInt(OFFSET +Int 32, lengthBytes(MEM))),
+                32,
+                0
+              )
+            ),
+            ACC
+          )
+        )
+      requires OFFSET >=Int 32
+
+    rule memoryToJsons(MEM, OFFSET, ACC)
+      => bytesToJson(
+          padRightBytes(
+            substrBytes(MEM, OFFSET, minInt(OFFSET +Int 32, lengthBytes(MEM))),
+            32,
+            0
+          )
+        ) , ACC
+      requires OFFSET <Int 32
 
     rule accountToJson( .Account ) => null
     rule accountToJson( ACC ) => ACC [owise]
@@ -243,16 +287,16 @@ module TRACE-JSON
         "pc": VAR_PC,
         "op": opcodeToJson( VAR_OPCODE ),
         "stack": wordstackToJson( VAR_WORDSTACK ),
-        "memoryChange": dataChangeToJson( VAR_MEMORY ),
+        "memoryChange": memoryToJson( VAR_MEMORY ),
         "storageChanges": storageMapToJson( VAR_STORAGE_CHANGES ),
         "nonceChanges": intMapToJson( VAR_NONCE_CHANGES ),
         "balanceChanges": intMapToJson( VAR_BALANCE_CHANGES),
         "callDataChange": dataChangeToJson( VAR_CALLDATA_CHANGE),
         "returndataChange": dataChangeToJson( VAR_RETURNDATA_CHANGE),
-        "programChange": null, // dataChangeToJson( VAR_PROGRAM_CHANGE),
+        "programChange": dataChangeToJson( VAR_PROGRAM_CHANGE),
         "deployedCodeChanges": bytesMapToJson( VAR_CODE_CHANGE),
         "initCodeChanges": bytesMapToJson( VAR_INIT_CODE_CHANGE),
-        "depth": VAR_CALL_DEPTH,
+        "depth": VAR_CALL_DEPTH +Int 1,
         "gas": VAR_GAS_LEFT,
         "coinbase": accountToJson( VAR_COINBASE ),
         "gasCost": VAR_GAS_PRICE,

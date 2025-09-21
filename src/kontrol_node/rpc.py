@@ -1106,11 +1106,11 @@ class DebugTraceTransactionResponse(BaseModel):
 class TraceItem(BaseModel):
     pc: int
     op: str
-    stack: list[int]
-    memoryChange: str | None
+    stack: list[str]
+    memoryChange: list[str] | None
     storageChanges: dict[str, dict[str, str]]
-    nonceChanges: dict[str, int]
-    balanceChanges: dict[str, int]
+    nonceChanges: dict[str, str]
+    balanceChanges: dict[str, str]
     callDataChange: str | None
     returndataChange: str | None
     programChange: str | None
