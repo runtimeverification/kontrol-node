@@ -245,7 +245,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         self._save_block()
         return transaction_hash
 
-    def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> DebugTraceTransactionResponse | None:
+    def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict | None:
         struct_logs = self.traced_transactions[tx_hash]
         receipt = self._get_tx_receipt_by_hash(tx_hash)
         if receipt is None:
@@ -256,12 +256,13 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             return_value = self.transaction_return_data[tx_hash]
         failed = not bool(receipt['<txStatus>'])
         gas = receipt['<txCumulativeGas>']
-        return DebugTraceTransactionResponse(
+        result = DebugTraceTransactionResponse(
             gas=gas,
             returnValue=return_value,
             structLogs=struct_logs,
             failed=failed,
         )
+        return result.model_dump()
 
     def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
         tx_receipt = self._get_tx_receipt_by_hash(tx_hash)
@@ -1104,31 +1105,31 @@ class DebugTraceTransactionResponse(BaseModel):
 
 class TraceItem(BaseModel):
     pc: int
-    opcode: str
+    op: str
     stack: list[int]
-    memory: str | None
-    storage_changes: list[tuple[int, int, int]]
-    nonce_changes: list[tuple[int, int]]
-    balance_changes: list[tuple[int, int]]
-    calldata_change: str | None
-    returndata_change: str | None
-    program_change: str | None
-    code_changes: list[tuple[int, str]] | None
-    init_code_changes: list[tuple[int, str]] | None
-    call_depth: int
-    gas_left: int
+    memoryChange: str | None
+    storageChanges: dict[str, dict[str, str]]
+    nonceChanges: dict[str, int]
+    balanceChanges: dict[str, int]
+    callDataChange: str | None
+    returndataChange: str | None
+    programChange: str | None
+    deployedCodeChanges: dict[str, str] | None
+    initCodeChanges: dict[str, str] | None
+    depth: int
+    gas: int
     coinbase: int # address
-    gasprice: int
+    gasCost: int
     difficulty: int
-    blocknumber: int
-    timestamp: int
-    target_address: int # address
-    code_address: int # address
-    msg_sender: int # address
-    msg_value: int
-    tx_origin: int # address
-    is_init_code: bool
-    status_code: str
+    blockNumber: int
+    blockTimestamp: int
+    targetAddress: int # address
+    codeAddress: int # address
+    msgSender: int # address
+    msgValue: int
+    txOrigin: int # address
+    isInitCode: bool
+    statusCode: str
 
 
 def extract_address(account_cell: KApply) -> int:

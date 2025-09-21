@@ -13,17 +13,25 @@ module TRACE-JSON
     imports JSON
     imports K-IO
 
-    syntax JSON ::= traceItemToJson(TraceItem)        [function, total, symbol(traceItemToJson)]
-                  | opcodeToJson(OpCode)              [function, total, symbol(opcodeToJson)]
-                  | wordstackToJson(WordStack)        [function, total, symbol(wordstackToJson)]
-                  | bytesToJson(Bytes)                [function, total, symbol(bytesToJson)]
-                  | mapMutationToJson(MapMutation)    [function, total, symbol(mapMutationToJson)]
-                  | mapMutationsToJson(List)          [function, total, symbol(mapMutationsToJson)]
-                  | accountToJson(Account)            [function, total, symbol(accountToJson)]
-                  | statusToJson(StatusCode)          [function, total, symbol(statusToJson)]
-                  | dataChangeToJson(DataChange)      [function, total, symbol(dataChangeToJson)]
-    syntax JSONs ::= wordstackToJsons(WordStack)      [function, total, symbol(wordstackToJsons)]
-                  | mapMutationsToJsons(List)         [function, total, symbol(mapMutationsToJsons)]
+    syntax JSON ::= traceItemToJson(TraceItem)          [function, total, symbol(traceItemToJson)]
+                  | opcodeToJson(OpCode)                [function, total, symbol(opcodeToJson)]
+                  | wordstackToJson(WordStack)          [function, total, symbol(wordstackToJson)]
+                  | bytesToJson(Bytes)                  [function, total, symbol(bytesToJson)]
+                  | intMapToJson(Map)                   [function, total, symbol(intMapToJson)]
+                  | bytesMapToJson(Map)                 [function, total, symbol(bytesMapToJson)]
+                  | storageMapToJson(Map)               [function, total, symbol(storageMapToJson)]
+                  | accountToJson(Account)              [function, total, symbol(accountToJson)]
+                  | statusToJson(StatusCode)            [function, total, symbol(statusToJson)]
+                  | dataChangeToJson(DataChange)        [function, total, symbol(dataChangeToJson)]
+
+    syntax JSONs ::= wordstackToJsons(WordStack)        [function, total, symbol(wordstackToJsons)]
+                  | intMapToJsons(Map)                  [function, total, symbol(intMapToJsons)]
+                  | bytesMapToJsons(Map)                [function, total, symbol(bytesMapToJsons)]
+                  | storageMapToJsons(Map)              [function, total, symbol(storageMapToJsons)]
+    
+    syntax String ::= intToHex(Int)    [function, total, symbol(intToHex)]
+                   | bytesToHex(Bytes) [function, total, symbol(bytesToHex)]
+
 
     rule opcodeToJson( STOP ) => "STOP"
     rule opcodeToJson( ADD ) => "ADD"
@@ -181,15 +189,20 @@ module TRACE-JSON
     rule wordstackToJsons( .WordStack ) => .JSONs
     rule wordstackToJsons( W:WS ) => W, wordstackToJsons( WS )
 
-    rule bytesToJson( BYTES ) => Bytes2Hex( BYTES ) 
+    rule bytesToJson( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
+    rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
 
-    rule mapMutationToJson( { A | B | C } ) => [ A, B, C]
-    rule mapMutationToJson( { A | B:Int } ) => [A, B]
-    rule mapMutationToJson( { A | B:Bytes } ) => [A, B]
+    rule intMapToJson( M:Map ) => { intMapToJsons(M) }
+    rule intMapToJsons( .Map) => .JSONs
+    rule intMapToJsons( (ACC:Int |-> VAL:Int) REST:Map ) => intToHex( ACC) : VAL, intMapToJsons( REST )
+    
+    rule bytesMapToJson( M:Map ) => { bytesMapToJsons( M ) }
+    rule bytesMapToJsons( .Map) => .JSONs
+    rule bytesMapToJsons( (ACC:Int |-> VAL:Bytes) REST:Map ) => intToHex( ACC) : bytesToJson( VAL ), bytesMapToJsons( REST )
 
-    rule mapMutationsToJson( XS ) => [ mapMutationsToJsons(XS) ] [priority(50)]
-    rule mapMutationsToJsons( .List ) => .JSONs
-    rule mapMutationsToJsons( ListItem(X) XS ) => mapMutationToJson( X ), mapMutationsToJsons( XS )
+    rule storageMapToJson( M:Map ) => { storageMapToJsons(M ) }
+    rule storageMapToJsons( .Map ) => .JSONs
+    rule storageMapToJsons( (ACC:Int |-> CONTRACT_STORAGE:Map) REST:Map ) => intToHex( ACC ) : intMapToJson( CONTRACT_STORAGE), storageMapToJsons( REST )
 
     rule accountToJson( .Account ) => null
     rule accountToJson( ACC ) => ACC [owise]
@@ -228,31 +241,31 @@ module TRACE-JSON
       | VAR_STATUS_CODE
       } ) => {
         "pc": VAR_PC,
-        "opcode": opcodeToJson( VAR_OPCODE ),
+        "op": opcodeToJson( VAR_OPCODE ),
         "stack": wordstackToJson( VAR_WORDSTACK ),
-        "memory": dataChangeToJson( VAR_MEMORY ),
-        "storage_changes": mapMutationsToJson( VAR_STORAGE_CHANGES ),
-        "nonce_changes": mapMutationsToJson( VAR_NONCE_CHANGES ),
-        "balance_changes": mapMutationsToJson( VAR_BALANCE_CHANGES),
-        "calldata_change": dataChangeToJson( VAR_CALLDATA_CHANGE),
-        "returndata_change": dataChangeToJson( VAR_RETURNDATA_CHANGE),
-        "program_change": null, // dataChangeToJson( VAR_PROGRAM_CHANGE),
-        "code_changes": [ .JSONs ], // mapMutationsToJson( VAR_CODE_CHANGE),
-        "init_code_changes": [ .JSONs ], // mapMutationsToJson( VAR_INIT_CODE_CHANGE),
-        "call_depth": VAR_CALL_DEPTH,
-        "gas_left": VAR_GAS_LEFT,
+        "memoryChange": dataChangeToJson( VAR_MEMORY ),
+        "storageChanges": storageMapToJson( VAR_STORAGE_CHANGES ),
+        "nonceChanges": intMapToJson( VAR_NONCE_CHANGES ),
+        "balanceChanges": intMapToJson( VAR_BALANCE_CHANGES),
+        "callDataChange": dataChangeToJson( VAR_CALLDATA_CHANGE),
+        "returndataChange": dataChangeToJson( VAR_RETURNDATA_CHANGE),
+        "programChange": null, // dataChangeToJson( VAR_PROGRAM_CHANGE),
+        "deployedCodeChanges": bytesMapToJson( VAR_CODE_CHANGE),
+        "initCodeChanges": bytesMapToJson( VAR_INIT_CODE_CHANGE),
+        "depth": VAR_CALL_DEPTH,
+        "gas": VAR_GAS_LEFT,
         "coinbase": accountToJson( VAR_COINBASE ),
-        "gasprice": VAR_GAS_PRICE,
+        "gasCost": VAR_GAS_PRICE,
         "difficulty": VAR_DIFFICULTY,
-        "blocknumber": VAR_BLOCK_NUMBER,
-        "timestamp": VAR_TIMESTAMP,
-        "target_address": accountToJson( VAR_TARGET_ADDRESS ),
-        "code_address": accountToJson( VAR_CODE_ADDRESS),
-        "msg_sender": accountToJson( VAR_MESSAGE_SENDER ),
-        "msg_value": VAR_MESSAGE_VALUE,
-        "tx_origin": accountToJson( VAR_TX_ORIGIN ),
-        "is_init_code": VAR_IS_INIT_CODE,
-        "status_code": statusToJson( VAR_STATUS_CODE )
+        "blockNumber": VAR_BLOCK_NUMBER,
+        "blockTimestamp": VAR_TIMESTAMP,
+        "targetAddress": accountToJson( VAR_TARGET_ADDRESS ),
+        "codeAddress": accountToJson( VAR_CODE_ADDRESS),
+        "msgSender": accountToJson( VAR_MESSAGE_SENDER ),
+        "msgValue": VAR_MESSAGE_VALUE,
+        "txOrigin": accountToJson( VAR_TX_ORIGIN ),
+        "isInitCode": VAR_IS_INIT_CODE,
+        "statusCode": statusToJson( VAR_STATUS_CODE )
       }
 
     // IO
@@ -301,13 +314,13 @@ module TRACE-JSON
          <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
          <recordedCreate>               _ => false             </recordedCreate>
          <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
-         <currentNonceMutations>        NONCECH => .List       </currentNonceMutations>          
+         <currentNonceMutations>        NONCECH => .Map        </currentNonceMutations>          
          <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
-         <currentBalanceMutations>      BALCH => .List         </currentBalanceMutations>          
-         <currentStorageMutations>      STORCH => .List        </currentStorageMutations>
+         <currentBalanceMutations>      BALCH => .Map          </currentBalanceMutations>          
+         <currentStorageMutations>      STORCH => .Map         </currentStorageMutations>
          <programChanged>               PROGCHANGED => false   </programChanged>
-         <currentDeployedCodeMutations> DEPLCODECH => .List    </currentDeployedCodeMutations>
-         <currentInitCodeMutations>     INITCODECH => .List    </currentInitCodeMutations>
+         <currentDeployedCodeMutations> DEPLCODECH => .Map     </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     INITCODECH => .Map     </currentInitCodeMutations>
          <callData>                     CADA                   </callData>
          <output>                       REDA                   </output>
          <pc>                           PCOUNT                 </pc>
