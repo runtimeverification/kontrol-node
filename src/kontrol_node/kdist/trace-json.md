@@ -24,15 +24,17 @@ module TRACE-JSON
                   | accountToJson(Account)               [function, total, symbol(accountToJson)]
                   | statusToJson(StatusCode)             [function, total, symbol(statusToJson)]
                   | dataChangeToJson(DataChange)         [function, total, symbol(dataChangeToJson)]
-
+ // ------------------------------------------------------------------------------------------------
     syntax JSONs ::= wordstackToJsons(WordStack, JSONs)  [function, total, symbol(wordstackToJsons)]
                   | memoryToJsons(Bytes, JSONs)          [function, total, symbol(memoryToJsons)]
                   | intMapToJsons(Map)                   [function, total, symbol(intMapToJsons)]
                   | bytesMapToJsons(Map)                 [function, total, symbol(bytesMapToJsons)]
                   | storageMapToJsons(Map)               [function, total, symbol(storageMapToJsons)]
-    
+ // -------------------------------------------------------------------------------------------------
     syntax String ::= intToHex(Int)    [function, total, symbol(intToHex)]
                    | bytesToHex(Bytes) [function, total, symbol(bytesToHex)]
+ // ------------------------------------------------------------------------
+
 
 
     rule opcodeToJson( STOP ) => "STOP"
@@ -185,7 +187,7 @@ module TRACE-JSON
     rule opcodeToJson( REVERT ) => "REVERT"
     rule opcodeToJson( INVALID ) => "INVALID"
     rule opcodeToJson( SELFDESTRUCT ) => "SELFDESTRUCT"
-    rule opcodeToJson( _ ) => "INVALID" [owise]
+    rule opcodeToJson( _ ) => "UNDEFINED" [owise]
 
     rule wordstackToJson( WS ) => [ wordstackToJsons( WS, .JSONs ) ] [priority(50)]
     rule wordstackToJsons( .WordStack, ACC ) => ACC

@@ -9,7 +9,6 @@ module KONTROL-NODE
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
     imports NO-CODE-SIZE-CHECKS
-    imports JSON
     imports EVM-TRACING
     imports TRACE-JSON
 
