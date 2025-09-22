@@ -231,8 +231,6 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             )
             self._run_cterm()
             if tracelogs_path.exists() and self.active_tracing:
-                print("Hello World!")
-                print(tracelogs_path.read_text())
                 trace = tuple(
                     TraceItem.model_validate_json(raw) for raw in tracelogs_path.read_text().split('\n') if raw != ''
                 )
@@ -1100,8 +1098,8 @@ def parse_kapply_list(kapply_list: KApply) -> list:
 
 class DebugTraceTransactionResponse(BaseModel):
     gas: int
-    returnValue: str | None
-    structLogs: tuple[TraceItem, ...]
+    returnValue: str | None  # noqa: N815
+    structLogs: tuple[TraceItem, ...] # noqa: N815
     failed: bool
 
 
@@ -1109,29 +1107,29 @@ class TraceItem(BaseModel):
     pc: int
     op: str
     stack: list[str]
-    memoryChange: list[str] | None
-    storageChanges: dict[str, dict[str, str]]
-    nonceChanges: dict[str, str]
-    balanceChanges: dict[str, str]
-    callDataChange: str | None
-    returnDataChange: str | None
-    programChange: str | None
-    deployedCodeChanges: dict[str, str] | None
-    initCodeChanges: dict[str, str] | None
+    memoryChange: list[str] | None # noqa: N815
+    storageChanges: dict[str, dict[str, str]] # noqa: N815
+    nonceChanges: dict[str, str] # noqa: N815
+    balanceChanges: dict[str, str] # noqa: N815
+    callDataChange: str | None # noqa: N815
+    returnDataChange: str | None # noqa: N815
+    programChange: str | None # noqa: N815
+    deployedCodeChanges: dict[str, str] | None # noqa: N815
+    initCodeChanges: dict[str, str] | None # noqa: N815
     depth: int
     gas: int
     coinbase: int  # address
-    gasCost: int
+    gasCost: int # noqa: N815
     difficulty: int
-    blockNumber: int
-    blockTimestamp: int
-    targetAddress: int  # address
-    codeAddress: int  # address
-    msgSender: int  # address
-    msgValue: int
-    txOrigin: int  # address
-    isInitCode: bool
-    statusCode: str
+    blockNumber: int # noqa: N815
+    blockTimestamp: int # noqa: N815
+    targetAddress: int  # noqa: N815
+    codeAddress: int # noqa: N815
+    msgSender: int # noqa: N815
+    msgValue: int # noqa: N815
+    txOrigin: int # noqa: N815
+    isInitCode: bool # noqa: N815
+    statusCode: str # noqa: N815
 
 
 def extract_address(account_cell: KApply) -> int:
