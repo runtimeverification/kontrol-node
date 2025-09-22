@@ -13,23 +13,23 @@ module TRACE-JSON
     imports JSON
     imports K-IO
 
-    syntax JSON ::= traceItemToJson(TraceItem)          [function, total, symbol(traceItemToJson)]
-                  | opcodeToJson(OpCode)                [function, total, symbol(opcodeToJson)]
-                  | wordstackToJson(WordStack)          [function, total, symbol(wordstackToJson)]
-                  | memoryToJson(DataChange)            [function, total, symbol(memoryToJson)]
-                  | bytesToJson(Bytes)                  [function, total, symbol(bytesToJson)]
-                  | intMapToJson(Map)                   [function, total, symbol(intMapToJson)]
-                  | bytesMapToJson(Map)                 [function, total, symbol(bytesMapToJson)]
-                  | storageMapToJson(Map)               [function, total, symbol(storageMapToJson)]
-                  | accountToJson(Account)              [function, total, symbol(accountToJson)]
-                  | statusToJson(StatusCode)            [function, total, symbol(statusToJson)]
-                  | dataChangeToJson(DataChange)        [function, total, symbol(dataChangeToJson)]
+    syntax JSON ::= traceItemToJson(TraceItem)           [function, total, symbol(traceItemToJson)]
+                  | opcodeToJson(OpCode)                 [function, total, symbol(opcodeToJson)]
+                  | wordstackToJson(WordStack)           [function, total, symbol(wordstackToJson)]
+                  | memoryToJson(DataChange)             [function, total, symbol(memoryToJson)]
+                  | bytesToJson(Bytes)                   [function, total, symbol(bytesToJson)]
+                  | intMapToJson(Map)                    [function, total, symbol(intMapToJson)]
+                  | bytesMapToJson(Map)                  [function, total, symbol(bytesMapToJson)]
+                  | storageMapToJson(Map)                [function, total, symbol(storageMapToJson)]
+                  | accountToJson(Account)               [function, total, symbol(accountToJson)]
+                  | statusToJson(StatusCode)             [function, total, symbol(statusToJson)]
+                  | dataChangeToJson(DataChange)         [function, total, symbol(dataChangeToJson)]
 
-    syntax JSONs ::= wordstackToJsons(WordStack)        [function, total, symbol(wordstackToJsons)]
-                  | memoryToJsons(Bytes, JSONs)         [function, total, symbol(memoryToJsons)]
-                  | intMapToJsons(Map)                  [function, total, symbol(intMapToJsons)]
-                  | bytesMapToJsons(Map)                [function, total, symbol(bytesMapToJsons)]
-                  | storageMapToJsons(Map)              [function, total, symbol(storageMapToJsons)]
+    syntax JSONs ::= wordstackToJsons(WordStack, JSONs)  [function, total, symbol(wordstackToJsons)]
+                  | memoryToJsons(Bytes, JSONs)          [function, total, symbol(memoryToJsons)]
+                  | intMapToJsons(Map)                   [function, total, symbol(intMapToJsons)]
+                  | bytesMapToJsons(Map)                 [function, total, symbol(bytesMapToJsons)]
+                  | storageMapToJsons(Map)               [function, total, symbol(storageMapToJsons)]
     
     syntax String ::= intToHex(Int)    [function, total, symbol(intToHex)]
                    | bytesToHex(Bytes) [function, total, symbol(bytesToHex)]
@@ -187,9 +187,9 @@ module TRACE-JSON
     rule opcodeToJson( SELFDESTRUCT ) => "SELFDESTRUCT"
     rule opcodeToJson( _ ) => "INVALID" [owise]
 
-    rule wordstackToJson( WS ) => [ wordstackToJsons( WS ) ] [priority(50)]
-    rule wordstackToJsons( .WordStack ) => .JSONs
-    rule wordstackToJsons( W:WS ) => intToHex( W ), wordstackToJsons( WS )
+    rule wordstackToJson( WS ) => [ wordstackToJsons( WS, .JSONs ) ] [priority(50)]
+    rule wordstackToJsons( .WordStack, ACC ) => ACC
+    rule wordstackToJsons( W:WS, ACC ) => wordstackToJsons(WS, (intToHex( W ), ACC) )
 
     rule bytesToJson( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
     rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
@@ -226,7 +226,7 @@ module TRACE-JSON
           MEM,
           OFFSET -Int 32,
           prepend(
-            bytesToJson(
+            Bytes2Hex(
               padRightBytes(
                 substrBytes(MEM, OFFSET, minInt(OFFSET +Int 32, lengthBytes(MEM))),
                 32,
@@ -239,7 +239,7 @@ module TRACE-JSON
       requires OFFSET >=Int 32
 
     rule memoryToJsons(MEM, OFFSET, ACC)
-      => bytesToJson(
+      => Bytes2Hex(
           padRightBytes(
             substrBytes(MEM, OFFSET, minInt(OFFSET +Int 32, lengthBytes(MEM))),
             32,
@@ -292,7 +292,7 @@ module TRACE-JSON
         "nonceChanges": intMapToJson( VAR_NONCE_CHANGES ),
         "balanceChanges": intMapToJson( VAR_BALANCE_CHANGES),
         "callDataChange": dataChangeToJson( VAR_CALLDATA_CHANGE),
-        "returndataChange": dataChangeToJson( VAR_RETURNDATA_CHANGE),
+        "returnDataChange": dataChangeToJson( VAR_RETURNDATA_CHANGE),
         "programChange": dataChangeToJson( VAR_PROGRAM_CHANGE),
         "deployedCodeChanges": bytesMapToJson( VAR_CODE_CHANGE),
         "initCodeChanges": bytesMapToJson( VAR_INIT_CODE_CHANGE),

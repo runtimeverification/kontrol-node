@@ -1112,7 +1112,7 @@ class TraceItem(BaseModel):
     nonceChanges: dict[str, str]
     balanceChanges: dict[str, str]
     callDataChange: str | None
-    returndataChange: str | None
+    returnDataChange: str | None
     programChange: str | None
     deployedCodeChanges: dict[str, str] | None
     initCodeChanges: dict[str, str] | None
