@@ -1,10 +1,14 @@
 ```k
 requires "foundry.md"
 requires "driver.md"
+requires "no_code_size_checks.md"
+requires "trace.md"
 
 module KONTROL-NODE
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
+    imports NO-CODE-SIZE-CHECKS
+    imports EVM-TRACING
 
     syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
  // -------------------------------------------------------------
@@ -34,44 +38,10 @@ module KONTROL-NODE
                         <contractAddress> .Account   </contractAddress>
                       </txReceipt>
                     </txReceipts>
+                    <KEVMTracing/>
                   </simbolikVM>
 ```
 
-  Transaction debugging
-  ---------------------
-  Once debug_traceTransaction get up and running in a PR, these changes below should be moved to Kontrol:trace.md.
-
-```k
-    syntax TraceItem ::= "{" Int "|" OpCode "|" WordStack "|" Bytes "|" Map "|" Int "|" Int "}" [symbol(traceItem)]
- // ---------------------------------------------------------------------------------------------------------------
-    rule <k> #next [ OPC ] ... </k>
-         <activeTracing>  true          </activeTracing>
-         <traceStorage>   DSTG          </traceStorage>
-         <traceWordStack> DSTK          </traceWordStack>
-         <traceMemory>    DMEM          </traceMemory>
-         <recordedTrace>  false => true </recordedTrace>
-         <pc>             PCOUNT        </pc>
-         <wordStack>      WS            </wordStack>
-         <callDepth>      CD            </callDepth>
-         <localMem>       MEM           </localMem>
-         <id>             ACCT          </id>
-         <gas>            GA            </gas>
-         <account>
-           <acctID>  ACCT    </acctID>
-           <storage> STORAGE </storage>
-           ...
-         </account>
-         <traceData>
-           ...
-           .List => ListItem({ PCOUNT
-                             | OPC
-                             | #if DSTK ==K true #then WS      #else .WordStack #fi
-                             | #if DMEM ==K true #then MEM     #else .Bytes     #fi
-                             | #if DSTG ==K true #then STORAGE #else .Map       #fi
-                             | CD | GA
-                             })
-         </traceData> [priority(24)]
-```
   Transaction Signing and execution
   ---------------------------------
 
@@ -86,7 +56,9 @@ module KONTROL-NODE
           => #updateBlockHeader
           ~> mkTX !TXID
           ~> #loadTransaction !TXID TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
+          ~> #openTraceLogsFile
           ~> #runTransaction !TXID ACCTFROM
+          ~> #closeTraceLogsFile
           ~> #makeTxReceipt !TXID
           ~> #finalizeBlock
           ~> #computeHeaderHash
@@ -227,9 +199,10 @@ module KONTROL-NODE
           ~> #loadAccessList(TA)
           ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE
           ~> #finishTx
-          ~> #finalizeTx(false)
+          ~> #finalizeTx(false, Ctxfloor(SCHED, CODE))
          ...
          </k>
+         <traceBalance> TRBAL </traceBalance>
          <schedule> SCHED </schedule>
          <gasPrice> _ => GPRICE </gasPrice>
          <origin> ACCTFROM </origin>
@@ -251,15 +224,18 @@ module KONTROL-NODE
            <nonce> NONCE </nonce>
            ...
          </account>
+         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation) #else .List #fi </currentBalanceMutations>
 
     rule <k> #executeTx TXID:Int
           => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
           ~> #call ACCTFROM ACCTTO ACCTTO VALUE VALUE DATA false
           ~> #finishTx
-          ~> #finalizeTx(false)
+          ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
          ...
          </k>
+         <traceBalance> TRBAL </traceBalance>
+         <traceNonce> TRNONCE </traceNonce>
          <schedule> SCHED </schedule>
          <origin> ACCTFROM </origin>
          <gasPrice> _ => GPRICE </gasPrice>
@@ -281,6 +257,8 @@ module KONTROL-NODE
            <nonce> NONCE => NONCE +Int 1 </nonce>
            ...
          </account>
+         <currentNonceMutations> ... .List => #if TRNONCE #then ListItem({ ACCTFROM | NONCE +Int 1 }:MapMutation) #else .List #fi </currentNonceMutations>
+         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ ACCTFROM | BAL -Int (GLIMIT *Int GPRICE) }:MapMutation) #else .List #fi </currentBalanceMutations>
       requires ACCTTO =/=K .Account
 
     syntax KItem ::= "#makeTxReceipt" Int
@@ -393,14 +371,16 @@ module KONTROL-NODE
     syntax KItem ::= "#setAcctBalance" Int Int
  // ------------------------------------------
     rule <k> #setAcctBalance KEY BAL => .K ... </k>
-            <accounts>
-              <account>
-                <acctID> KEY </acctID>
-                <balance> _ => BAL </balance>
-                ...
-              </account>
-              ...
-            </accounts>
+         <traceBalance> TRBAL </traceBalance>
+         <accounts>
+           <account>
+             <acctID> KEY </acctID>
+             <balance> _ => BAL </balance>
+             ...
+           </account>
+           ...
+         </accounts>
+         <currentBalanceMutations> ... .List => #if TRBAL #then ListItem({ KEY | BAL }:MapMutation) #else .List #fi </currentBalanceMutations>
 endmodule
 
 ```

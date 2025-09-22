@@ -12,13 +12,18 @@ runs:
     shell: bash {0}
     run: |
       set -euxo pipefail
+
       CONTAINER_NAME=${{ inputs.container-name }}
       TAG=runtimeverificationinc/${CONTAINER_NAME}
       K_VERSION=$(cat deps/k_release)
+      UV_VERSION=$(cat deps/uv_release)
+
       docker build .                                  \
         --file .github/actions/with-docker/Dockerfile \
         --tag ${TAG}                                  \
-        --build-arg K_VERSION=${K_VERSION}
+        --build-arg K_VERSION=${K_VERSION}            \
+        --build-arg UV_VERSION=${UV_VERSION}
+
       docker run                          \
         --name ${CONTAINER_NAME}          \
         --rm                              \
@@ -28,5 +33,6 @@ runs:
         --user root                       \
         --workdir /home/user              \
         ${TAG}
+
       docker cp . ${CONTAINER_NAME}:/home/user
       docker exec ${CONTAINER_NAME} chown -R user:user /home/user

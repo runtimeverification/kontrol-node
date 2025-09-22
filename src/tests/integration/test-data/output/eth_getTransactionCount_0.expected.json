@@ -1,17 +1,17 @@
 [
   {
+    "id": 0,
     "jsonrpc": "2.0",
-    "result": "0x0",
-    "id": 0
+    "result": "0x0"
   },
   {
+    "id": 1,
     "jsonrpc": "2.0",
-    "result": "0xa2a48bf94c47073aa235c34e3dfe9bd9687e7b6a6cce28a2380ed48138f51680",
-    "id": 1
+    "result": "0xa2a48bf94c47073aa235c34e3dfe9bd9687e7b6a6cce28a2380ed48138f51680"
   },
   {
+    "id": 2,
     "jsonrpc": "2.0",
-    "result": "0x1",
-    "id": 2
+    "result": "0x1"
   }
 ]

@@ -1,1 +1,7 @@
-{"jsonrpc": "2.0", "result": "0xabb251fd13db4399e3a24655c54e03fbda3182a4d02d231223ea32dffde22922", "id": 0}
+[
+  {
+    "id": 0,
+    "jsonrpc": "2.0",
+    "result": "0xabb251fd13db4399e3a24655c54e03fbda3182a4d02d231223ea32dffde22922"
+  }
+]
