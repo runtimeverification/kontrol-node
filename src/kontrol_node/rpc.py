@@ -1099,7 +1099,7 @@ def parse_kapply_list(kapply_list: KApply) -> list:
 class DebugTraceTransactionResponse(BaseModel):
     gas: int
     returnValue: str | None  # noqa: N815
-    structLogs: tuple[TraceItem, ...] # noqa: N815
+    structLogs: tuple[TraceItem, ...]  # noqa: N815
     failed: bool
 
 
@@ -1107,29 +1107,29 @@ class TraceItem(BaseModel):
     pc: int
     op: str
     stack: list[str]
-    memoryChange: list[str] | None # noqa: N815
-    storageChanges: dict[str, dict[str, str]] # noqa: N815
-    nonceChanges: dict[str, str] # noqa: N815
-    balanceChanges: dict[str, str] # noqa: N815
-    callDataChange: str | None # noqa: N815
-    returnDataChange: str | None # noqa: N815
-    programChange: str | None # noqa: N815
-    deployedCodeChanges: dict[str, str] | None # noqa: N815
-    initCodeChanges: dict[str, str] | None # noqa: N815
+    memoryChange: list[str] | None  # noqa: N815
+    storageChanges: dict[str, dict[str, str]]  # noqa: N815
+    nonceChanges: dict[str, str]  # noqa: N815
+    balanceChanges: dict[str, str]  # noqa: N815
+    callDataChange: str | None  # noqa: N815
+    returnDataChange: str | None  # noqa: N815
+    programChange: str | None  # noqa: N815
+    deployedCodeChanges: dict[str, str] | None  # noqa: N815
+    initCodeChanges: dict[str, str] | None  # noqa: N815
     depth: int
     gas: int
     coinbase: int  # address
-    gasCost: int # noqa: N815
+    gasCost: int  # noqa: N815
     difficulty: int
-    blockNumber: int # noqa: N815
-    blockTimestamp: int # noqa: N815
+    blockNumber: int  # noqa: N815
+    blockTimestamp: int  # noqa: N815
     targetAddress: int  # noqa: N815
-    codeAddress: int # noqa: N815
-    msgSender: int # noqa: N815
-    msgValue: int # noqa: N815
-    txOrigin: int # noqa: N815
-    isInitCode: bool # noqa: N815
-    statusCode: str # noqa: N815
+    codeAddress: int  # noqa: N815
+    msgSender: int  # noqa: N815
+    msgValue: int  # noqa: N815
+    txOrigin: int  # noqa: N815
+    isInitCode: bool  # noqa: N815
+    statusCode: str  # noqa: N815
 
 
 def extract_address(account_cell: KApply) -> int:
