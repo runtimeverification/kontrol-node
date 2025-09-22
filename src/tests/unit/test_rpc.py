@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Any, Final
 
 import pytest
-from pyk.kast.inner import KApply, KLabel, KSort, KToken
+from pyk.kast.inner import KApply, KSort, KToken
 
 from kontrol_node.rpc import extract_message, extract_receipt, get_address_from_private_key
-
 
 EXTRACT_RECEIPT_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
     (

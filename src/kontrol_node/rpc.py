@@ -3,12 +3,10 @@ from __future__ import annotations
 import ast
 import gzip
 import json
-import multiprocessing
 import pprint
 import tempfile
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -235,7 +233,9 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             if tracelogs_path.exists() and self.active_tracing:
                 print("Hello World!")
                 print(tracelogs_path.read_text())
-                trace = tuple(TraceItem.model_validate_json(raw) for raw in tracelogs_path.read_text().split('\n') if raw != '')
+                trace = tuple(
+                    TraceItem.model_validate_json(raw) for raw in tracelogs_path.read_text().split('\n') if raw != ''
+                )
 
         transaction_hash = self._get_rpc_response()
         transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
@@ -251,7 +251,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         if receipt is None:
             return None
 
-        return_value : str | None = None
+        return_value: str | None = None
         if '<contractAddress>' in receipt.keys():
             return_value = self.transaction_return_data[tx_hash]
         failed = not bool(receipt['<txStatus>'])
@@ -1097,11 +1097,13 @@ def parse_kapply_list(kapply_list: KApply) -> list:
         values.append(t.token)
     return values
 
+
 class DebugTraceTransactionResponse(BaseModel):
     gas: int
     returnValue: str | None
     structLogs: tuple[TraceItem, ...]
     failed: bool
+
 
 class TraceItem(BaseModel):
     pc: int
@@ -1118,16 +1120,16 @@ class TraceItem(BaseModel):
     initCodeChanges: dict[str, str] | None
     depth: int
     gas: int
-    coinbase: int # address
+    coinbase: int  # address
     gasCost: int
     difficulty: int
     blockNumber: int
     blockTimestamp: int
-    targetAddress: int # address
-    codeAddress: int # address
-    msgSender: int # address
+    targetAddress: int  # address
+    codeAddress: int  # address
+    msgSender: int  # address
     msgValue: int
-    txOrigin: int # address
+    txOrigin: int  # address
     isInitCode: bool
     statusCode: str
 
