@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "kontrol-node"
-version = "0.1.45"
+version = "0.1.46"
 source = { editable = "." }
 dependencies = [
     { name = "kontrol" },
