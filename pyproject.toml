@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kontrol-node"
-version = "0.1.46"
+version = "0.1.47"
 description = "A local testnet node powered by KEVM"
 readme = "README.md"
 requires-python = ">=3.10,<4"
 dependencies = [
     "pydantic>=2.10.6,<3",
-    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v1.0.188",
+    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v1.0.195",
 ]
 
 [[project.authors]]
