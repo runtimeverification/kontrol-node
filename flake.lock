@@ -696,22 +696,6 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1759381078,
-        "narHash": "sha256-gTrEEp5gEspIcCOx9PD8kMaF1iEmfBcTbO0Jag2QhQs=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "7df7ff7d8e00218376575f0acdcc5d66741351ee",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_10": {
-      "locked": {
         "lastModified": 1759036355,
         "narHash": "sha256-0m27AKv6ka+q270dw48KflE0LwQYrO7Fm4/2//KCVWg=",
         "owner": "NixOS",
@@ -726,18 +710,18 @@
         "type": "github"
       }
     },
-    "nixpkgs_10": {
+    "nixpkgs-unstable_2": {
       "locked": {
-        "lastModified": 1744306051,
-        "narHash": "sha256-jWwqkmi8cplBu4CXUb4zdfpqKp3UJYVAs/b5m8M75sg=",
-        "owner": "runtimeverification",
+        "lastModified": 1759381078,
+        "narHash": "sha256-gTrEEp5gEspIcCOx9PD8kMaF1iEmfBcTbO0Jag2QhQs=",
+        "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "e9a77bb24d408d3898f6a11fb065d350d6bc71f1",
+        "rev": "7df7ff7d8e00218376575f0acdcc5d66741351ee",
         "type": "github"
       },
       "original": {
-        "owner": "runtimeverification",
-        "ref": "libmatch",
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -1203,7 +1187,7 @@
           "rv-nix-tools",
           "nixpkgs"
         ],
-        "nixpkgs-unstable": "nixpkgs-unstable",
+        "nixpkgs-unstable": "nixpkgs-unstable_2",
         "pyproject-build-systems": "pyproject-build-systems_4",
         "pyproject-nix": [
           "uv2nix",
