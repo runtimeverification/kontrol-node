@@ -659,5 +659,14 @@ The `TraceItem` is a sort used to serialize information from the configuration a
    // The console.log of Kontrol does not have a rewrite rule, as it is meant to generate a stuck state.
    rule <k> #consoleLog _ _ => .K ... </k>
 
+   // TODO: upstream into kontrol
+   rule [console.log-refund-gas]:
+      <k> STATICCALL GCAP #address(FoundryConsole) ARGSTART ARGWIDTH RETSTART RETWIDTH 
+         => #consoleLog #asWord(#range(LM, ARGSTART, 4)) #range(LM, ARGSTART +Int 4, ARGWIDTH -Int 4)
+         ~> #refund GCALL ~> 1 ~> #push ~> #setLocalMem RETSTART RETWIDTH .Bytes ... </k>
+      <localMem> LM </localMem>
+      <callGas> GCALL </callGas>
+   [priority(29)]
+
 endmodule
  ```
