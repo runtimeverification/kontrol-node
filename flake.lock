@@ -559,16 +559,16 @@
         "uv2nix": "uv2nix_3"
       },
       "locked": {
-        "lastModified": 1761676173,
-        "narHash": "sha256-S8xqD7Hv3F8DzNsWqhMfKSrwGB9FB2gux2WEkb3nOlk=",
+        "lastModified": 1761681719,
+        "narHash": "sha256-D6b/lWH9BcE+x0YNAszfWWmRfth/o1VafAVyDiXPWxc=",
         "owner": "runtimeverification",
         "repo": "kontrol",
-        "rev": "b5b24a27c1fd4b7fd3ef7e7a258806686e96535a",
+        "rev": "355be82c7b1f40896f8f883fa0f0656a61a4393a",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v1.0.206",
+        "ref": "v1.0.207",
         "repo": "kontrol",
         "type": "github"
       }
