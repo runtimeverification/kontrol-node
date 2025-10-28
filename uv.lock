@@ -750,8 +750,8 @@ wheels = [
 
 [[package]]
 name = "kevm-pyk"
-version = "1.0.869"
-source = { git = "https://github.com/runtimeverification/evm-semantics.git?subdirectory=kevm-pyk&rev=v1.0.869#d0cfe696498cea5ca01ef32909bda763978b8c39" }
+version = "1.0.873"
+source = { git = "https://github.com/runtimeverification/evm-semantics.git?subdirectory=kevm-pyk&rev=v1.0.873#6c5f5244204c70e1170deb46aaa459b47d76e53b" }
 dependencies = [
     { name = "frozendict" },
     { name = "kframework" },
@@ -761,7 +761,7 @@ dependencies = [
 
 [[package]]
 name = "kframework"
-version = "7.1.297"
+version = "7.1.299"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "coloredlogs" },
@@ -778,15 +778,15 @@ dependencies = [
     { name = "tomli" },
     { name = "xdg-base-dirs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/28/fbc0bf6c36ffb7df882f6370087c16c94575c8d7cea8631e7513ec1faf0b/kframework-7.1.297.tar.gz", hash = "sha256:64dd1de38778f8cca8c748249ba4070abffbbc36670dab043e7a2c55a4bfbfda", size = 242938, upload-time = "2025-10-09T08:35:10.314Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/0e/d6290fb077e994521b402514adff495abdc256fc7a7869d3ee9cfbae7cfe/kframework-7.1.299.tar.gz", hash = "sha256:f91cc63d8d134c27bb91108e2774c685ddb0a6d9ef0f625b86eb97984f5b3b89", size = 242932, upload-time = "2025-10-16T03:40:19.121Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/a1/75a8f1b7ef3122813687f1d0c5474022afc60418b9ee6060ba0eda55593e/kframework-7.1.297-py3-none-any.whl", hash = "sha256:43e8ea18e8d32c918440f6eaab3a7c7b5355b935b7462f1fdf25744eb42250df", size = 294134, upload-time = "2025-10-09T08:35:08.892Z" },
+    { url = "https://files.pythonhosted.org/packages/97/3b/68860f5548f590222e7d6aa32785e4703c43f08900fe38e877cc07252f7a/kframework-7.1.299-py3-none-any.whl", hash = "sha256:0c673ed10f8ba60a523306c1a9d4711778d65c730a07d8f2eb86ef65ac3f2f59", size = 294134, upload-time = "2025-10-16T03:40:17.36Z" },
 ]
 
 [[package]]
 name = "kontrol"
-version = "1.0.199"
-source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.199#1115f5b5d74d821cbca2a1f69fb8bf837694b996" }
+version = "1.0.206"
+source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.206#b5b24a27c1fd4b7fd3ef7e7a258806686e96535a" }
 dependencies = [
     { name = "eth-abi" },
     { name = "eth-utils" },
@@ -830,7 +830,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.199" },
+    { name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.206" },
     { name = "pydantic", specifier = ">=2.10.6,<3" },
 ]
 
