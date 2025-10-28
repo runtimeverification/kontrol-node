@@ -785,8 +785,8 @@ wheels = [
 
 [[package]]
 name = "kontrol"
-version = "1.0.206"
-source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.206#b5b24a27c1fd4b7fd3ef7e7a258806686e96535a" }
+version = "1.0.207"
+source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.207#355be82c7b1f40896f8f883fa0f0656a61a4393a" }
 dependencies = [
     { name = "eth-abi" },
     { name = "eth-utils" },
@@ -830,7 +830,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.206" },
+    { name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.207" },
     { name = "pydantic", specifier = ">=2.10.6,<3" },
 ]
 
