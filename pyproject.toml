@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10,<4"
 dependencies = [
     "pydantic>=2.10.6,<3",
-    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v1.0.195",
+    "kontrol@git+https://github.com/runtimeverification/kontrol.git@v1.0.207",
 ]
 
 [[project.authors]]
