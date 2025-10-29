@@ -656,5 +656,9 @@ The `TraceItem` is a sort used to serialize information from the configuration a
          </mockFunctions>
       [owise,priority(49)]
 
+   // The console.log of Kontrol does not have a rewrite rule, as it is meant to generate a stuck state.
+   rule <k> #consoleLog _ _ => .K ... </k>
+
+
 endmodule
  ```
