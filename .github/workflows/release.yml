@@ -35,7 +35,7 @@ jobs:
             VERSION=$(date +%Y.%m.%d)
           fi
 
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${VERSION}" >> $GITHUB_OUTPUT
           echo "Using version: ${VERSION}"
           
       - name: 'Update dependents'
