@@ -37,11 +37,14 @@ The configuration of the KEVMTracing is defined as following:
         <traceLogsFilePath>       "":String   </traceLogsFilePath>
         <writeTraceLogsToFile>    false       </writeTraceLogsToFile>
 
-        <currentNonceMutations>   .Map </currentNonceMutations>
+        <currentNonceMutations>   .Map  </currentNonceMutations>
         <traceNonce>              false </traceNonce>
-        <currentBalanceMutations> .Map </currentBalanceMutations>
+        <currentBalanceMutations> .Map  </currentBalanceMutations>
         <traceBalance>            false </traceBalance>
-        <currentStorageMutations> .Map </currentStorageMutations>
+        <currentStorageMutations> .Map  </currentStorageMutations>
+
+        <currentConsoleLogs>      .List </currentConsoleLogs>
+        <traceConsoleLogs>        false </traceConsoleLogs>
 
         <localMemoryChanged>      true  </localMemoryChanged>
 
@@ -108,6 +111,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       "|" Account      // transaction origin
       "|" Bool         // is init code
       "|" StatusCode   // status
+      "|" List         // console logs
     "}" [symbol(traceItem)]
 
    syntax Map ::= updateNested( Map, KItem, KItem, KItem ) [function]
@@ -657,8 +661,13 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       [owise,priority(49)]
 
    // The console.log of Kontrol does not have a rewrite rule, as it is meant to generate a stuck state.
-   rule <k> #consoleLog _ _ => .K ... </k>
+   // rule <k> #consoleLog _ _ => .K ... </k>
+
+   rule <k> #consoleLog LOGSELECTOR LOGBYTES => .K ... </k>
+        <currentConsoleLogs> CONLOGS => CONLOGS ListItem( "0x" +String Bytes2Hex( #padToWidth ( 4 , #asByteStack ( LOGSELECTOR ) ) ) +String Bytes2Hex( LOGBYTES ) ) </currentConsoleLogs>
+      requires #rangeUInt(32, LOGSELECTOR)
+      [priority(49)]
 
 
 endmodule
- ```
+```
