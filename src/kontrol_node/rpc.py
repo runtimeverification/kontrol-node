@@ -1130,7 +1130,7 @@ class TraceItem(BaseModel):
     txOrigin: int  # noqa: N815
     isInitCode: bool  # noqa: N815
     statusCode: str  # noqa: N815
-    consoleLogs: list[str]
+    consoleLogs: list[str]  # noqa: N815
 
 
 def extract_address(account_cell: KApply) -> int:
