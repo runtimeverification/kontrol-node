@@ -4,7 +4,7 @@
     rv-nix-tools.url = "github:runtimeverification/rv-nix-tools/854d4f05ea78547d46e807b414faad64cea10ae4";
     nixpkgs.follows = "rv-nix-tools/nixpkgs";
 
-    kontrol.url = "github:runtimeverification/kontrol/v1.0.208";
+    kontrol.url = "github:runtimeverification/kontrol/v1.0.213";
     kontrol.inputs.nixpkgs.follows = "nixpkgs";
 
     k-framework.follows = "kontrol/k-framework";
