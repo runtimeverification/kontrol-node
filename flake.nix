@@ -31,6 +31,7 @@
   outputs = { self, rv-nix-tools, nixpkgs, kontrol, k-framework, flake-utils, pyproject-nix, pyproject-build-systems, uv2nix, nixpkgs-unstable }:
   let
     pythonVer = "310";
+    nixLibs = pkgs: with pkgs; "-I${openssl.dev}/include -L${openssl.out}/lib -I${secp256k1}/include -L${secp256k1}/lib";
   in flake-utils.lib.eachSystem [
       "x86_64-linux"
       "x86_64-darwin"
@@ -72,25 +73,37 @@
     in {
       devShells.default = pkgs.mkShell {
         name = "uv develop shell";
-        buildInputs = [
-          python
-        ] ++ (with pkgs; [
-          uv
-          k.openssl.secp256k1
-          openssl.dev
-          secp256k1
-          pkg-config
-          mpfr
+        packages = with pkgs; ([
+          k
+          autoconf
+          automake
           cmake
-          boost
+          pkg-config
+          python
+          clang
+          uv
+          which
+        ] ++ lib.optionals (!stdenv.isDarwin) [
+          elfutils
         ]);
+        buildInputs = with pkgs; [
+          fmt
+          libtool
+          mpfr
+          openssl
+          secp256k1
+          boost
+        ];
         env = {
           # prevent uv from managing Python downloads and force use of specific
           UV_PYTHON_DOWNLOADS = "never";
           UV_PYTHON = python.interpreter;
         };
         shellHook = ''
+          export NIX_LIBS="${nixLibs pkgs}"
           unset PYTHONPATH
+        '' + pkgs.lib.strings.optionalString (pkgs.stdenv.isAarch64 && pkgs.stdenv.isDarwin) ''
+          export APPLE_SILICON=true
         '';
       };
       packages = rec {
