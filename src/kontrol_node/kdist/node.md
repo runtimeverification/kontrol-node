@@ -4,6 +4,7 @@ requires "driver.md"
 requires "no_code_size_checks.md"
 requires "trace.md"
 requires "trace-json.md"
+requires "state-json.md"
 
 module KONTROL-NODE
     imports FOUNDRY
@@ -11,6 +12,7 @@ module KONTROL-NODE
     imports NO-CODE-SIZE-CHECKS
     imports EVM-TRACING
     imports TRACE-JSON
+    imports STATE-JSON
 
     syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
  // -------------------------------------------------------------

@@ -248,7 +248,7 @@ module TRACE-JSON
             0
           )
         ) , ACC
-      requires OFFSET <Int 32
+      [owise]
 
     rule accountToJson( .Account ) => null
     rule accountToJson( ACC ) => ACC [owise]

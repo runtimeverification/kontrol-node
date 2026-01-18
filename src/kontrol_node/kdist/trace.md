@@ -34,7 +34,9 @@ The configuration of the KEVMTracing is defined as following:
         <recordedTrace>           false       </recordedTrace>
         <traceData>               .List       </traceData>
         <traceLogsFileDescriptor> .FileDescr  </traceLogsFileDescriptor>
+        <stateDumpFileDescriptor> .FileDescr  </stateDumpFileDescriptor>
         <traceLogsFilePath>       "":String   </traceLogsFilePath>
+        <stateDumpFilePath>       "":String   </stateDumpFilePath>
         <writeTraceLogsToFile>    false       </writeTraceLogsToFile>
 
         <currentNonceMutations>   .Map </currentNonceMutations>
