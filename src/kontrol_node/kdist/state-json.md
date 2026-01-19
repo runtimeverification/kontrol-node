@@ -1,27 +1,48 @@
 # JSON encoding of state snapshots
 
-There is no standardized way for encoding state snapshots.
-This encoding aims for compatbility with Anvil's `anvil_dumpState` format.
+This module defines rules to save and load vm machine snapshots in a JSON
+format from disk. Since there is no standardized way for encoding state
+snapshots, we aim for compatbility with Anvil's `anvil_dumpState` format.
+
+Notice, that Anvil's format doesn't is incomplete, for example it does not
+contain the chain_id.
 
 ```k
 requires "foundry.md"
 requires "driver.md"
+requires "fs.md"
+requires "json.md"
+requires "config.md"
 
 module STATE-JSON
-  
     imports EVM
     imports FOUNDRY
     imports EVM-TRACING
     imports JSON
     imports STRING
+    imports MAP
     imports K-IO
-
+    imports FILE-SYSTEM
+    imports SERIALIZATION
+    imports KONTROL-NODE-CONFIG
 
 ```
-This section builds a JSON datastructure representing
-the StateDump from the configuration.
+
+===============================================================================
+JSON ENCODING
+
+This section defines rule to create a StateDump JSON object from the current
+K configuration.
 
 ```k
+
+    syntax KItem ::= #saveStateDump( String )           // Public API
+                   | #loadStateDump( String, Int )      // Public API
+                   | #createStateDump()         // Internal use only, create a StateDump from the current configuration
+                   | #stLoad( JSON )            // Internal use only, populate a StateDump into the current configuration (reverse of #createStateDump)
+                   | #StateDump( JSON )         // Internal use only, wrap a StateDump JSON object to disambiguate it from other KItems containing JSON data
+                   | #writeStateDump( String )          // Internal use only, write a StateDump to disk
+
     syntax JSON  ::= ( JSON )  [bracket]
     syntax JSONs ::= ( JSONs ) [bracket]
     syntax JSON  ::= accountsCellToJSON( AccountsCell )          [function, total, symbol(accountsCellToJSON)]
@@ -68,9 +89,6 @@ the StateDump from the configuration.
             => accountsCellToJSONs( <accounts> ACCS </accounts>, (accountCellToJSON( <account> ACC </account> ) , ACCU) ) 
     rule accountsCellToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
 
-    syntax KItem ::= #createStateDump()
-                   | #StateDump( JSON )
-
     rule <k> #createStateDump()
         => #StateDump({
             "bestBlockNumber": BLOCK_NUMBER,
@@ -100,44 +118,181 @@ the StateDump from the configuration.
     <accounts> ACCOUNTS </accounts>
 ```
 
-Write the StateDump to disc.
+===============================================================================
+JSON DECODING
+
+This secion defines rules to load a StateDump JSON object into the current
+K configuration.
+
+It's very similar to the [state-utils.md](https://github.com/runtimeverification/evm-semantics/blob/master/kevm-pyk/src/kevm_pyk/kproj/evm-semantics/state-utils.md)
+module defined in `evm-semantics`, but targets specifically the Anvil's
+StateDump format - not the ethereum/test format.
 
 ```k
-    syntax KItem ::= #storeStateDump()
 
-    rule <k> #StateDump( ST)
-          ~> #storeStateDump()
-          => #write (
-               STFILEDESCR, 
-               JSON2String( ST ) +String "\n"
-             ) ...
-        </k>
-        <stateDumpFileDescriptor> STFILEDESCR </stateDumpFileDescriptor>
-      requires STFILEDESCR =/=K .FileDescr
+    syntax KItem ::= #stLoad( JSON )
+                   | #stLoadBlock( JSON )
+                   | #stLoadBlob( JSON )
+                   | #stLoadAccounts( JSON )
+                   | #stLoadAccount( Int, JSON )
+                   | #stLoadStorage( Int, Map )
+
+    // ------------
+    // StateDump root object
+
+    // Finished decoding StateDump
+    rule <k> #stLoad( { .JSONs } ) => .K ... </k>
+ 
+    // Break up the StateDump into it's compnents
+    rule <k> #stLoad( { KEY : VALUE , REST } ) => #stLoad( KEY : VALUE ) ~> #stLoad( { REST } )... </k>
+      requires REST =/=K .JSONs
+
+    // Handle components
+    rule <k> #stLoad( "best_block_number" : _        ) => .K ... </k> // TODO: Do we need this?
+    rule <k> #stLoad( "block"             : BLOCK    ) => #stLoadBlock( BLOCK ) ... </k>
+    rule <k> #stLoad( "accounts"          : ACCOUNTS ) => #stLoadAccounts( ACCOUNTS ) ... </k>
+
+    // Discard all other components
+    rule <k> #stLoad( _:String : _VAL ) => .K ...</k> [owise]
+
+    // ------------
+    // Block
+
+    // Finished block
+    rule <k> #stLoadBlock( { .JSONs } ) => .K ... </k>
+
+    // Break up a block into it's components
+    rule <k> #stLoadBlock( { KEY : VALUE, REST } ) => #stLoadBlock( KEY : VALUE ) ~> #stLoadBlock( { REST } ) ... </k>
+      requires REST =/=K .JSONs
+
+    // Handle components
+    rule <k> #stLoadBlock( "number"      : VAL ) => .K ... </k> <number>     _ => #parseWord( VAL ) </number>
+    rule <k> #stLoadBlock( "beneficiary" : VAL ) => .K ... </k> <coinbase>   _ => #parseWord( VAL ) </coinbase>
+    rule <k> #stLoadBlock( "timestamp"   : VAL ) => .K ... </k> <timestamp>  _ => #parseWord( VAL ) </timestamp>
+    rule <k> #stLoadBlock( "gas_limit"   : VAL ) => .K ... </k> <gasLimit>   _ => VAL </gasLimit>
+    rule <k> #stLoadBlock( "basefee"     : VAL ) => .K ... </k> <baseFee>    _ => VAL </baseFee>
+    rule <k> #stLoadBlock( "difficulty"  : VAL ) => .K ... </k> <difficulty> _ => #parseWord( VAL ) </difficulty>
+    rule <k> #stLoadBlock( "blob_excess_gas_and_price": VAL ) => #stLoadBlob( VAL )... </k>
+
+    // Discard all other components
+    rule <k> #stLoadBlock( _:String : _VAL ) => .K ...</k> [owise] 
+
+    // ------------
+    // Blob
+
+    // Finished blob
+    rule <k> #stLoadBlob( { .JSONs } )=> .K ... </k>
+
+    // Break up a blob into it's components
+    rule <k> #stLoadBlob( { KEY : VALUE, REST } ) => #stLoadBlob( KEY : VALUE ) ~> #stLoadBlob( { REST } ) ... </k>
+      requires REST =/=K .JSONs
+
+    // Handle components
+    rule <k> #stLoadBlob( "excess_blob_gas" : VAL ) => .K ... </k> <excessBlobGas> _ => VAL </excessBlobGas>
+    rule <k> #stLoadBlob( "blob_gasprice"   : VAL ) => .K ... </k> <blobGasUsed>   _ => VAL </blobGasUsed>
+    
+    // Discard all other components
+    rule <k> #stLoadBlob( _:String : _VAL) => .K ...</k> [owise] 
+
+    // ------------
+    // Accounts
+
+    rule <k> #stLoadAccounts( { .JSONs } ) => .K ... </k>
+    rule <k> #stLoadAccounts( { KEY : VALUE, REST } ) => #stLoadAccounts( KEY : VALUE ) ~> #stLoadAccounts( { REST } ) ... </k>
+      requires REST =/=K .JSONs
+
+    rule <k> #stLoadAccounts( ACCT_ID : ACCT_DATA )
+          => #newAccount( #parseAddr( ACCT_ID ) )
+          ~> #stLoadAccount( #parseAddr( ACCT_ID ), ACCT_DATA ) ...
+         </k>
+
+    // ------------
+    // Account
+
+    // Finished account
+    rule <k> #stLoadAccount( _, { .JSONs } ) => .K ... </k>
+
+    // Break up an account into it's components
+    rule <k> #stLoadAccount( ACCT_ID, { KEY : VALUE, REST } ) => #stLoadAccount(ACCT_ID, KEY : VALUE) ~> #stLoadAccount(ACCT_ID, { REST } )... </k>
+      requires REST =/=K .JSONs
+
+    // Handle components
+    rule <k> #stLoadAccount(ACCT_ID, "nonce" : VAL) => .K ... </k>
+         <account>
+            <acctID> ACCT_ID  </acctID>
+            <nonce>  _ => VAL </nonce>
+            ...
+        </account>
+    rule <k> #stLoadAccount(ACCT_ID, "balance" : VAL) => .K ... </k>
+         <account>
+            <acctID>  ACCT_ID  </acctID>
+            <balance> _ => VAL </balance>
+            ...
+        </account>
+    rule <k> #stLoadAccount(ACCT_ID, "code" : VAL) => .K ... </k>
+         <account>
+            <acctID> ACCT_ID  </acctID>
+            <code>   _ => parseByteStack( VAL ) </code>
+            ... 
+         </account>
+    rule <k> #stLoadAccount( ACCT_ID, "storage" : VAL) => #stLoadStorage( ACCT_ID, #parseMap( VAL ) ) ... </k>
+    
+    // Discard all other components
+    rule <k> #stLoadAccount( _, _ : _VAL ) => .K ...</k> [owise]
+
+    // ------------
+    // Account Storage
+
+    rule <k> #stLoadStorage( ACCT_ID, ST ) => .K ... </k>
+         <account>
+            <acctID> ACCT_ID </acctID>
+            <storage>     _ => ST </storage>
+            <origStorage> _ => ST </origStorage>
+            ...
+        </account>
 
 ```
 
-Opening and closing files.
+===============================================================================
+Persisting a StateDump to Disk
+
+This seciont defines rules to write a StateDump JSON object to disk.
 
 ```k
-    syntax KItem ::= #openStateDumpFile()
-                   | #storeStateDumpFileDescriptor()
-                   | #closeStateDumpFile()
 
-    rule <k> #openStateDumpFile()
-          => #open(SDFILEPATH, "w")
-          ~> #storeStateDumpFileDescriptor() ...
+    syntax String ::= #stateDumpFile(
+        String, // IO dir
+        Int     // block number
+    ) [function, total]
+
+    rule #stateDumpFile( IO_DIR, BLOCK_NUMBER ) => IO_DIR +String "/blocks/block_" +String Int2String( BLOCK_NUMBER ) +String ".json"
+
+    rule <k> #saveStateDump( IO_DIR )
+          => #createStateDump()
+          ~> #writeStateDump( IO_DIR )
         </k>
-        <stateDumpFilePath> SDFILEPATH </stateDumpFilePath>
 
-    rule <k> STFILEDESCR ~> #storeStateDumpFileDescriptor() => .K ... </k>
-        <stateDumpFileDescriptor> _ => STFILEDESCR </stateDumpFileDescriptor>
-
-    rule <k> #closeStateDumpFile()
-          => #close(STFILEDESCR) ...
+    rule <k> #StateDump( SD )
+          ~> #writeStateDump( IO_DIR )
+          => #writeFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER), JSON2String( SD ) )
+          ...
         </k>
-        <stateDumpFileDescriptor> STFILEDESCR => .FileDescr </stateDumpFileDescriptor>
-      requires STFILEDESCR =/=K .FileDescr
-      
+        <number> BLOCK_NUMBER </number>
+
+```
+===============================================================================
+Loading StateDump from Disk
+
+This secion defines rules to read a StateDump JSON object from disk.
+
+```k
+
+    rule <k> #loadStateDump( IO_DIR, BLOCK_NUMBER )
+          => #let CONTENTS:IOString = #readFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER ) )
+              #in #stLoad( String2JSON( {CONTENTS}:>String ) )
+              ...
+         </k>
+
+
 endmodule
 ```

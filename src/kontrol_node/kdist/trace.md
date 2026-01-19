@@ -1,7 +1,7 @@
 ```k
 requires "foundry.md"
 requires "driver.md"
-
+requires "config.md"
 ```
 
 Debug Collection with KEVM
@@ -13,63 +13,8 @@ module EVM-TRACING
     imports EVM
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
+    imports KONTROL-NODE-CONFIG
 
-
-```
-The configuration of the KEVMTracing is defined as following:
-- `<activeTracing>` signals if the tracing feature is active or not.
-- `<traceStorage>` signals if the storage should be recorded in the `TraceItem`.
-- `<traceWordStack>` signals if the storage should be recorded in the `TraceItem`.
-- `<traceMemory>` signals if the storage should be recorded in the `TraceItem`.
-- `<recordedTrace>` is an auxiliary cell that is used to determine if the current step has been recorded or not.
-- `<traceData>` is a collection of `TraceItem`s.
-
-```k
-    configuration
-      <KEVMTracing>
-        <activeTracing>           false       </activeTracing>
-        <traceStorage>            false       </traceStorage>
-        <traceWordStack>          false       </traceWordStack>
-        <traceMemory>             false       </traceMemory>
-        <recordedTrace>           false       </recordedTrace>
-        <traceData>               .List       </traceData>
-        <traceLogsFileDescriptor> .FileDescr  </traceLogsFileDescriptor>
-        <stateDumpFileDescriptor> .FileDescr  </stateDumpFileDescriptor>
-        <traceLogsFilePath>       "":String   </traceLogsFilePath>
-        <stateDumpFilePath>       "":String   </stateDumpFilePath>
-        <writeTraceLogsToFile>    false       </writeTraceLogsToFile>
-
-        <currentNonceMutations>   .Map </currentNonceMutations>
-        <traceNonce>              false </traceNonce>
-        <currentBalanceMutations> .Map </currentBalanceMutations>
-        <traceBalance>            false </traceBalance>
-        <currentStorageMutations> .Map </currentStorageMutations>
-
-        <localMemoryChanged>      true  </localMemoryChanged>
-
-        <injectedTracesCallStack> false </injectedTracesCallStack>
-        <recordedMkCallCreate>    false </recordedMkCallCreate>
-        <contextSwitch>           true  </contextSwitch>
-        <traceCallData>           false </traceCallData>
-        <traceReturnData>         false </traceReturnData>
-        <tracesCallStack>         .List </tracesCallStack>
-        <tracesCallState>
-           <isInitCode> false </isInitCode>
-        </tracesCallState>
-
-        <traceCurrentProgram> false </traceCurrentProgram>
-        <programChanged> true </programChanged>
-
-        <traceDeployedCode> false </traceDeployedCode>
-        <currentDeployedCodeMutations> .Map </currentDeployedCodeMutations>
-
-        <traceInitCode> false </traceInitCode>
-        <currentInitCodeMutations> .Map </currentInitCodeMutations>
-        <recordedCreate> false </recordedCreate>
-      </KEVMTracing>
-```
-
-```k
    syntax KItem ::= "#openTraceLogsFile"            [symbol(openTraceLogsFile)]
                   | "#closeTraceLogsFile"           [symbol(closeTraceLogsFile)]
                   | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
@@ -130,7 +75,6 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // evm.md:1483 [sstore] `STORE`
     rule [sstore]:
          <k> SSTORE INDEX NEW => .K ... </k>
-         <traceStorage> true </traceStorage>
          <id> ACCT </id>
          <account>
            <acctID> ACCT </acctID>
@@ -143,7 +87,6 @@ The `TraceItem` is a sort used to serialize information from the configuration a
  // ---------------------------------------------------------------------------------------------------------------
     // cheatcodes.md:1282 `#setStorage` 
     rule <k> #setStorage ACCTID LOC VALUE => .K ... </k>
-         <traceStorage> true </traceStorage>
          <account>
            <acctID> ACCTID </acctID>
            <storage> STORAGE => STORAGE [ LOC <- VALUE ] </storage>
@@ -566,52 +509,42 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // when memory change, we trace the entire memory contents
     // the <localMemory> cell is also changed at `#popTracesCallStack`
     rule <k> MSTORE _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> MSTORE8 _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> MCOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> CODECOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> CALLDATACOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> RETURNDATACOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> EXTCODECOPY _ _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> #initVM ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> #setLocalMem _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> clearTX ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 

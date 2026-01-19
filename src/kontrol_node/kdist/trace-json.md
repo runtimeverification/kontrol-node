@@ -4,6 +4,8 @@
 requires "foundry.md"
 requires "driver.md"
 requires "trace.md"
+requires "fs.md"
+requires "config.md"
 
 module TRACE-JSON
   
@@ -12,6 +14,8 @@ module TRACE-JSON
     imports EVM-TRACING
     imports JSON
     imports K-IO
+    imports FILE-SYSTEM
+    imports KONTROL-NODE-CONFIG
 
     syntax JSON ::= traceItemToJson(TraceItem)           [function, total, symbol(traceItemToJson)]
                   | opcodeToJson(OpCode)                 [function, total, symbol(opcodeToJson)]
@@ -324,14 +328,14 @@ module TRACE-JSON
 
     rule <k> (.K => #storeTraceItem { PCOUNT
                                     | OPC
-                                    | #if DSTK ==K true #then WS      #else .WordStack #fi
-                                    | #if (DMEM andBool MEMCH)          ==K true #then MEM  #else .DataChange #fi
+                                    | WS
+                                    | MEM
                                     | STORCH
                                     | NONCECH
                                     | BALCH
-                                    | #if (DCADA andBool CONTEXTSWITCH) ==K true #then CADA #else .DataChange #fi
-                                    | #if (DREDA andBool CONTEXTSWITCH) ==K true #then REDA #else .DataChange #fi
-                                    | #if PROGCHANGED                   ==K true #then PROG #else .DataChange #fi
+                                    | CADA
+                                    | REDA
+                                    | #if PROGCHANGED ==K true #then PROG #else .DataChange #fi
                                     | DEPLCODECH
                                     | INITCODECH
                                     | CD
@@ -352,16 +356,12 @@ module TRACE-JSON
              ~> #next [ OPC ] ...
          </k>
          <activeTracing>                true                   </activeTracing>
-         <traceWordStack>               DSTK                   </traceWordStack>
-         <traceMemory>                  DMEM                   </traceMemory>
-         <traceCallData>                DCADA                  </traceCallData>
-         <traceReturnData>              DREDA                  </traceReturnData>
          <recordedTrace>                false => true          </recordedTrace>
          <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
          <recordedCreate>               _ => false             </recordedCreate>
-         <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
+         <localMemoryChanged>           _ => false             </localMemoryChanged>
          <currentNonceMutations>        NONCECH => .Map        </currentNonceMutations>          
-         <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
+         <contextSwitch>                _ => false             </contextSwitch>
          <currentBalanceMutations>      BALCH => .Map          </currentBalanceMutations>          
          <currentStorageMutations>      STORCH => .Map         </currentStorageMutations>
          <programChanged>               PROGCHANGED => false   </programChanged>
@@ -389,35 +389,18 @@ module TRACE-JSON
          <statusCode>                   STATUS                 </statusCode>
       [priority(24)]
 
-    rule <k> #storeTraceItem TRITEM => .K ... </k>
-         <writeTraceLogsToFile> false </writeTraceLogsToFile>
-         <traceData> ... .List => ListItem(TRITEM) </traceData>
+    syntax String ::= #traceFile( String, Int ) [function, total]
+
+    rule #traceFile( IO_DIR, MSG_ID ) => IO_DIR +String "/transactions/trace_" +String Int2String( MSG_ID ) +String ".json"
 
     rule <k> #storeTraceItem TRITEM
-             => #write (
-              TRFILEDESCR, 
-              JSON2String( traceItemToJson( TRITEM ) ) +String "\n"
+          => #appendFile(
+                #traceFile( IO_DIR, MSG_ID ),
+                JSON2String( traceItemToJson( TRITEM ) ) +String "\n"
              ) ...
          </k>
-         <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
-         <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
-      requires TRFILEDESCR =/=K .FileDescr
-
-    rule <k> #openTraceLogsFile => #open(TRFILEPATH, "w") ~> #storeTraceLogsFileDescriptor ... </k>
-        <traceLogsFilePath> TRFILEPATH </traceLogsFilePath>
-        <writeTraceLogsToFile> true </writeTraceLogsToFile>
-
-    rule <k> #openTraceLogsFile => .K ... </k>
-        <writeTraceLogsToFile> false </writeTraceLogsToFile>
-
-    rule <k> TRFILEDESCR ~> #storeTraceLogsFileDescriptor => .K ... </k>
-        <traceLogsFileDescriptor> _ => TRFILEDESCR </traceLogsFileDescriptor>
-
-    rule <k> #closeTraceLogsFile => #close(TRFILEDESCR) ... </k>
-        <traceLogsFileDescriptor> TRFILEDESCR => .FileDescr </traceLogsFileDescriptor>
-      requires TRFILEDESCR =/=K .FileDescr
-
-    rule <k> #closeTraceLogsFile => .K ... </k> [owise]
+         <ioDir> IO_DIR </ioDir>
+         <msgID> MSG_ID </msgID>
 
 endmodule
 ```

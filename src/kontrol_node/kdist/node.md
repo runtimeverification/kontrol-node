@@ -5,6 +5,7 @@ requires "no_code_size_checks.md"
 requires "trace.md"
 requires "trace-json.md"
 requires "state-json.md"
+requires "config.md"
 
 module KONTROL-NODE
     imports FOUNDRY
@@ -13,37 +14,33 @@ module KONTROL-NODE
     imports EVM-TRACING
     imports TRACE-JSON
     imports STATE-JSON
+    imports KONTROL-NODE-CONFIG
+
 
     syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
  // -------------------------------------------------------------
 
     syntax RPCResponse ::= String | Int
-                         | ".RPCResponse" [symbol(EmptyRPCResponse)]
  // ----------------------------------------------------------------
 
-    configuration <simbolikVM>
-                    <foundry/>
-                    <rpcResponse> .RPCResponse </rpcResponse>
-                    <accountKeys> .Map </accountKeys>
-                    <timeFreeze> true </timeFreeze>
-                    <timeDiff> 0 </timeDiff>
-                    <currentTxID> 0 </currentTxID>
-                    <currentBlockHash> 0 </currentBlockHash>
-                    <txReceipts>
-                      <txReceipt multiplicity ="*" type="Map">
-                        <txHash>          "":String  </txHash>
-                        <txCumulativeGas> 0          </txCumulativeGas>
-                        <logSet>          .List      </logSet>
-                        <bloomFilter>     .Bytes     </bloomFilter>
-                        <txStatus>        0          </txStatus>
-                        <txID>            0          </txID>
-                        <sender>          .Account   </sender>
-                        <txBlockNumber>   0          </txBlockNumber>
-                        <contractAddress> .Account   </contractAddress>
-                      </txReceipt>
-                    </txReceipts>
-                    <KEVMTracing/>
-                  </simbolikVM>
+    syntax Start ::= #start(
+      String // IO directory
+    )
+
+    configuration <simbolikVM/>
+```
+
+Create the initial configuration by reading the inputs from the IO directory
+
+```k
+
+  rule <k> #start( IO_DIR )
+        => #loadStateDump( IO_DIR, 1)
+           // TODO
+        ...
+       </k>
+       <ioDir> _ => IO_DIR </ioDir>
+
 ```
 
   Transaction Signing and execution
@@ -67,7 +64,6 @@ module KONTROL-NODE
           ~> #finalizeBlock
           ~> #computeHeaderHash
           ... </k>
-          <traceData> _ => .List </traceData>
 
     syntax KItem ::= "#loadTransaction" Int TxType Account Account Int Int Int Int Bytes
  // ------------------------------------------------------------------------------------
