@@ -8,10 +8,12 @@ module KONTROL-NODE-CONFIG
     imports ETHEREUM-SIMULATION
 
     syntax RPCResponse ::= ".RPCResponse" [symbol(EmptyRPCResponse)]
+    syntax RPCRequest
 
     configuration <simbolikVM>
             <ioDir> "":String </ioDir>
             <foundry/>
+            <rpcRequestId> 0 </rpcRequestId>
             <rpcResponse> .RPCResponse </rpcResponse>
             <accountKeys> .Map </accountKeys>
             <timeFreeze> true </timeFreeze>

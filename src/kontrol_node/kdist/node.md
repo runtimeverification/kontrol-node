@@ -6,14 +6,16 @@ requires "trace.md"
 requires "trace-json.md"
 requires "state-json.md"
 requires "config.md"
+requires "rpc-json.md"
 
 module KONTROL-NODE
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
     imports NO-CODE-SIZE-CHECKS
     imports EVM-TRACING
-    imports TRACE-JSON
     imports STATE-JSON
+    imports RPC-JSON
+    imports TRACE-JSON
     imports KONTROL-NODE-CONFIG
 
 
@@ -51,43 +53,21 @@ Create the initial configuration by reading the inputs from the IO directory
   Once these steps are performed, a receipt is generated.
 
 ```k
-    syntax RPCRequest ::= "#eth_sendTransaction" TxType Account Account Int Int Int Int Bytes [symbol(eth_sendTransaction)]
- // -----------------------------------------------------------------------------------------------------------------------
-    rule <k> #eth_sendTransaction TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
-          => #updateBlockHeader
-          ~> mkTX !TXID
-          ~> #loadTransaction !TXID TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
-          ~> #openTraceLogsFile
-          ~> #runTransaction !TXID ACCTFROM
-          ~> #closeTraceLogsFile
-          ~> #makeTxReceipt !TXID
+    // Assumes the transaction is fully loaded into the <message>-cell
+    // and that the initial state is fully initialized.
+    // It then executes the transaction
+    rule <k> #processTx( TX_ID )
+          => #signTX TX_ID FROM
+          ~> #setup_G0 TX_ID
+          ~> #validateTx TX_ID
+          ~> #updateTimestamp
+          ~> #executeTx TX_ID
+          ~> #makeTxReceipt TX_ID
           ~> #finalizeBlock
           ~> #computeHeaderHash
-          ... </k>
-
-    syntax KItem ::= "#loadTransaction" Int TxType Account Account Int Int Int Int Bytes
- // ------------------------------------------------------------------------------------
-    rule <k> #loadTransaction TXID TXTYPE ACCTFROM ACCTTO TXGAS TXGASPRICE TXVALUE TXNONCE TXDATA
-          => #signTX TXID ACCTFROM
           ...
-         </k>
-         <chainID> CID </chainID>
-         <currentTxID> _ => TXID </currentTxID>
-         <message>
-           <msgID> TXID </msgID>
-           <txNonce>    _ => TXNONCE    </txNonce>
-           <txGasPrice> _ => TXGASPRICE </txGasPrice>
-           <txGasLimit> _ => TXGAS      </txGasLimit>
-           <to>         _ => ACCTTO     </to>
-           <value>      _ => TXVALUE    </value>
-           <data>       _ => TXDATA     </data>
-           <txChainID>  _ => CID        </txChainID>
-           <txType>     _ => TXTYPE     </txType>
-           ...
-         </message>
-         <account> <acctID> ACCTFROM </acctID> <nonce> TXNONCE </nonce> ... </account>
-
-
+          </k>
+          <origin> FROM </origin>
 
     // ECDSASign returns [r,s,recid]
     // previously of EIP155, v is computed as:  v = recid + 27
@@ -129,16 +109,6 @@ Create the initial configuration by reading the inputs from the IO directory
          <rpcResponse> _ => -1 </rpcResponse> // TODO: Come up with error code values for this cell
       requires notBool ACCTFROM in_keys(KEYMAP)
 
-    syntax KItem ::= "#runTransaction" Int Account
- // ----------------------------------------------
-    rule <k> #runTransaction TXID:Int ACCTFROM
-          => #setup_G0 TXID
-          ~> #validateTx TXID
-          ~> #updateTimestamp
-          ~> #executeTx TXID
-          ...
-          </k>
-         <origin> _ => ACCTFROM </origin>
 
     syntax KItem ::= "#setup_G0" Int
  // --------------------------------
