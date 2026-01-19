@@ -1,723 +1,117 @@
 from __future__ import annotations
 
-import ast
-import gzip
+import cProfile
+from collections.abc import Iterator
 import json
-import pprint
-import tempfile
-from collections import defaultdict
-from collections.abc import Callable
-from datetime import datetime
+import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Callable, Final
 
 from eth_keys import keys
-from kevm_pyk.kevm import KEVM
-from kontrol.foundry import Foundry
 from pydantic import BaseModel
+from pyk.utils import run_process_2
 from pyk.cterm import CTerm
-from pyk.kast.inner import KApply, KLabel, KSequence, KToken, Subst, build_assoc, flatten_label
+
+from pyk.konvert._utils import munge
 from pyk.kast.manip import set_cell
-from pyk.kast.prelude.bytes import bytesToken
-from pyk.kast.prelude.collections import list_empty, map_empty
-from pyk.kast.prelude.k import GENERATED_TOP_CELL
-from pyk.kast.prelude.kbool import TRUE
 from pyk.kast.prelude.utils import token
 from pyk.kdist import kdist
+from pyk.ktool.krun import KRun, llvm_interpret_raw
+from pyk.kast.inner import KApply, KLabel, KSequence, KSort, KToken, Subst, build_assoc, flatten_label
+from kevm_pyk.kevm import KEVM
+from kontrol_node.rpc_server import JsonRpcServer, ServeRpcOptions
+from kontrol_node.state_dump import Account, StateDump
 from pyk.kore.parser import KoreParser
-from pyk.ktool.krun import KRun
-from pyk.rpc.rpc import JsonRpcServer, ServeRpcOptions
-from pyk.utils import single
+from pyk.kore.syntax import App, SortApp, String, DV
+from pyk.kore.prelude import BOOL, INT, SORT_JSON, SORT_K_ITEM, bool_dv, inj, int_dv, str_dv, top_cell_initializer
 
-from .blockstore import BlockStore
+from pyk.ktool.krun import llvm_interpret
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
 
     from eth_keys.datatypes import PublicKey
-    from pyk.kast.inner import KInner
-
     from .cli import VMOptions
+    from pyk.kore.syntax import Pattern
 
-_PPRINT = pprint.PrettyPrinter(width=41, compact=True)
-ACCOUNT_EMPTY: Final[KApply] = KApply('.Account_EVM-TYPES_Account')
-WORDSTACK_EMPTY: Final[KApply] = KApply('.WordStack_EVM-TYPES_WordStack')
-WORDSTACK_CONS: Final[str] = '_:__EVM-TYPES_WordStack_Int_WordStack'
-MAP_CONS: Final[str] = '_Map_'
-STATUS_CODE_EMPTY: Final[KApply] = KApply('.StatusCode_NETWORK_StatusCode')
-UNCHANGED_DATA: Final[KApply] = KApply('UnchangedData')
 CHUNK_SIZE: Final[int] = 64
+PROFILING: Final[bool] = False
 
 # 32 bytes, and two characters for '0x'
 HASH_LENGTH: Final[int] = 32 * 2 + 2
 
 
-# must be located in module root for multiprocessing
-def pool_init_forkserver(krun_dir: str, tracelogs_path_str: str) -> None:
-    global krun, kore_traces_str  # flake8: noqa: F824
-    krun = KRun(Path(krun_dir))  # type: ignore[name-defined]
-    tracelogs_path = Path(tracelogs_path_str)
-    kore_traces_str = tracelogs_path.read_text().split('\n')[:-1]  # type: ignore[name-defined]
+# For performance reasons, `kontrol-node` entirely avoids converting between
+# KAST and KORE. The commmunication between the Python code and the K code
+# is done by reading and writing JSON files.
 
+# For requests that don't modify state (eth_getCode, eth_getStorageAt, etc.),
+# the K semantics is never run. The state is ready from disk, where it was
+# dumped by the K code on the last state-modifying request.
 
-# must be located in module root for multiprocessing
-def pool_parse_kore_to_kast_forkserver(trace_index: int) -> KInner:
-    global krun, kore_traces_str  # noqa: F824
+# For requests that modify the state (eth_sendTransaction), the Python server
+# writes the JSON-RPC request to a file. Next, it calls KRun passing the file
+# path as an argument. The K Code executes the request, and writes the result
+# to disk. The result is 1) the transaction result 2) the transaction receipt
+# 3) the debug trace and 4) the new state dump (includes accounts).
 
-    kore_parser = KoreParser(kore_traces_str[trace_index])  # type: ignore[name-defined]
-    kore_pattern = kore_parser.pattern()
-    kast = krun.kore_to_kast(kore_pattern)  # type: ignore[name-defined]
-    return kast
+# Simbolik needs at minimum the following RPC methods
+# eth_sendTransaction
+# eth_waitForTransactionReceipt <--- should be removed from Simbolik
+# eth_getTransactionByHash
+# eth_getTransactionReceipt
+# eth_getCode
+# eth_getBlockByNumber
+# eth_getBlockByHash
+# eth_getTransactionCount
+# eth_getStorageAt
+# anvil_stateDump
+# debug_traceTransaction
 
+# requests.json                                <- JSON-RPC requests
+# blocks/block_0.json                          <- The initial StateDump (genesis state)
+# blocks/block_<block number>.json             <- StateDump
+# transactions/traces/trace_<tx hash>.jsonl    <- JSON lines consisting of TraceItems
+# transactions/receipts/receipt_<tx hash>.json <- TransactionReceipt
+# transactions/results/result_<tx hash>.json   <- TransactionResult
+
+class Database:
+
+    def getInitialState(self) -> StateDump:
+        ...
+
+    def getBlockState(self, block_number: int) -> StateDump:
+        ...
+
+    def getTransactionReceipt(self, tx_hash: str) -> Any:
+        ...
+
+    def getTransaction(self, tx_hash: str) -> Any:
+        ...
+
+    def getTransactionTrace(self, tx_hash: str) -> Iterator[bytes]:
+        """
+        Debug traces are never parsed into structured data, only read as raw bytes
+        This is because they can be very large, and parsing them would be very slow
+        Instead they are passed as raw bytes to the RPC response
+        """
+        ...
 
 class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
-    cterm: CTerm
-    traced_transactions: dict[str, tuple[TraceItem, ...]]
-    transaction_return_data: dict[str, str]
-    transaction_hashes: dict[int, str]
-    default_sender_address: Final[int]
-    block_storage: BlockStore
+    db: Database
 
     def __init__(self, options: VMOptions) -> None:
         super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
-
         self._register_rpc_methods()
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
-        self.traced_transactions = {}
-        self.transaction_return_data = {}
-        self.transaction_hashes = {}
-        start_time = datetime.now()
-        self._init_cterm(options.steps_tracing)
-        self.default_sender_address = self._get_account_addresses()[0]
-        end_time = datetime.now()
-        self.block_storage = BlockStore()
-        print(f'Server initialization finished in {(end_time - start_time).total_seconds()} seconds.')
-
-    def exec_get_chain_id(self) -> int:
-        return int(self._parse_ktoken_cell('CHAINID_CELL'))
-
-    def exec_get_memory_used(self) -> int:
-        return int(self._parse_ktoken_cell('MEMORYUSED_CELL'))
-
-    def exec_get_gas_price(self) -> int:
-        return int(self._parse_ktoken_cell('GASPRICE_CELL'))
-
-    def exec_get_block_number(self) -> int:
-        return int(self._parse_ktoken_cell('NUMBER_CELL'))
-
-    def exec_get_storage_at(self, hex_address: str, hex_slot: str, _block_number: str) -> str:
-        address = _address_to_acct_id(hex_address)
-        slot = int(hex_slot, base=16)
-        return hex(self._get_account_storage_slot(address, slot))
-
-    def exec_get_code(self, hex_address: str, _block_number: str) -> str:
-        address = _address_to_acct_id(hex_address)
-        return self._get_account_code(address)
-
-    def exec_get_block_by_hash(self, hash: str, transaction_detail: bool = False) -> dict | None:
-        block_hash = int(hash, base=0)
-        return self.block_storage.get_block_by_hash(block_hash)
-
-    def exec_get_block_by_number(self, number: str, transaction_detail: bool = False) -> dict | None:
-        if number == 'latest':
-            return self.block_storage.get_latest_block()
-        block_number = int(number, base=0)
-        return self.block_storage.get_block_by_number(block_number)
-
-    def exec_get_balance(self, hex_address: str, _block_number: str) -> str:
-        address = _address_to_acct_id(hex_address)
-        return hex(self._get_account_balance(address))
-
-    def exec_get_transaction_count(self, hex_address: str, _block_number: str) -> str:
-        address = _address_to_acct_id(hex_address)
-        return hex(self._get_account_nonce(address))
-
-    def exec_accounts(self) -> list[str]:
-        return [hex(address) for address in self._get_account_addresses()]
-
-    def exec_add_account(self, private_key: str, value: str) -> str:
-        balance = int(value, 0)
-        address = get_address_from_private_key(private_key)
-        account_id = _address_to_acct_id(address)
-        new_account = KEVM.account_cell(
-            id=token(account_id),
-            balance=token(balance),
-            code=token(b''),
-            storage=map_empty(),
-            orig_storage=map_empty(),
-            transient_storage=map_empty(),
-            nonce=token(0),
-        )
-        new_pair = KApply('_|->_', [token(account_id), token(int(private_key, 16))])
-        self._add_or_update_accounts([new_account])
-        self._add_or_update_private_keys([new_pair])
-        return address.lower()
-
-    def exec_dump_state(self) -> str:
-        dump: dict[str, Any] = {}
-        dump['accounts'] = self._dump_accounts()
-        dump['best_block_number'] = hex(self.block_number)
-        header = self._get_partial_block_header()
-        block = {
-            'number': header['<number>'],
-            'coinbase': header['<coinbase>'],
-            'timestamp': header['<timestamp>'],
-            'gas_limit': header['<gasLimit>'],
-            'basefee': header['<baseFee>'],
-            'difficulty': header['<difficulty>'],
-            'prevrandao': '0x4049e9c3939dad98110354500dc0bebd598bad807233a6b7055ae794bfac22d9',
-            'blob_excess_gas_and_price': {
-                'excess_blob_gas': int(header['<excessBlobGas>'], base=16),
-                'blob_gasprice': int(header['<blobGasUsed>'], base=16),
-            },
-        }
-        dump['block'] = block
-        dump_bytes = json.dumps(dump).encode('utf-8')
-        result = '0x' + gzip.compress(dump_bytes).hex()
-        return result
-
-    def exec_set_balance(self, address: str, value: str) -> None:
-        def _extract_kapply(field: KInner) -> KInner:
-            assert type(field) is KApply
-            return single(field.args)
-
-        balance = int(value, 0)
-        account_id = _address_to_acct_id(address)
-        account = self._get_account_cell_by_address(account_id)
-        new_account = KEVM.account_cell(
-            id=token(account_id),
-            balance=token(balance),
-            code=token(b'') if account is ACCOUNT_EMPTY else _extract_kapply(account.args[2]),
-            storage=map_empty() if account is ACCOUNT_EMPTY else _extract_kapply(account.args[3]),
-            orig_storage=map_empty() if account is ACCOUNT_EMPTY else _extract_kapply(account.args[4]),
-            transient_storage=map_empty() if account is ACCOUNT_EMPTY else _extract_kapply(account.args[5]),
-            nonce=token(0) if account is ACCOUNT_EMPTY else _extract_kapply(account.args[6]),
-        )
-        self._add_or_update_accounts([new_account])
-
-    def exec_send_transaction(self, transaction_json: dict) -> str:
-        sender: int | None = _get_address_from(transaction_json, 'from')
-        if sender is None:
-            sender = self.default_sender_address
-        sender_nonce = self._get_account_nonce(sender)
-
-        destination: int | None = _get_address_from(transaction_json, 'to')
-        tx_type: str = transaction_json.get('type', 'Legacy')
-        nonce: int = transaction_json.get('nonce', sender_nonce)
-        gas: int = int(transaction_json.get('gas', '0x15f90'), base=16)
-        gas_price: int = int(transaction_json.get('gasPrice', '0x0'), base=16)
-        value: int = int(transaction_json.get('value', '0x0'), base=16)
-        data: str = transaction_json.get('data', '0x0')
-
-        self.cterm = CTerm.from_kast(
-            set_cell(
-                self.cterm.config,
-                'K_CELL',
-                eth_send_transaction(tx_type, sender, destination, gas, gas_price, value, nonce, data),
-            )
-        )
-
-        trace = None
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tracelogs_path = Path(tmpdir).resolve() / 'tracelogs.kore'
-            self.cterm = CTerm.from_kast(
-                set_cell(
-                    self.cterm.config,
-                    'TRACELOGSFILEPATH_CELL',
-                    token(str(tracelogs_path)),
-                )
-            )
-            self._run_cterm()
-            if tracelogs_path.exists() and self.active_tracing:
-                trace = tuple(
-                    TraceItem.model_validate_json(raw) for raw in tracelogs_path.read_text().split('\n') if raw != ''
-                )
-
-        transaction_hash = self._get_rpc_response()
-        transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
-        self.transaction_hashes[transaction_id] = transaction_hash
-        if self.active_tracing:
-            self._collect_trace(transaction_hash, trace=trace)
-        self._save_block()
-        return transaction_hash
-
-    def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict | None:
-        struct_logs = self.traced_transactions[tx_hash]
-        receipt = self._get_tx_receipt_by_hash(tx_hash)
-        if receipt is None:
-            return None
-
-        return_value: str | None = None
-        if '<contractAddress>' in receipt.keys():
-            return_value = self.transaction_return_data[tx_hash]
-        failed = not bool(receipt['<txStatus>'])
-        gas = receipt['<txCumulativeGas>']
-        result = DebugTraceTransactionResponse(
-            gas=gas,
-            returnValue=return_value,
-            structLogs=struct_logs,
-            failed=failed,
-        )
-        return result.model_dump()
-
-    def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
-        tx_receipt = self._get_tx_receipt_by_hash(tx_hash)
-
-        if tx_receipt is None:
-            return 'Transaction receipt not found'
-
-        msg_id = tx_receipt['<txID>']
-        messages_dict = self._get_all_messages_dict()
-
-        if msg_id not in messages_dict:
-            return 'Transaction not found.'
-
-        formatted_messages_dict = _apply_format_to_message_cell_json_dict(messages_dict[msg_id])
-        formatted_messages_dict['blockNumber'] = tx_receipt['<txBlockNumber>']
-        formatted_messages_dict['hash'] = tx_receipt['<txHash>']
-        formatted_messages_dict['from'] = _acct_id_to_address(tx_receipt['<sender>'])
-        del formatted_messages_dict['priorityFee']
-        del formatted_messages_dict['maxFee']
-        return formatted_messages_dict
-
-    def exec_get_transaction_receipt(self, tx_hash: str) -> dict | str:
-        tx_receipt_dict = self._get_tx_receipt_by_hash(tx_hash)
-
-        if tx_receipt_dict is None:
-            return 'Transaction receipt not found'
-
-        msg_id = tx_receipt_dict['<txID>']
-        messages_dict = self._get_all_messages_dict()
-
-        if msg_id not in messages_dict:
-            return 'Transaction not found.'
-        message_dict = messages_dict[msg_id]
-
-        receipt: dict[str, Any] = {}
-        receipt['type'] = hex(message_dict['<txType>'])
-        receipt['status'] = hex(tx_receipt_dict['<txStatus>'])
-        receipt['cumulativeGasUsed'] = hex(tx_receipt_dict['<txCumulativeGas>'])
-        receipt['logs'] = tx_receipt_dict['<logSet>']
-        receipt['logsBloom'] = tx_receipt_dict['<bloomFilter>']
-        receipt['transactionHash'] = tx_hash
-        receipt['transactionIndex'] = hex(int(msg_id))
-        receipt['blockNumber'] = hex(tx_receipt_dict['<txBlockNumber>'])
-        receipt['gasUsed'] = hex(tx_receipt_dict['<txCumulativeGas>'])
-        receipt['effectiveGasPrice'] = hex(message_dict['<txGasPrice>'])
-
-        receipt['to'] = message_dict['<to>'] if '<to>' in message_dict.keys() else None
-        receipt['contractAddress'] = (
-            hex(tx_receipt_dict['<contractAddress>']) if tx_receipt_dict['<contractAddress>'] is not None else None
-        )
-        receipt['root'] = hex(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL')))
-        return receipt
-
-    # ------------------------------------------------------
-    # VM data fetch helper functions
-    # ------------------------------------------------------
-
-    @property
-    def active_tracing(self) -> bool:
-        return self._parse_ktoken_cell('ACTIVETRACING_CELL') == 'true'
-
-    @property
-    def block_number(self) -> int:
-        return int(self._parse_ktoken_cell('NUMBER_CELL'))
-
-    def _get_rpc_response(self) -> str:
-        """Parses and returns the RPC response from the 'RPCRESPONSE_CELL' in hexadecimal format.
-
-        The function processes the cell content:
-        - If the value is a decimal, it converts it to hexadecimal.
-        - If the value is a quoted string (e.g., `"value"`), it strips the quotes and prepends '0x'.
-        - It then updates the configuration by clearing the 'RPCRESPONSE_CELL' with an empty RPCResponse object.
-        - If the RPCRESPONSE_CELL has an empty RPCResponse value, then it throws an AssertionError and the function
-        returns an empty string.
-        :return: The RPC response as a hexadecimal string.
-        """
-        try:
-            response_value = self._parse_ktoken_cell('RPCRESPONSE_CELL')
-
-            if response_value.isdecimal():
-                response_value = hex(int(response_value))
-            elif response_value.startswith('"'):
-                response_value = '0x' + response_value[1:-1]
-            self.cterm = CTerm.from_kast(set_cell(self.cterm.config, 'RPCRESPONSE_CELL', KApply('EmptyRPCResponse')))
-        except AssertionError:
-            response_value = '0x'
-        return response_value
-
-    def _save_block(self) -> None:
-        header = self._get_block_header()
-        transaction_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
-        block = {
-            'hash': header['<currentBlockHash>'],
-            'parentHash': header['<previousHash>'],
-            'sha3Uncles': header['<ommersHash>'],
-            'miner': header['<coinbase>'],
-            'stateRoot': header['<stateRoot>'],
-            'transactionsRoot': header['<transactionsRoot>'],
-            'receiptsRoot': header['<receiptsRoot>'],
-            'logsBloom': header['<logsBloom>'],
-            'difficulty': header['<difficulty>'],
-            'number': header['<number>'],
-            'gasLimit': header['<gasLimit>'],
-            'gasUsed': header['<gasUsed>'],
-            'timestamp': header['<timestamp>'],
-            'totalDifficulty': header['<difficulty>'],
-            'extraData': header['<extraData>'],
-            'mixHash': header['<mixHash>'],
-            'nonce': header['<blockNonce>'],
-            'baseFeePerGas': header['<baseFee>'],
-            'blobGasUsed': header['<blobGasUsed>'],
-            'excessBlobGas': header['<excessBlobGas>'],
-            'uncles': header['<ommerBlockHeaders>'],
-            'transactions': [self.transaction_hashes[transaction_id]] if header['<number>'] != 0 else [],
-            'size': '0x3e8',
-        }
-        self.block_storage.add_block(block)
-
-    def _get_account_cell_by_address(self, address: int) -> KApply:
-        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
-        for account in accounts_cell:
-            assert type(account) is KApply
-            if extract_address(account) == address:
-                return account
-        return ACCOUNT_EMPTY
-
-    def _get_account_nonce(self, address: int) -> int:
-        account_cell = self._get_account_cell_by_address(address)
-        if account_cell == ACCOUNT_EMPTY:
-            return 0
-        return extract_nonce(account_cell)
-
-    def _get_account_storage_slot(self, address: int, slot: int) -> int:
-        account_cell = self._get_account_cell_by_address(address)
-        if account_cell == ACCOUNT_EMPTY:
-            return 0
-        storage_cell = account_cell.terms[3]
-        assert type(storage_cell) is KApply and storage_cell.label.name == '<storage>'
-        storage_map = single(storage_cell.terms)
-        if storage_map == map_empty():
-            return 0
-        storage_entries = flatten_label(MAP_CONS, storage_map)
-
-        for entry in storage_entries:
-            assert type(entry) is KApply and entry.label.name == '_|->_'
-            key, value = entry.terms
-            assert type(key) is KToken
-            if int(key.token) == slot:
-                assert type(value) is KToken
-                return int(value.token)
-        return 0
-
-    def _get_account_code(self, address: int) -> str:
-        account_cell = self._get_account_cell_by_address(address)
-        if account_cell == ACCOUNT_EMPTY:
-            return '0x'
-        return extract_code(account_cell)
-
-    def _get_account_balance(self, address: int) -> int:
-        account_cell = self._get_account_cell_by_address(address)
-        if account_cell == ACCOUNT_EMPTY:
-            return 0
-        return extract_balance(account_cell)
-
-    def _get_account_addresses(self) -> list[int]:
-        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
-        account_list = []
-        for account in accounts_cell:
-            assert type(account) is KApply
-            acct_id = account.terms[0]
-            assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
-            _address = single(acct_id.terms)
-            assert type(_address) is KToken
-            account_list.append(int(_address.token))
-        account_list.sort()
-        return account_list
-
-    def _add_or_update_accounts(self, new_accounts: list[KApply]) -> None:
-        self._add_or_update_cell(
-            cell_name='ACCOUNTS_CELL',
-            flatten_label_name='_AccountCellMap_',
-            empty_value=KApply('.AccountCellMap'),
-            assoc_unit=KApply('.AccountCellMap'),
-            assoc_label=KLabel('_AccountCellMap_'),
-            new_items=new_accounts,
-        )
-
-    def _add_or_update_private_keys(self, new_keys: list[KApply]) -> None:
-        self._add_or_update_cell(
-            cell_name='ACCOUNTKEYS_CELL',
-            flatten_label_name='_Map_',
-            empty_value=map_empty(),
-            assoc_unit=map_empty(),
-            assoc_label=KLabel('_Map_'),
-            new_items=new_keys,
-        )
-
-    def _add_or_update_cell(
-        self,
-        cell_name: str,
-        flatten_label_name: str,
-        empty_value: KInner,
-        assoc_unit: KInner,
-        assoc_label: KLabel,
-        new_items: list[KApply],
-    ) -> None:
-        """
-        Add new items or update existing ones in a specified cell.
-
-        This function updates self.cterm to reflect the modified items list.
-
-        Args:
-        :param cell_name: The name of the cell to update.
-        :param flatten_label_name: The label name used in flatten_label.
-        :param empty_value: The empty value to compare against.
-        :param assoc_unit: The unit value for the associative operator in build_assoc.
-        :param assoc_label: The label for the associative operator in build_assoc.
-        :param new_items: The list of items to add or update.
-        """
-        # Extract the existing items from the specified cell
-        all_items = flatten_label(flatten_label_name, self.cterm.cell(cell_name))
-
-        # Create a mapping from item IDs to items for quick lookup
-        items_dict: dict[KInner, KApply] = {}
-        if all_items != [empty_value]:
-            for item in all_items:
-                assert type(item) is KApply
-                item_id = item.args[0]
-                items_dict[item_id] = item
-
-        # Update existing items or add new ones
-        for new_item in new_items:
-            assert type(new_item) is KApply
-            item_id = new_item.args[0]
-            items_dict[item_id] = new_item
-
-        # Build the updated items list from the dictionary values
-        updated_items_list = list(items_dict.values())
-
-        # Reconstruct the cell with the updated items
-        new_cell_contents = build_assoc(assoc_unit, assoc_label, updated_items_list)
-
-        # Update self.cterm with the new cell contents
-        self.cterm = CTerm.from_kast(
-            set_cell(
-                self.cterm.config,
-                cell_name,
-                new_cell_contents,
-            )
-        )
-
-    def _dump_accounts(self) -> dict:
-        accounts_cell = flatten_label('_AccountCellMap_', self.cterm.cell('ACCOUNTS_CELL'))
-        account_dict = {}
-        for account in accounts_cell:
-            assert type(account) is KApply
-            address = hex(extract_address(account))
-            balance = hex(extract_balance(account))
-            code = extract_code(account)
-            storage = extract_storage(account)
-            nonce = extract_nonce(account)
-            account_dict[address] = {'nonce': nonce, 'balance': balance, 'code': code, 'storage': storage}
-        return account_dict
-
-    def _collect_trace(self, transaction_hash: str, trace: tuple[TraceItem, ...] | None = None) -> None:
-        return_data = '0x' + ast.literal_eval(self._parse_ktoken_cell('OUTPUT_CELL')).hex()
-        if trace is not None:
-            self.traced_transactions[transaction_hash] = trace
-        self.transaction_return_data[transaction_hash] = return_data[2:]
-
-    def _get_tx_receipt_by_msg_id(self, msg_id: int) -> dict | None:
-        tx_receipts_dict = self._get_all_tx_receipts_dict()
-        tx_receipt = None
-
-        for tx_receipt_key in tx_receipts_dict:
-            if tx_receipts_dict[tx_receipt_key]['<txID>'] == msg_id:
-                tx_receipt = tx_receipts_dict[tx_receipt_key]
-
-        return tx_receipt
-
-    def _get_tx_receipt_by_hash(self, hash: str) -> dict | None:
-        tx_receipts_dict = self._get_all_tx_receipts_dict()
-        return tx_receipts_dict[hash]
-
-    def _get_all_tx_receipts_dict(self) -> dict:
-        cells = self.cterm.cells
-        cell = cells.get('TXRECEIPTS_CELL', None)
-
-        tx_receipts: dict[str, Any] = {}
-
-        if cell is None:
-            # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
-            return self._build_tx_receipt_from_subst()
-        else:
-            assert type(cell) is KApply
-            kapply_receipts = flatten_label('_TxReceiptCellMap_', cell)
-            for r in kapply_receipts:
-                assert type(r) is KApply
-                receipt = extract_receipt(r)
-                tx_receipts[receipt['<txHash>']] = receipt
-            return tx_receipts
-
-    def _get_last_message_tx_hash(self) -> str:
-        msg_id = int(self._parse_ktoken_cell('CURRENTTXID_CELL'))
-        tx_receipt = self._get_tx_receipt_by_msg_id(msg_id)
-        assert tx_receipt is not None
-        return tx_receipt['<txHash>']
-
-    def _get_all_messages_dict(self) -> dict:
-        messages_dict: dict[str, dict] = {}
-
-        cell = self.cterm.cells.get('MESSAGES_CELL', None)
-
-        if cell is None:
-            # For the first transaction, the cells of the message will be scattered in the model, and if there is only this transaction in the messages map, this dictionary entry must be built manually.
-            return self._build_message_from_subst()
-        else:
-            assert type(cell) is KApply
-            kapply_messages = flatten_label('_MessageCellMap_', cell)
-            for r in kapply_messages:
-                assert type(r) is KApply
-                message = extract_message(r)
-                messages_dict[message['<msgID>']] = message
-            return messages_dict
-
-    def _get_block_header(self) -> dict:
-        return {
-            '<currentBlockHash>': format(int(self._parse_ktoken_cell('CURRENTBLOCKHASH_CELL')), f'#0{HASH_LENGTH}x'),
-            '<previousHash>': format(int(self._parse_ktoken_cell('PREVIOUSHASH_CELL')), f'#0{HASH_LENGTH}x'),
-            '<ommersHash>': format(int(self._parse_ktoken_cell('OMMERSHASH_CELL')), f'#0{HASH_LENGTH}x'),
-            '<stateRoot>': format(int(self._parse_ktoken_cell('STATEROOT_CELL')), f'#0{HASH_LENGTH}x'),
-            '<transactionsRoot>': format(int(self._parse_ktoken_cell('TRANSACTIONSROOT_CELL')), f'#0{HASH_LENGTH}x'),
-            '<receiptsRoot>': format(int(self._parse_ktoken_cell('RECEIPTSROOT_CELL')), f'#0{HASH_LENGTH}x'),
-            '<logsBloom>': '0x' + ast.literal_eval(self._parse_ktoken_cell('LOGSBLOOM_CELL')).hex(),
-            '<gasUsed>': hex(int(self._parse_ktoken_cell('GASUSED_CELL'))),
-            '<extraData>': '0x' + ast.literal_eval(self._parse_ktoken_cell('EXTRADATA_CELL')).hex(),
-            '<mixHash>': format(int(self._parse_ktoken_cell('MIXHASH_CELL')), f'#0{HASH_LENGTH}x'),
-            '<blockNonce>': hex(int(self._parse_ktoken_cell('BLOCKNONCE_CELL'))),
-            '<withdrawalsRoot>': hex(int(self._parse_ktoken_cell('WITHDRAWALSROOT_CELL'))),
-            '<beaconRoot>': hex(int(self._parse_ktoken_cell('BEACONROOT_CELL'))),
-            '<ommerBlockHeaders>': [],
-        } | self._get_partial_block_header()
-
-    def _get_partial_block_header(self) -> dict:
-        return {
-            '<coinbase>': _acct_id_to_address(int(self._parse_ktoken_cell('COINBASE_CELL'))),
-            '<difficulty>': hex(int(self._parse_ktoken_cell('DIFFICULTY_CELL'))),
-            '<number>': hex(int(self._parse_ktoken_cell('NUMBER_CELL'))),
-            '<gasLimit>': hex(int(self._parse_ktoken_cell('GASLIMIT_CELL'))),
-            '<timestamp>': hex(int(self._parse_ktoken_cell('TIMESTAMP_CELL'))),
-            '<baseFee>': hex(int(self._parse_ktoken_cell('BASEFEE_CELL'))),
-            '<blobGasUsed>': hex(int(self._parse_ktoken_cell('BLOBGASUSED_CELL'))),
-            '<excessBlobGas>': hex(int(self._parse_ktoken_cell('EXCESSBLOBGAS_CELL'))),
-        }
-
-    # ------------------------------------------------------
-    # VM setup functions
-    # ------------------------------------------------------
-
-    def _add_initial_accounts(self) -> None:
-        balance = 10**20
-
-        private_keys = [
-            '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-            '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
-            '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a',
-            '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
-            '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a',
-            '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba',
-            '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e',
-            '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356',
-            '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97',
-            '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6',
-        ]
-        account_list: list[KApply] = []
-        private_key_pairs: list[KApply] = []
-        for private_key in private_keys:
-            address = get_address_from_private_key(private_key)
-            account_id = _address_to_acct_id(address)
-            account_list.append(
-                KEVM.account_cell(
-                    id=token(account_id),
-                    balance=token(balance),
-                    code=token(b''),
-                    storage=map_empty(),
-                    orig_storage=map_empty(),
-                    transient_storage=map_empty(),
-                    nonce=token(0),
-                )
-            )
-            private_key_pairs.append(KApply('_|->_', [token(account_id), token(int(private_key, 0))]))
-        account_list.append(Foundry.account_CHEATCODE_ADDRESS(map_empty()))
-        self._add_or_update_accounts(account_list)
-        self._add_or_update_private_keys(private_key_pairs)
-
-    def _run_cterm(self) -> None:
-        from pyk.ktool.krun import llvm_interpret
-
-        pattern = self.krun.kast_to_kore(self.cterm.config, sort=GENERATED_TOP_CELL)
-        output_kore = llvm_interpret(
-            definition_dir=self.krun.definition_dir,
-            pattern=pattern,
-            check=False,
-        )
-        self.cterm = CTerm.from_kast(self.krun.kore_to_kast(output_kore))
-
-    def _init_cterm(self, steps_tracing: bool) -> None:
-        self.krun.definition.empty_config(GENERATED_TOP_CELL)
-        init_config = self.krun.definition.init_config(GENERATED_TOP_CELL)
-        init_subst = {
-            '$PGM': KSequence([KEVM.sharp_execute()]),
-            '$MODE': KApply('NORMAL'),
-            '$SCHEDULE': KApply('CANCUN_EVM'),
-            '$USEGAS': TRUE,
-            '$CHAINID': token(31337),
-        }
-
-        init_config = set_cell(init_config, 'BASEFEE_CELL', token(1000000000))
-        init_config = set_cell(init_config, 'GASLIMIT_CELL', token(30000000))
-        init_config = set_cell(init_config, 'TIMESTAMP_CELL', token(1725635810))
-        init_config = set_cell(
-            init_config,
-            'OMMERSHASH_CELL',
-            token(13478047122767188135818125966132228187941283477090363246179690878162135454535),
-        )
-        init_config = set_cell(
-            init_config,
-            'TRANSACTIONSROOT_CELL',
-            token(39309028074332508661983559455579427211983204215636056653337583610388178777121),
-        )
-        init_config = set_cell(init_config, 'ACTIVETRACING_CELL', token(steps_tracing))
-        init_config = set_cell(init_config, 'TRACEWORDSTACK_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACEMEMORY_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACESTORAGE_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACENONCE_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACEBALANCE_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACECALLDATA_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACERETURNDATA_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACECURRENTPROGRAM_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACEDEPLOYEDCODE_CELL', TRUE)
-        init_config = set_cell(init_config, 'TRACEINITCODE_CELL', TRUE)
-        init_config = set_cell(init_config, 'WRITETRACELOGSTOFILE_CELL', TRUE)
-
-        init_term = Subst(init_subst)(init_config)
-        self.cterm = CTerm.from_kast(init_term)
-        self._add_initial_accounts()
+        self.db = Database()
+        print(f'Server initialization finished.')
 
     def _register_rpc_methods(self) -> None:
         rpc_methods: dict[str, Callable] = {
             'anvil_dumpState': self.exec_dump_state,
-            'anvil_setBalance': self.exec_set_balance,
             'debug_traceTransaction': self.exec_trace_transaction,
-            'eth_accounts': self.exec_accounts,
-            'eth_blockNumber': self.exec_get_block_number,
-            'eth_chainId': self.exec_get_chain_id,
-            'eth_gasPrice': self.exec_get_gas_price,
-            'eth_getBalance': self.exec_get_balance,
             'eth_getBlockByHash': self.exec_get_block_by_hash,
             'eth_getBlockByNumber': self.exec_get_block_by_number,
             'eth_getCode': self.exec_get_code,
@@ -725,376 +119,113 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             'eth_getTransactionByHash': self.exec_get_transaction_by_hash,
             'eth_getTransactionCount': self.exec_get_transaction_count,
             'eth_getTransactionReceipt': self.exec_get_transaction_receipt,
-            'eth_memoryUsed': self.exec_get_memory_used,
             'eth_sendTransaction': self.exec_send_transaction,
-            'kontrol_addAccount': self.exec_add_account,
         }
         for method_name, exec_function in rpc_methods.items():
             self.register_method(method_name, exec_function)
 
-    def _parse_ktoken_cell(self, cell_name: str) -> str:
-        """Retrieves the value of a `KToken` inside a cell.
-
-        This method looks up a cell by its name, verifies that the cell is of type
-        `KToken`, and returns the associated token as a string.
-        :param cell_name: The name of the cell to retrieve.
-        :return: The token value of the `KToken` inside the cell.
-        """
-        cell = self.cterm.cell(cell_name)
-        assert type(cell) is KToken
-        return cell.token
-
-    def _build_tx_receipt_from_subst(self) -> dict[str, Any]:
-        """Manually builds the first transaction receipt when no <txReceipts> cell map is found.
-
-        Returns:
-            str: The uid (tx_hash) of the transaction receipt.
-            dict: The manually created transaction receipt.
-        """
-        tx_hash = '0x' + self._parse_ktoken_cell('TXHASH_CELL')[1:-1]
-
-        receipt: dict[str, Any] = {
-            '<txHash>': tx_hash,
-            '<txCumulativeGas>': int(self._parse_ktoken_cell('TXCUMULATIVEGAS_CELL')),
-            '<logSet>': self._parse_log_set(),
-            '<txNonce>': int(self._parse_ktoken_cell('TXNONCE_CELL')),
-            '<bloomFilter>': '0x' + ast.literal_eval(self._parse_ktoken_cell('BLOOMFILTER_CELL')).hex(),
-            '<txStatus>': int(self._parse_ktoken_cell('TXSTATUS_CELL')),
-            '<txID>': int(self._parse_ktoken_cell('TXID_CELL')),
-            '<sender>': int(self._parse_ktoken_cell('SENDER_CELL')),
-            '<txBlockNumber>': int(self._parse_ktoken_cell('TXBLOCKNUMBER_CELL')),
-            '<contractAddress>': self._parse_contract_address(),
-        }
-
-        return {tx_hash: receipt}
-
-    def _build_message_from_subst(self) -> dict[int, Any]:
-        """Manually builds the first message when no <messages> cell map is found.
-
-        Returns:
-            dict: The manually created message.
-        """
-        msg_id = int(self._parse_ktoken_cell('MSGID_CELL'))
-
-        message: dict[str, Any] = {
-            '<txNonce>': int(self._parse_ktoken_cell('TXNONCE_CELL')),
-            '<txGasPrice>': int(self._parse_ktoken_cell('TXGASPRICE_CELL')),
-            '<txGasLimit>': int(self._parse_ktoken_cell('TXGASLIMIT_CELL')),
-            '<value>': int(self._parse_ktoken_cell('VALUE_CELL')),
-            '<sigV>': int(self._parse_ktoken_cell('SIGV_CELL')),
-            '<sigR>': '0x' + ast.literal_eval(self._parse_ktoken_cell('SIGR_CELL')).hex(),
-            '<sigS>': '0x' + ast.literal_eval(self._parse_ktoken_cell('SIGS_CELL')).hex(),
-            '<data>': '0x' + ast.literal_eval(self._parse_ktoken_cell('DATA_CELL')).hex(),
-            '<txChainID>': int(self._parse_ktoken_cell('TXCHAINID_CELL')),
-            '<txPriorityFee>': int(self._parse_ktoken_cell('TXPRIORITYFEE_CELL')),
-            '<txMaxFee>': int(self._parse_ktoken_cell('TXMAXFEE_CELL')),
-            '<msgID>': msg_id,
-        }
-        _c = self.cterm.cell('TO_CELL')
-        if type(_c) is KToken:
-            message['<to>'] = _acct_id_to_address(int(_c.token))
-
-        _c = self.cterm.cell('TXTYPE_CELL')
-        assert type(_c) is KApply
-        message['<txType>'] = tx_type_to_int(_c.label)
-
-        return {msg_id: message}
-
-    def _parse_log_set(self) -> list:
-        """Parses the log set from the LOGSET_CELL."""
-        cell = self.cterm.cell('LOGSET_CELL')
-        assert type(cell) is KApply
-        return parse_kapply_list(cell)
-
-    def _parse_contract_address(self) -> int | None:
-        """Parses the contract address from the CONTRACTADDRESS_CELL."""
-        cell = self.cterm.cell('CONTRACTADDRESS_CELL')
-        if type(cell) is KToken:
-            return int(cell.token)
-        return None
-
-
-# ------------------------------------------------------
-# Helpers
-# ------------------------------------------------------
-def _acct_id_to_address(acct_id: int) -> str:
-    hex_value = hex(acct_id).lower()[2:]
-    target_length = 40
-    padding_length = target_length - len(hex_value)
-    padded_address = '0' * padding_length + hex_value
-    return '0x' + padded_address
-
-
-def _get_address_from(data: dict, data_key: str) -> int | None:
-    address: str | None = data.get(data_key, None)
-    if address is None:
-        return None
-    return _address_to_acct_id(address)
-
-
-def _address_to_acct_id(address: str) -> int:
-    if len(address) != 42:
-        raise ValueError('Invalid string length')
-    return int(address, base=16)
-
-
-def _apply_format_to_message_cell_json_dict(message_dict: dict) -> dict:
-    formatted_message_dict = {}
-
-    for key in message_dict:
-        new_key = key.replace('<', '').replace('>', '').replace('sig', '').replace('tx', '')
-
-        new_key = new_key[0].lower() + new_key[1:]
-
-        if new_key == 'gasLimit':
-            new_key = 'gas'
-        elif new_key == 'data':
-            new_key = 'input'
-
-        if new_key == 'to':
-            formatted_message_dict[new_key] = message_dict[key]
-        else:
-            value = message_dict[key]
-
-            try:
-                int(value, 16)
-                value = '0x' + value if value[:2] != '0x' else value
-            except Exception:
-                if type(value) is int:
-                    value = hex(value)
-                elif message_dict[key].isdecimal():
-                    value = hex(int(message_dict[key]))
-                else:
-                    value = '0x' + ast.literal_eval(message_dict[key]).hex()
-
-            formatted_message_dict[new_key] = value
-
-    return formatted_message_dict
-
-
-def _is_label_a_map(name: str) -> bool:
-    map_names = ['<accounts>', '<messages>', '<blocks>']
-
-    if name in map_names:
-        return True
-
-    return False
-
-
-def _extract_cell_data(cell: KApply) -> list | dict | int | str:
-    if _is_label_a_map(cell.label.name):
-        return _from_cell_map_to_list(cell)
-
-    return _convert_cell_to_dict(cell)
-
-
-def _from_cell_map_to_list(cell: KApply) -> list:
-    index_list = []
-    cell_list = list(cell.args)
-
-    index = 0
-    while index < len(cell_list):
-        _c = cell_list[index]
-        if type(_c) is KApply and 'CellMap' in _c.label.name:
-            index_list.append(index)
-            for arg in list(_c.args):
-                cell_list.append(arg)
-        index += 1
-
-    index_list.reverse()
-
-    for index in index_list:
-        cell_list.pop(index)
-
-    return_list = [_extract_cell_data(_c) for _c in cell_list if type(_c) is KApply]
-
-    _PPRINT.pprint(return_list)
-    return return_list
-
-
-def string_to_bool(bool_str: str) -> bool:
-    return bool_str.lower() == 'true'
-
-
-# this was used to parse the storage map of a current account
-# this was approach was deprecatedin favor of tracing individual storage writes, see `_from_storage_changes_to_dict`
-def _from_storage_map_to_dict(storage_map: KInner) -> dict[str, str]:
-    if storage_map == map_empty():
-        return {}
-
-    storage_entries = flatten_label(MAP_CONS, storage_map)
-    storage_dict: dict[str, str] = {}
-    for entry in storage_entries:
-        assert type(entry) is KApply and entry.label.name == '_|->_'
-        key, value = entry.terms
-        assert type(key) is KToken
-        assert type(value) is KToken
-        storage_dict[hex(int(key.token))] = hex(int(value.token))
-
-    return storage_dict
-
-
-def _from_int_tuple(int_tuple_k: KApply, label: str) -> tuple[str, ...]:
-    assert type(int_tuple_k) is KApply
-    assert int_tuple_k.label.name == label
-    for term in int_tuple_k.terms:
-        assert type(term) is KToken
-    return tuple(hex(int(value.token)) for value in int_tuple_k.terms)  # type: ignore[attr-defined]
-
-
-def _from_int_bytes_tuple(int_bytes_tuple_k: KApply, label: str) -> tuple[str, str]:
-    assert type(int_bytes_tuple_k) is KApply
-    assert int_bytes_tuple_k.label.name == label
-
-    assert len(int_bytes_tuple_k.terms) == 2, 'expected exactly two k terms for (int, bytes) tuple'
-
-    first_term, second_term = int_bytes_tuple_k.terms
-    assert type(first_term) is KToken
-    assert type(second_term) is KToken
-
-    return (hex(int(first_term.token)), '0x' + ast.literal_eval(second_term.token).hex())  # type: ignore[attr-defined]
-
-
-def _from_storage_changes_to_dict(storage_changes_k: KInner) -> Mapping[str, dict[str, str]]:
-    if storage_changes_k == list_empty():
-        return {}
-
-    storage_changes_k_items = flatten_label('_List_', storage_changes_k)
-
-    storage_changes: Mapping[str, dict[str, str]] = defaultdict(dict)
-    for storage_change_k_list in storage_changes_k_items:
-        # storage_change_k_list := ListItem({ ACCT:Int | SLOT:Int | VALUE:Int }:MapMutation)
-        assert type(storage_change_k_list) is KApply
-        assert storage_change_k_list.label.name == 'ListItem'
-        storage_change_k = single(storage_change_k_list.terms)
-
-        # storage_change_k := { ACCT:Int | SLOT:Int | VALUE:Int }:MapMutation
-        assert type(storage_change_k) is KApply
-        account, slot, value = _from_int_tuple(storage_change_k, 'node_intDoubleMapMutation')
-        storage_changes[account][slot] = value
-
-    return storage_changes
-
-
-# used for either balance or nonce
-def _from_balance_nonce_changes_to_dict(balance_nonce_changes_k: KInner) -> dict[str, str]:
-    if balance_nonce_changes_k == list_empty():
-        return {}
-
-    balance_nonce_changes_k_items = flatten_label('_List_', balance_nonce_changes_k)
-
-    balance_nonce_changes = {}
-    for balance_nonce_change_k_list in balance_nonce_changes_k_items:
-        # balance_nonce_change_k_list := ListItem({ ACCT:Int | BALANACE_OR_NONCE:Int }:MapMutation)
-        assert type(balance_nonce_change_k_list) is KApply
-        assert balance_nonce_change_k_list.label.name == 'ListItem'
-        balance_nonce_change_k = single(balance_nonce_change_k_list.terms)
-
-        # nonce_change_k := { ACCT:Int | BALANACE_OR_NONCE:Int }:MapMutation
-        assert type(balance_nonce_change_k) is KApply
-        account, balance_nonce = _from_int_tuple(balance_nonce_change_k, 'node_intMapMutation')
-        balance_nonce_changes[account] = balance_nonce
-
-    return balance_nonce_changes
-
-
-def _from_code_changes_to_dict(code_changes_k: KInner) -> dict[str, str]:
-    if code_changes_k == list_empty():
-        return {}
-
-    code_changes_k_items = flatten_label('_List_', code_changes_k)
-
-    code_changes = {}
-    for code_change_k_list in code_changes_k_items:
-        # code_change_k_list := ListItem({ ACCT:Int | CODE:Bytes }:MapMutation)
-        assert type(code_change_k_list) is KApply
-        assert code_change_k_list.label.name == 'ListItem'
-        code_change_k = single(code_change_k_list.terms)
-
-        # code_change_k := { ACCT:Int | CODE:Bytes }:MapMutation
-        assert type(code_change_k) is KApply
-        account, program = _from_int_bytes_tuple(code_change_k, 'node_bytesMapMutation')
-        code_changes[account] = program
-
-    return code_changes
-
-
-def _convert_cell_to_dict(cell: KApply) -> dict | int | str:
-    cell_dict = {}
-
-    for args in cell.args:
-
-        if type(args) is not KToken:
-            assert type(args) is KApply
-
-            cell_dict[args.label.name] = _extract_cell_data(args)
-        else:
-            assert type(args) is KToken
-            if args.token.isdecimal():
-                value = int(args.token)
-            else:
-                value = '0x' + ast.literal_eval(args.token).hex()
-
-            return value
-
-    return cell_dict
-
-
-def _from_statuscode_to_str(status_code_kapply: KApply) -> str:
-    if status_code_kapply == STATUS_CODE_EMPTY:
-        return 'empty'
-    status_code = (
-        status_code_kapply.label.name.replace('_NETWORK', '')
-        .replace('_StatusCode', '')
-        .replace('_ExceptionalStatusCode', '')
-        .replace('_EndStatusCode', '')
-    )
-    return status_code
-
-
-def eth_send_transaction(
-    tx_type: str, sender: int, to: int | None, gas_limit: int, gas_price: int, value: int, nonce: int, data: str
-) -> KApply:
-    return KApply(
-        'eth_sendTransaction',
-        [
-            KApply(tx_type + '_EVM-TYPES_TxType'),
-            token(sender),
-            (token(to) if type(to) is int else ACCOUNT_EMPTY),
-            token(gas_limit),
-            token(gas_price),
-            token(value),
-            token(nonce),
-            bytesToken(bytes.fromhex(data[2:])),
-        ],
-    )
-
-
-def tx_type_to_int(txtype: KLabel) -> int:
-    if txtype.name == 'Legacy_EVM-TYPES_TxType':
-        return 0
-    else:
-        raise ValueError(f'Unknown transaction type: {txtype.name}.')
-
-
-def parse_kapply_list(kapply_list: KApply) -> list:
-    """Parses a KApply list of KTokens into a Python list by extracting the KToken values.
-
-    :param kapply_list:  The KApply structure representing the list.
-    :return:  A Python list containing the token values extracted from the KApply list.
-    """
-    if kapply_list == list_empty():
-        return []
-    list_items = flatten_label('_List_', kapply_list)
-    values = []
-    for list_item in list_items:
-        assert type(list_item) is KApply
-        assert list_item.label.name == 'ListItem'
-        t = single(list_item.terms)
-        assert type(t) is KToken
-        values.append(t.token)
-    return values
-
+    def exec_get_storage_at(self, hex_address: str, hex_slot: str, _block_number: str) -> str:
+        block_number = int(_block_number, base=0)
+        address = int(hex_address, base=0)
+        slot = int(hex_slot, base=0)
+        storage = self.db.getBlockState(block_number).accounts.get(address, Account.empty()).storage.get(
+            slot,
+            0,
+        ).to_bytes(32, byteorder='big').hex()
+        return '0x' + storage
+
+    def exec_get_code(self, hex_address: str, _block_number: str) -> str:
+        block_number = int(_block_number, base=0)
+        address = int(hex_address, base=0)
+        code = self.db.getBlockState(block_number).accounts.get(address, Account.empty()).code or b''
+        return '0x' + code.hex()
+
+    def exec_get_block_by_hash(self, hash: str, transaction_detail: bool = False) -> dict | None:
+        ...
+
+    def exec_get_block_by_number(self, number: str, transaction_detail: bool = False) -> dict | None:
+        ...
+
+    def exec_get_transaction_count(self, hex_address: str, _block_number: str) -> str:
+        ...
+
+    def exec_dump_state(self) -> str:
+        ...
+
+    def exec_send_transaction(self, transaction_json: dict) -> str:
+        if PROFILING:
+            profile = cProfile.Profile()
+            profile.enable()
+            os.makedirs('profiling', exist_ok=True)
+
+        BASE_DIR = Path(__file__).resolve().parent
+        SRC_DIR = BASE_DIR.parent
+        TEST_DIR = SRC_DIR / "tests"
+        IO_DIR = TEST_DIR / "integration" / "io_dir"
+
+        # Write the transaction JSON to the requests.json file
+        requests_path = IO_DIR / "requests.json"
+        with open(requests_path, 'w') as f:
+            json.dump([{
+                "jsonrpc": "2.0",
+                "method": "eth_sendTransaction",
+                "params": [transaction_json],
+                "id": 0
+            }], f)
+
+        start = self.start_kore(str(IO_DIR))
+        mode = 'NORMAL'
+        schedule = 'PRAGUE'
+        initial_kore = kore_pgm_to_kore(
+            start,
+            SortApp('SortEthereumSimulation'),
+            schedule,
+            mode,
+            chainid=1,
+            usegas=True,
+        )
+        # echo 'inj{SortStart{}, SortEthereumSimulation{}}(Lblstart{}(\dv{SortString{}}("/home/raoul/rv/kontrol-node/src/tests/integration/io_dir")))' | $(uv run kdist which)/kontrol-node/simbolik/interpreter /dev/stdin 0 /dev/stdout
+        res = interpret(initial_kore, check=False)
+
+
+        if PROFILING:
+            profile.disable()
+            filename = f'profiling/profiling-{transaction_hash}.prof'
+            profile.dump_stats(filename)
+
+        return ""
+
+    def start_kore(self, io_dir: str) -> App:
+        return inj(SortApp('SortStart'), SortApp('SortEthereumSimulation'),
+                   App('Lblstart', [], [str_dv(str(io_dir))]))
+
+    def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict | None:
+        ...
+
+    def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
+        ...
+
+    def exec_get_transaction_receipt(self, tx_hash: str) -> dict | str:
+        ...
+
+def interpret(init_kore: Any, *, check: bool = True) -> Pattern:
+    return llvm_interpret(kdist.get('kontrol-node.simbolik'), init_kore, check=check, depth=0)
+
+def kore_pgm_to_kore(pgm: Pattern, pattern_sort: SortApp, schedule: str, mode: str, chainid: int, usegas: bool) -> App:
+    config = {
+        '$PGM': inj(pattern_sort, SORT_K_ITEM, pgm),
+        '$SCHEDULE': inj(SortApp('SortSchedule'), SORT_K_ITEM, _schedule_to_kore(schedule)),
+        '$MODE': inj(SortApp('SortMode'), SORT_K_ITEM, _mode_to_kore(mode)),
+        '$CHAINID': inj(INT, SORT_K_ITEM, int_dv(chainid)),
+        '$USEGAS': inj(BOOL, SORT_K_ITEM, bool_dv(usegas)),
+    }
+    return top_cell_initializer(config)
+
+def _schedule_to_kore(schedule: str) -> App:
+    return App(f"Lbl{munge(schedule)}'Unds'EVM")
+
+def _mode_to_kore(mode: str) -> App:
+    return App(f'Lbl{mode}')
 
 class DebugTraceTransactionResponse(BaseModel):
     gas: int
@@ -1130,124 +261,6 @@ class TraceItem(BaseModel):
     txOrigin: int  # noqa: N815
     isInitCode: bool  # noqa: N815
     statusCode: str  # noqa: N815
-
-
-def extract_address(account_cell: KApply) -> int:
-    assert type(account_cell) is KApply
-    acct_id = account_cell.terms[0]
-    assert type(acct_id) is KApply and acct_id.label.name == '<acctID>'
-    _address = single(acct_id.terms)
-    assert type(_address) is KToken
-    return int(_address.token)
-
-
-def extract_nonce(account_cell: KApply) -> int:
-    nonce_cell = account_cell.terms[6]
-    assert type(nonce_cell) is KApply and nonce_cell.label.name == '<nonce>'
-    nonce = single(nonce_cell.terms)
-    assert type(nonce) is KToken
-    return int(nonce.token)
-
-
-def extract_code(account_cell: KApply) -> str:
-    code_cell = account_cell.terms[2]
-    assert type(code_cell) is KApply and code_cell.label.name == '<code>'
-    code = single(code_cell.terms)
-    assert type(code) is KToken
-    return '0x' + ast.literal_eval(code.token).hex()
-
-
-def extract_balance(account_cell: KApply) -> int:
-    balance_cell = account_cell.terms[1]
-    assert type(balance_cell) is KApply and balance_cell.label.name == '<balance>'
-    balance = single(balance_cell.terms)
-    assert type(balance) is KToken
-    return int(balance.token)
-
-
-def extract_storage(account_cell: KApply) -> dict[str, str]:
-    storage_cell = account_cell.terms[3]
-    assert type(storage_cell) is KApply and storage_cell.label.name == '<storage>'
-    storage_map = single(storage_cell.terms)
-    return _from_storage_map_to_dict(storage_map)
-
-
-def extract_receipt(receipt_cell: KApply) -> dict[str, Any]:
-    """Builds the transaction receipt from the given <txReceipt> cell.
-
-    :param receipt: The KApply object representing a transaction receipt.
-    :raises TypeError: Signals any receipt terms that are not handled.
-    :return: The transaction receipt data.
-    """
-    tx_receipt: dict[str, Any] = {}
-    for term in receipt_cell.terms:
-        assert type(term) is KApply
-        key = term.label.name
-        value = single(term.args)
-        if key == '<logSet>':
-            assert type(value) is KApply
-            tx_receipt[key] = []  # TODO
-            continue
-
-        if key == '<contractAddress>':
-            tx_receipt[key] = int(value.token) if type(value) is KToken else None
-            continue
-
-        assert type(value) is KToken
-        if key == '<txHash>':
-            tx_receipt[key] = '0x' + value.token[1:-1]
-        elif key == '<bloomFilter>':
-            tx_receipt[key] = '0x' + ast.literal_eval(value.token).hex()
-        elif key in ['<txCumulativeGas>', '<txNonce>', '<txStatus>', '<txID>', '<sender>', '<txBlockNumber>']:
-            tx_receipt[key] = int(value.token)
-        else:
-            raise TypeError(f'Unexpected key {key}.')
-    return tx_receipt
-
-
-def extract_message(message_cell: KApply) -> dict[str, Any]:
-    """Builds the message from the given <message> cell.
-
-    :param receipt: The KApply object representing a message.
-    :raises TypeError: Signals any receipt terms that are not handled.
-    :return: The message data.
-    """
-    msg_dict: dict[str, Any] = {}
-    for term in message_cell.terms:
-        assert type(term) is KApply
-        key = term.label.name
-        value = single(term.args)
-        if key == '<txAccess>':
-            continue
-        if key == '<to>':
-            if type(value) is KToken:
-                msg_dict[key] = _acct_id_to_address(int(value.token))
-            continue
-        if key == '<txType>':
-            assert type(value) is KApply
-            msg_dict[key] = tx_type_to_int(value.label)
-            continue
-        if key in ('<txVersionedHashes>', '<txAuthList>'):
-            continue  # TODO
-        assert type(value) is KToken
-        if key in ['<sigR>', '<sigS>', '<data>']:
-            msg_dict[key] = '0x' + ast.literal_eval(value.token).hex()
-        elif key in [
-            '<msgID>',
-            '<txNonce>',
-            '<txGasPrice>',
-            '<txGasLimit>',
-            '<value>',
-            '<sigV>',
-            '<txChainID>',
-            '<txPriorityFee>',
-            '<txMaxFee>',
-            '<txMaxBlobFee>',
-        ]:
-            msg_dict[key] = int(value.token)
-        else:
-            raise TypeError(f'Unexpected key {key}.')
-    return msg_dict
 
 
 def get_address_from_private_key(private_key: str) -> str:

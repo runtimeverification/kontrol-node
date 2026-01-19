@@ -19,15 +19,12 @@ module KONTROL-NODE
     imports KONTROL-NODE-CONFIG
 
 
-    syntax RPCRequest ::= ".RPCRequest" [symbol(EmptyRPCRequest)]
- // -------------------------------------------------------------
-
     syntax RPCResponse ::= String | Int
- // ----------------------------------------------------------------
 
+    syntax EthereumSimulation ::= Start
     syntax Start ::= #start(
       String // IO directory
-    )
+    ) [symbol(start)]
 
     configuration <simbolikVM/>
 ```
@@ -37,8 +34,9 @@ Create the initial configuration by reading the inputs from the IO directory
 ```k
 
   rule <k> #start( IO_DIR )
-        => #loadStateDump( IO_DIR, 1)
-           // TODO
+        => #loadStateDump( IO_DIR, 0)
+        ~> #loadRpcRequests( IO_DIR )
+        ~> #saveStateDump( IO_DIR )
         ...
        </k>
        <ioDir> _ => IO_DIR </ioDir>
