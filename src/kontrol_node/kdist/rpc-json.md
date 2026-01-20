@@ -27,10 +27,11 @@ module RPC-JSON
 Load an array of JSON RPC Requests into the corrent configuration.
 
 ```k
-      syntax KItem ::= #rpcLoad( JSON )         // public
-                  | #rpcLoadRequest( JSON )     // internal
-                  | #rpcLoadParams( Int, JSON ) // internal
-                  | #processTx( Int )           // public, this term is placed on-top of the K-cell when a TX is
+      syntax KItem ::= #rpcLoad( JSON )            // public
+                  | #rpcLoadRequest( JSON )        // internal
+                  | #rpcLoadParams( Int, JSON )    // internal
+                  | #rpcLoadTxDefaults( Int, Int ) // internal
+                  | #processTx( Int )              // public, this term is placed on-top of the K-cell when a TX is
                                                 // fully loaded into the configuration and ready to be 
                                                 // processed
 
@@ -42,9 +43,31 @@ Load an array of JSON RPC Requests into the corrent configuration.
 
       rule <k> #rpcLoadRequest( "jsonrpc": "2.0"         ) => .K ... </k>
       rule <k> #rpcLoadRequest( "method" : "eth_sendTransaction") => .K ...</k>
-      rule <k> #rpcLoadRequest( "id"     : REQ_ID:Int    ) => .K ... </k> <rpcRequestId> _ => REQ_ID </rpcRequestId>
-      rule <k> #rpcLoadRequest( "params" : PARAMS:JSON   ) => mkTX !TX_ID ~> #rpcLoadParams( !TX_ID, PARAMS ) ... </k>
-      <currentTxID> _ => !TX_ID </currentTxID>
+      rule <k> #rpcLoadRequest( "id"     : REQ_ID:Int    ) => .K ... </k>
+           <rpcRequestId> _ => REQ_ID </rpcRequestId>
+      
+      rule <k> #rpcLoadRequest( "params" : PARAMS:JSON   )
+            => mkTX !TX_ID
+            ~> #rpcLoadTxDefaults( !TX_ID, #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266") )
+            ~> #rpcLoadParams( !TX_ID, PARAMS )
+            ...
+            </k>
+            <currentTxID> _ => !TX_ID </currentTxID> // TODO: Is this cell used? If not, remove
+
+      rule <k> #rpcLoadTxDefaults( TX_ID, FROM )
+            => .K
+            ...
+            </k>
+           <message>
+                  <msgID>      TX_ID         </msgID>
+                  <txChainID>  _ => CHAIN_ID </txChainID>
+                  <txNonce>    _ => TXNONCE  </txNonce>
+                  <txType>     _ => Legacy   </txType>
+                  ...
+            </message>
+            <origin> _ => FROM </origin>
+            <chainID> CHAIN_ID </chainID>
+            <account> <acctID> FROM </acctID> <nonce> TXNONCE </nonce> ... </account>
 
       // TODO, should the tx really be processed here, or should we first
       // parse all other transactions? What would it need to defer the
@@ -53,19 +76,16 @@ Load an array of JSON RPC Requests into the corrent configuration.
       // be kept around for all txs, but only once globally
       rule <k> #rpcLoadParams( TX_ID, [ .JSONs ] ) => #processTx(TX_ID) ... </k>
       rule <k> #rpcLoadParams( TX_ID, [ FIRST, REST ] ) => #rpcLoadParams( TX_ID, FIRST ) ~> #rpcLoadParams( TX_ID, [ REST ] ) ... </k>
-      rule <k> #rpcLoadParams( TX_ID, { .JSONs } ) => .K ... </k>
+      rule <k> #rpcLoadParams( _, { .JSONs } ) => .K ... </k>
       rule <k> #rpcLoadParams( TX_ID, { FIRST, REST } ) => #rpcLoadParams( TX_ID, FIRST ) ~> #rpcLoadParams( TX_ID, { REST } ) ... </k>
 
       rule <k> #rpcLoadParams( TX_ID, "from": FROM ) => .K ... </k>
             <message>
                   <msgID>     TX_ID          </msgID>
-                  <txChainID>  _ => CHAIN_ID </txChainID>
                   <txNonce>    _ => TXNONCE  </txNonce>
-                  <txType>     _ => Legacy   </txType>
                   ...
             </message>
             <origin> _ => ACCT_ID </origin>
-            <chainID> CHAIN_ID </chainID>
             <account> <acctID> ACCT_ID </acctID> <nonce> TXNONCE </nonce> ... </account>
         requires ACCT_ID ==Int #parseAddr( FROM )
 

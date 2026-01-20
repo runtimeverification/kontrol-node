@@ -224,7 +224,7 @@ StateDump format - not the ethereum/test format.
     rule <k> #stLoadAccount(ACCT_ID, "balance" : VAL) => .K ... </k>
          <account>
             <acctID>  ACCT_ID  </acctID>
-            <balance> _ => VAL </balance>
+            <balance> _ => #parseWord( VAL ) </balance>
             ...
         </account>
     rule <k> #stLoadAccount(ACCT_ID, "code" : VAL) => .K ... </k>
