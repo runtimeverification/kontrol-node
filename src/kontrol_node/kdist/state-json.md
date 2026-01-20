@@ -77,8 +77,8 @@ K configuration.
             <nonce>             ACC_NONCE         </nonce>
             ...
         </account>
-    ) => Int2String(ACC_ID) : {
-        "balance": ACC_BALANCE,
+    ) => intToHex(ACC_ID) : {
+        "balance": intToHex( ACC_BALANCE ),
         "code": codeToJson( ACC_CODE ),
         "storage": storageToJSON( ACC_STORAGE ),
         "nonce" : ACC_NONCE
@@ -93,12 +93,12 @@ K configuration.
         => #StateDump({
             "bestBlockNumber": BLOCK_NUMBER,
             "block": {
-                "number": BLOCK_NUMBER,
-                "beneficiary": BLOCK_COINBASE,
-                "timestamp": BLOCK_TIMESTAMP,
+                "number": intToHex( BLOCK_NUMBER ),
+                "beneficiary": intToHex( BLOCK_COINBASE ),
+                "timestamp": intToHex( BLOCK_TIMESTAMP ),
                 "gas_limit": BLOCK_GAS_LIMIT,
                 "basefee": BLOCK_BASE_FEE,
-                "difficulty": BLOCK_DIFFICULTY,
+                "difficulty": intToHex( BLOCK_DIFFICULTY ),
                 "prevrandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
                 "blob_excess_gas_and_price": BLOCK_EXCESS_BLOB_GAS
             },
