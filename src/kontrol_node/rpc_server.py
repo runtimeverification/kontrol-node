@@ -9,9 +9,8 @@ from functools import partial
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, NamedTuple
 
-from typing_extensions import Protocol
-
 from pyk.cli.cli import Options
+from typing_extensions import Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -215,17 +214,17 @@ class JsonRpcRequestHandler(BaseHTTPRequestHandler):
         required_fields = ['jsonrpc', 'method', 'id']
         for field in required_fields:
             if field not in request_dict:
-                return JsonRpcError(-32600, f'Invalid request: missing field "{field}"', request_dict.get('id', None))
+                return JsonRpcError(-32600, f'Invalid request: missing field {field!r}', request_dict.get('id', None))
 
         jsonrpc_version = request_dict['jsonrpc']
         if jsonrpc_version != JsonRpcServer.JSONRPC_VERSION:
             return JsonRpcError(
-                -32600, f'Invalid request: bad version: "{jsonrpc_version}"', request_dict.get('id', None)
+                -32600, f'Invalid request: bad version: {jsonrpc_version!r}', request_dict.get('id', None)
             )
 
         method_name = request_dict['method']
         if method_name not in self.methods.keys():
-            return JsonRpcError(-32601, f'Method "{method_name}" not found.', request_dict.get('id', None))
+            return JsonRpcError(-32601, f'Method {method_name!r} not found.', request_dict.get('id', None))
 
         return JsonRpcRequest(
             method=request_dict['method'], params=request_dict.get('params', None), id=request_dict.get('id', None)

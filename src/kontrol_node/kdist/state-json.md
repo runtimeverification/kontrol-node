@@ -145,7 +145,6 @@ StateDump format - not the ethereum/test format.
  
     // Break up the StateDump into it's compnents
     rule <k> #stLoad( { KEY : VALUE , REST } ) => #stLoad( KEY : VALUE ) ~> #stLoad( { REST } )... </k>
-      requires REST =/=K .JSONs
 
     // Handle components
     rule <k> #stLoad( "best_block_number" : _        ) => .K ... </k> // TODO: Do we need this?
@@ -163,7 +162,6 @@ StateDump format - not the ethereum/test format.
 
     // Break up a block into it's components
     rule <k> #stLoadBlock( { KEY : VALUE, REST } ) => #stLoadBlock( KEY : VALUE ) ~> #stLoadBlock( { REST } ) ... </k>
-      requires REST =/=K .JSONs
 
     // Handle components
     rule <k> #stLoadBlock( "number"      : VAL ) => .K ... </k> <number>     _ => #parseWord( VAL ) </number>
@@ -185,7 +183,6 @@ StateDump format - not the ethereum/test format.
 
     // Break up a blob into it's components
     rule <k> #stLoadBlob( { KEY : VALUE, REST } ) => #stLoadBlob( KEY : VALUE ) ~> #stLoadBlob( { REST } ) ... </k>
-      requires REST =/=K .JSONs
 
     // Handle components
     rule <k> #stLoadBlob( "excess_blob_gas" : VAL ) => .K ... </k> <excessBlobGas> _ => VAL </excessBlobGas>
@@ -199,7 +196,6 @@ StateDump format - not the ethereum/test format.
 
     rule <k> #stLoadAccounts( { .JSONs } ) => .K ... </k>
     rule <k> #stLoadAccounts( { KEY : VALUE, REST } ) => #stLoadAccounts( KEY : VALUE ) ~> #stLoadAccounts( { REST } ) ... </k>
-      requires REST =/=K .JSONs
 
     rule <k> #stLoadAccounts( ACCT_ID : ACCT_DATA )
           => #newAccount( #parseAddr( ACCT_ID ) )
@@ -213,8 +209,10 @@ StateDump format - not the ethereum/test format.
     rule <k> #stLoadAccount( _, { .JSONs } ) => .K ... </k>
 
     // Break up an account into it's components
-    rule <k> #stLoadAccount( ACCT_ID, { KEY : VALUE, REST } ) => #stLoadAccount(ACCT_ID, KEY : VALUE) ~> #stLoadAccount(ACCT_ID, { REST } )... </k>
-      requires REST =/=K .JSONs
+    rule <k> #stLoadAccount( ACCT_ID, { KEY : VALUE, REST } )
+          => #stLoadAccount(ACCT_ID, KEY : VALUE)
+          ~> #stLoadAccount(ACCT_ID, { REST } )
+          ... </k>
 
     // Handle components
     rule <k> #stLoadAccount(ACCT_ID, "nonce" : VAL) => .K ... </k>

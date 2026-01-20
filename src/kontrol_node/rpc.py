@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import cProfile
-from collections.abc import Iterator
 import json
 import os
 from pathlib import Path
@@ -9,29 +8,24 @@ from typing import TYPE_CHECKING, Any, Callable, Final
 
 from eth_keys import keys
 from pydantic import BaseModel
-from pyk.utils import run_process_2
-from pyk.cterm import CTerm
-
-from pyk.konvert._utils import munge
-from pyk.kast.manip import set_cell
-from pyk.kast.prelude.utils import token
 from pyk.kdist import kdist
-from pyk.ktool.krun import KRun, llvm_interpret_raw
-from pyk.kast.inner import KApply, KLabel, KSequence, KSort, KToken, Subst, build_assoc, flatten_label
-from kevm_pyk.kevm import KEVM
-from kontrol_node.rpc_server import JsonRpcServer, ServeRpcOptions
-from kontrol_node.state_dump import Account, StateDump
-from pyk.kore.parser import KoreParser
-from pyk.kore.syntax import App, SortApp, String, DV
-from pyk.kore.prelude import BOOL, INT, SORT_JSON, SORT_K_ITEM, bool_dv, inj, int_dv, str_dv, top_cell_initializer
+from pyk.konvert._utils import munge
+from pyk.kore.prelude import BOOL, INT, SORT_K_ITEM, bool_dv, inj, int_dv, str_dv, top_cell_initializer
+from pyk.kore.syntax import App, SortApp
+from pyk.ktool.krun import KRun, llvm_interpret
 
-from pyk.ktool.krun import llvm_interpret
+from kontrol_node.rpc_server import JsonRpcServer, ServeRpcOptions
+from kontrol_node.state_dump import Account
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
 
     from eth_keys.datatypes import PublicKey
-    from .cli import VMOptions
     from pyk.kore.syntax import Pattern
+
+    from kontrol_node.state_dump import StateDump
+
+    from .cli import VMOptions
 
 CHUNK_SIZE: Final[int] = 64
 PROFILING: Final[bool] = False
@@ -74,27 +68,29 @@ HASH_LENGTH: Final[int] = 32 * 2 + 2
 # transactions/receipts/receipt_<tx hash>.json <- TransactionReceipt
 # transactions/results/result_<tx hash>.json   <- TransactionResult
 
+
 class Database:
 
-    def getInitialState(self) -> StateDump:
-        ...
+    def get_initial_state(self) -> StateDump:
+        raise NotImplementedError()
 
-    def getBlockState(self, block_number: int) -> StateDump:
-        ...
+    def get_block_state(self, block_number: int) -> StateDump:
+        raise NotImplementedError()
 
-    def getTransactionReceipt(self, tx_hash: str) -> Any:
-        ...
+    def get_transaction_receipt(self, tx_hash: str) -> Any:
+        raise NotImplementedError()
 
-    def getTransaction(self, tx_hash: str) -> Any:
-        ...
+    def get_transaction(self, tx_hash: str) -> Any:
+        raise NotImplementedError()
 
-    def getTransactionTrace(self, tx_hash: str) -> Iterator[bytes]:
+    def get_transaction_trace(self, tx_hash: str) -> Iterator[bytes]:
         """
         Debug traces are never parsed into structured data, only read as raw bytes
         This is because they can be very large, and parsing them would be very slow
         Instead they are passed as raw bytes to the RPC response
         """
-        ...
+        raise NotImplementedError()
+
 
 class StatefulKJsonRpcServer(JsonRpcServer):
     krun: KRun
@@ -106,7 +102,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
         self.krun = KRun(dir_path)
         self.db = Database()
-        print(f'Server initialization finished.')
+        print('Server initialization finished.')
 
     def _register_rpc_methods(self) -> None:
         rpc_methods: dict[str, Callable] = {
@@ -128,29 +124,35 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         block_number = int(_block_number, base=0)
         address = int(hex_address, base=0)
         slot = int(hex_slot, base=0)
-        storage = self.db.getBlockState(block_number).accounts.get(address, Account.empty()).storage.get(
-            slot,
-            0,
-        ).to_bytes(32, byteorder='big').hex()
+        storage = (
+            self.db.get_block_state(block_number)
+            .accounts.get(address, Account.empty())
+            .storage.get(
+                slot,
+                0,
+            )
+            .to_bytes(32, byteorder='big')
+            .hex()
+        )
         return '0x' + storage
 
     def exec_get_code(self, hex_address: str, _block_number: str) -> str:
         block_number = int(_block_number, base=0)
         address = int(hex_address, base=0)
-        code = self.db.getBlockState(block_number).accounts.get(address, Account.empty()).code or b''
+        code = self.db.get_block_state(block_number).accounts.get(address, Account.empty()).code or b''
         return '0x' + code.hex()
 
     def exec_get_block_by_hash(self, hash: str, transaction_detail: bool = False) -> dict | None:
-        ...
+        raise NotImplementedError()
 
     def exec_get_block_by_number(self, number: str, transaction_detail: bool = False) -> dict | None:
-        ...
+        raise NotImplementedError()
 
     def exec_get_transaction_count(self, hex_address: str, _block_number: str) -> str:
-        ...
+        raise NotImplementedError()
 
     def exec_dump_state(self) -> str:
-        ...
+        raise NotImplementedError()
 
     def exec_send_transaction(self, transaction_json: dict) -> str:
         if PROFILING:
@@ -158,22 +160,17 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             profile.enable()
             os.makedirs('profiling', exist_ok=True)
 
-        BASE_DIR = Path(__file__).resolve().parent
-        SRC_DIR = BASE_DIR.parent
-        TEST_DIR = SRC_DIR / "tests"
-        IO_DIR = TEST_DIR / "integration" / "io_dir"
+        base_dir = Path(__file__).resolve().parent
+        src_dir = base_dir.parent
+        test_dir = src_dir / 'tests'
+        io_dir = test_dir / 'integration' / 'io_dir'
 
         # Write the transaction JSON to the requests.json file
-        requests_path = IO_DIR / "requests.json"
+        requests_path = io_dir / 'requests.json'
         with open(requests_path, 'w') as f:
-            json.dump([{
-                "jsonrpc": "2.0",
-                "method": "eth_sendTransaction",
-                "params": [transaction_json],
-                "id": 0
-            }], f)
+            json.dump([{'jsonrpc': '2.0', 'method': 'eth_sendTransaction', 'params': [transaction_json], 'id': 0}], f)
 
-        start = self.start_kore(str(IO_DIR))
+        start = self.start_kore(str(io_dir))
         mode = 'NORMAL'
         schedule = 'PRAGUE'
         initial_kore = kore_pgm_to_kore(
@@ -185,31 +182,32 @@ class StatefulKJsonRpcServer(JsonRpcServer):
             usegas=True,
         )
         # echo 'inj{SortStart{}, SortEthereumSimulation{}}(Lblstart{}(\dv{SortString{}}("/home/raoul/rv/kontrol-node/src/tests/integration/io_dir")))' | $(uv run kdist which)/kontrol-node/simbolik/interpreter /dev/stdin 0 /dev/stdout
-        res = interpret(initial_kore, check=False)
-
+        interpret(initial_kore, check=False)
 
         if PROFILING:
             profile.disable()
+            transaction_hash = 'TODO'
             filename = f'profiling/profiling-{transaction_hash}.prof'
             profile.dump_stats(filename)
 
-        return ""
+        return ''
 
     def start_kore(self, io_dir: str) -> App:
-        return inj(SortApp('SortStart'), SortApp('SortEthereumSimulation'),
-                   App('Lblstart', [], [str_dv(str(io_dir))]))
+        return inj(SortApp('SortStart'), SortApp('SortEthereumSimulation'), App('Lblstart', [], [str_dv(str(io_dir))]))
 
     def exec_trace_transaction(self, tx_hash: str, args: dict[str, bool]) -> dict | None:
-        ...
+        raise NotImplementedError()
 
     def exec_get_transaction_by_hash(self, tx_hash: str) -> dict | str:
-        ...
+        raise NotImplementedError()
 
     def exec_get_transaction_receipt(self, tx_hash: str) -> dict | str:
-        ...
+        raise NotImplementedError()
+
 
 def interpret(init_kore: Any, *, check: bool = True) -> Pattern:
     return llvm_interpret(kdist.get('kontrol-node.simbolik'), init_kore, check=check, depth=0)
+
 
 def kore_pgm_to_kore(pgm: Pattern, pattern_sort: SortApp, schedule: str, mode: str, chainid: int, usegas: bool) -> App:
     config = {
@@ -221,11 +219,14 @@ def kore_pgm_to_kore(pgm: Pattern, pattern_sort: SortApp, schedule: str, mode: s
     }
     return top_cell_initializer(config)
 
+
 def _schedule_to_kore(schedule: str) -> App:
     return App(f"Lbl{munge(schedule)}'Unds'EVM")
 
+
 def _mode_to_kore(mode: str) -> App:
     return App(f'Lbl{mode}')
+
 
 class DebugTraceTransactionResponse(BaseModel):
     gas: int

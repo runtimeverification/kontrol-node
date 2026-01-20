@@ -5,7 +5,16 @@ from typing import Any, Final
 import pytest
 from pyk.kast.inner import KApply, KSort, KToken
 
-from kontrol_node.rpc import extract_message, extract_receipt, get_address_from_private_key
+from kontrol_node.rpc import get_address_from_private_key
+
+
+def extract_receipt(receipt_kast: KApply) -> dict[str, Any]:
+    raise NotImplementedError()
+
+
+def extract_message(message_kast: KApply) -> dict[str, Any]:
+    raise NotImplementedError()
+
 
 EXTRACT_RECEIPT_DATA: Final[list[tuple[str, KApply, dict[str, Any]]]] = [
     (

@@ -15,13 +15,6 @@ module EVM-TRACING
     imports ETHEREUM-SIMULATION
     imports KONTROL-NODE-CONFIG
 
-   syntax KItem ::= "#openTraceLogsFile"            [symbol(openTraceLogsFile)]
-                  | "#closeTraceLogsFile"           [symbol(closeTraceLogsFile)]
-                  | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
-
-   
-   syntax FILEDESCR ::= Int | ".FileDescr"
- // ----------------------------------------------------------------------------------
 ```
 
 The `TraceItem` is a sort used to serialize information from the configuration about the executed opcodes.

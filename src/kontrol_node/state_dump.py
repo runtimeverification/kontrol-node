@@ -71,6 +71,7 @@ class Account(BaseModel):
             storage={},
         )
 
+
 class StateDump(BaseModel):
     best_block_number: HexInt
     block: Block
