@@ -34,9 +34,9 @@ module KONTROL-NODE-CONFIG
                 </txReceipt>
             </txReceipts>
 
-            <activeTracing>           false </activeTracing>          // signals if the tracing is gloablly enabled
-            <traceNonce>              false </traceNonce>             // signals if nonce tracing is enabled
-            <traceBalance>            false </traceBalance>           // signals if balance tracing enabled
+            <activeTracing>           true  </activeTracing>          // signals if the tracing is gloablly enabled
+            <traceNonce>              true  </traceNonce>             // signals if nonce tracing is enabled
+            <traceBalance>            true  </traceBalance>           // signals if balance tracing enabled
 
             <recordedTrace>           false </recordedTrace>           // auxiliary cell that is used to determine if the current step has been recorded or not.
 
