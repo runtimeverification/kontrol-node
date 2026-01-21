@@ -26,6 +26,9 @@ module STATE-JSON
     imports SERIALIZATION
     imports KONTROL-NODE-CONFIG
 
+    syntax KItem ::= #saveStateDump( String )
+                   | #loadStateDump( String, Int )
+
 ```
 
 ===============================================================================
@@ -36,12 +39,10 @@ K configuration.
 
 ```k
 
-    syntax KItem ::= #saveStateDump( String )           // Public API
-                   | #loadStateDump( String, Int )      // Public API
-                   | #createStateDump()         // Internal use only, create a StateDump from the current configuration
+    syntax KItem ::= #createStateDump()         // Internal use only, create a StateDump from the current configuration
                    | #stLoad( JSON )            // Internal use only, populate a StateDump into the current configuration (reverse of #createStateDump)
                    | #StateDump( JSON )         // Internal use only, wrap a StateDump JSON object to disambiguate it from other KItems containing JSON data
-                   | #writeStateDump( String )          // Internal use only, write a StateDump to disk
+                   | #writeStateDump( String )  // Internal use only, write a StateDump to disk
 
     syntax JSON  ::= ( JSON )  [bracket]
     syntax JSONs ::= ( JSONs ) [bracket]

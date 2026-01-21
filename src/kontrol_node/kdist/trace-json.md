@@ -356,17 +356,17 @@ module TRACE-JSON
              ~> #next [ OPC ] ...
          </k>
          <activeTracing>                true                   </activeTracing>
-         <recordedTrace>                false => true          </recordedTrace>
-         <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
-         <recordedCreate>               _ => false             </recordedCreate>
-         <localMemoryChanged>           _ => false             </localMemoryChanged>
-         <currentNonceMutations>        NONCECH => .Map        </currentNonceMutations>          
-         <contextSwitch>                _ => false             </contextSwitch>
-         <currentBalanceMutations>      BALCH => .Map          </currentBalanceMutations>          
-         <currentStorageMutations>      STORCH => .Map         </currentStorageMutations>
+         <recordedTrace>                false       => true    </recordedTrace>
+         <recordedMkCallCreate>         _           => false   </recordedMkCallCreate>
+         <recordedCreate>               _           => false   </recordedCreate>
+         <localMemoryChanged>           _           => false   </localMemoryChanged>
+         <currentNonceMutations>        NONCECH     => .Map    </currentNonceMutations>          
+         <contextSwitch>                _           => false   </contextSwitch>
+         <currentBalanceMutations>      BALCH       => .Map    </currentBalanceMutations>          
+         <currentStorageMutations>      STORCH      => .Map    </currentStorageMutations>
          <programChanged>               PROGCHANGED => false   </programChanged>
-         <currentDeployedCodeMutations> DEPLCODECH => .Map     </currentDeployedCodeMutations>
-         <currentInitCodeMutations>     INITCODECH => .Map     </currentInitCodeMutations>
+         <currentDeployedCodeMutations> DEPLCODECH  => .Map    </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     INITCODECH  => .Map    </currentInitCodeMutations>
          <callData>                     CADA                   </callData>
          <output>                       REDA                   </output>
          <pc>                           PCOUNT                 </pc>

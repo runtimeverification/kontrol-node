@@ -1,127 +1,294 @@
 
-This module defines rules for loading JSON-RPC request data from disk.
-It assumes that the input file contains a JSON array of RPCRequest objects.
-
+This module defines rules for loading JSON RPC requests from disk,
+and writing JSON RPC responses to disk. When a request is loaded 
+it is immediately dispatched for execution.
 
 ```k
 requires "fs.md"
 requires "json.md"
 requires "config.md"
+requires "plugin/krypto.md"
 
 
 module RPC-JSON
+      imports KRYPTO
       imports FILE-SYSTEM
       imports JSON
       imports KONTROL-NODE-CONFIG
       imports SERIALIZATION
 
-      syntax String ::= #requestsFile( String ) [function, total]
-
-      rule #requestsFile( IO_DIR ) => IO_DIR +String "/requests.json"
 
       syntax KItem ::= #loadRpcRequests( String )
+                     | #saveRpcResponse( String )
+                     | #processTx( Int )
 
 ```
 
 ===============================================================================
-Load an array of JSON RPC Requests into the corrent configuration.
+JSON RPC Intermediate Representation
+
+This section defines an intermediate represention for JSON RPC requests.
 
 ```k
-      syntax KItem ::= #rpcLoad( JSON )            // public
-                  | #rpcLoadRequest( JSON )        // internal
-                  | #rpcLoadParams( Int, JSON )    // internal
-                  | #rpcLoadTxDefaults( Int, Int ) // internal
-                  | #processTx( Int )              // public, this term is placed on-top of the K-cell when a TX is
-                                                // fully loaded into the configuration and ready to be 
-                                                // processed
+      syntax KResult ::= RPCResponse | RPCRequest
+
+      syntax RPCResponse ::= RPCResponse( JSON )
+      syntax RPCRequest  ::= RPCRequest( Int, RPCRequestParams)
+
+      syntax RPCRequestParams ::= EthSendTransaction(
+                                    Int , // from
+                                    Int , // to
+                                    Int , // gas
+                                    Int , // gas price
+                                    Int , // value
+                                    Bytes // input
+                                  )
+
+```
+
+===============================================================================
+Utilities for working with JSON objects
+
+```k
+      syntax JSON ::= #getJSON ( JSONKey, JSON )      [function]
+
+      rule #getJSON( KEY, { KEY : J, _     } ) => J
+      rule #getJSON(   _, { .JSONs         } ) => null
+      rule #getJSON( KEY, { KEY2 : _, REST } ) => #getJSON( KEY, { REST } )
+            requires KEY =/=K KEY2
+
+      syntax Int ::= #getInt(JSONKey, JSON) [function]
+      rule #getInt( KEY, J ) => {#getJSON( KEY, J )}:>Int
+
+      syntax String ::= #getString(JSONKey, JSON) [function]
+      rule #getString( KEY, J ) => {#getJSON( KEY, J )}:>String
+
+      syntax Int ::= #getWord(JSONKey, JSON, Int) [function]
+      rule #getWord( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
+                                          #if RAW ==K null #then DEF_VAL #else #parseWord( {RAW}:>String ) #fi
+
+      syntax Int ::= #getAddr(JSONKey, JSON, Int) [function]
+      rule #getAddr( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
+                                          #if RAW ==K null #then DEF_VAL #else #parseAddr( {RAW}:>String ) #fi
+
+      syntax Bytes ::= #getBytes(JSONKey, JSON, Bytes) [function]
+      rule #getBytes( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
+                                           #if RAW ==K null #then DEF_VAL #else #parseByteStack( {RAW}:>String ) #fi
+
+      syntax String ::= intToHex(Int)     [function, total]
+                      | bytesToHex(Bytes) [function, total]
+
+      rule bytesToHex( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
+      rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
+            requires A >=Int 0
+      rule intToHex( A:Int ) => "-0x" +String Base2String( absInt(A), 16) [owise]
+
+```
+
+===============================================================================
+Convert JSON RPC representation to intermedaite representation
+
+This section defines rules to convert from the JSON representation to the
+intermediate representation.
+
+```k
+      syntax KItem ::= #rpcLoad( JSON )
+                     | "#dispatchRequest"
+
+      syntax RPCRequest       ::= #rpcLoadRequest( JSON )         [function]
+      syntax RPCRequestParams ::= #rpcLoadParams( String, JSON )  [function]
 
       rule <k> #rpcLoad( [ .JSONs ] ) => .K ... </k>
-      rule <k> #rpcLoad( [ FIRST, REST ] ) => #rpcLoadRequest( FIRST ) ~> #rpcLoad( [ REST ] ) ... </k>
+      rule <k> #rpcLoad( [ FIRST, REST ] )
+            => #rpcLoadRequest( FIRST )
+            ~> #dispatchRequest
+            ~> #rpcLoad( [ REST ] ) ... </k>
 
-      rule <k> #rpcLoadRequest( { .JSONs } ) => .K ... </k>
-      rule <k> #rpcLoadRequest( { PROP, REST } ) => #rpcLoadRequest(PROP) ~> #rpcLoadRequest({ REST }) ... </k>
+      rule #rpcLoadRequest( J )
+             => #let REQ_ID     = #getInt(    "id",     J) #in
+                #let METHOD     = #getString( "method", J) #in
+                #let PARAMS_RAW = #getJSON(   "params", J) #in
+                #let REQ_PARAMS = #rpcLoadParams( METHOD, PARAMS_RAW ) #in
+                RPCRequest(REQ_ID, REQ_PARAMS)
 
-      rule <k> #rpcLoadRequest( "jsonrpc": "2.0"         ) => .K ... </k>
-      rule <k> #rpcLoadRequest( "method" : "eth_sendTransaction") => .K ...</k>
-      rule <k> #rpcLoadRequest( "id"     : REQ_ID:Int    ) => .K ... </k>
-           <rpcRequestId> _ => REQ_ID </rpcRequestId>
+      syntax Int ::= "DEFAULTSENDER" [function]
+      rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+
+      rule #rpcLoadParams( "eth_sendTransaction", [ J ])
+            => #let FROM  = #getAddr( "from", J, DEFAULTSENDER ) #in
+               #let TO    = #getAddr( "to"  , J, 0 ) #in
+               #let GAS_LIMIT = #getWord( "gas" , J, pow24 ) #in
+               #let GAS_PRICE = #getWord( "gas_price", J, 1 ) #in
+               #let VALUE = #getWord( "value", J, 0 ) #in
+               #let DATA  = #getBytes( "data", J, .Bytes ) #in
+               EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
       
-      rule <k> #rpcLoadRequest( "params" : PARAMS:JSON   )
-            => mkTX !TX_ID
-            ~> #rpcLoadTxDefaults( !TX_ID, #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266") )
-            ~> #rpcLoadParams( !TX_ID, PARAMS )
-            ...
-            </k>
-            <currentTxID> _ => !TX_ID </currentTxID> // TODO: Is this cell used? If not, remove
+```
 
-      rule <k> #rpcLoadTxDefaults( TX_ID, FROM )
-            => .K
+===============================================================================
+Execute RPC Requests
+
+This section defines rules to load rpc requests into the current configuration
+and dispatch their execution.
+
+```k
+      rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
+            ~> #dispatchRequest
+            => #processTx( !TX_ID )
             ...
             </k>
+            <chainID>      CHAIN_ID </chainID>
+            <account>
+                  <acctID> FROM     </acctID>
+                  <nonce>  TXNONCE  </nonce>
+                  ...
+            </account>
+            <rpcRequestId>       _ => REQ_ID             </rpcRequestId>
+            <origin>             _ => FROM               </origin>
+            <currentTxID>        _ => !TX_ID             </currentTxID>// TODO: Is this cell used? If not, remove
+            <txOrder>   ... (.List => ListItem(!TX_ID )) </txOrder>
+            <txPending> ... (.List => ListItem(!TX_ID )) </txPending>
+            <messages>
+                  ( .Bag => 
+                        <message>
+                              <msgID>      !TX_ID         </msgID>
+                              <txChainID>  CHAIN_ID  </txChainID>
+                              <txNonce>    TXNONCE   </txNonce>
+                              <txType>     Legacy    </txType>
+                              <to>         TO        </to>
+                              <txGasLimit> GAS_LIMIT </txGasLimit>
+                              <txGasPrice> GAS_PRICE </txGasPrice>
+                              <value>      VALUE     </value>
+                              <data>       DATA      </data>
+                              ...
+                        </message>
+                  )
+                  ...
+            </messages>
+
+```
+
+===============================================================================
+JSON RPC Response
+
+This section defines rules to create JSON RPC response objects from the current
+configuration.
+
+```k 
+
+      syntax KItem ::= #createTransactionHash()  // return value of eth_sendTransaction
+                     | #createTransaction()      // return value of eth_getTransactionByHash
+                     | #createReceipt()          // return value of eth_getTransactionReceipt
+
+      rule <k> #createTransactionHash()
+            => RPCResponse( Keccak256( #rlpEncode( [ TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS ] ) ) )
+            ... </k>
+            <currentTxID>      TXID   </currentTxID>
+            <message>
+                  <msgID>      TXID   </msgID>
+                  <txNonce>    TN     </txNonce>
+                  <txGasPrice> TP     </txGasPrice>
+                  <txGasLimit> TG     </txGasLimit>
+                  <txType>     Legacy </txType>
+                  <to>         TT     </to>
+                  <value>      TV     </value>
+                  <sigV>       TW     </sigV>
+                  <sigR>       TR     </sigR>
+                  <sigS>       TS     </sigS>
+                  <data>       TD     </data>
+                  ...
+            </message>
+
+      rule <k> #createTransaction()
+            => RPCResponse({
+                  "type"     : "0x0",
+                  "nonce"    : intToHex( TX_NONCE ),
+                  "to"       : #if TX_TO ==Int 0 #then null #else intToHex( TX_TO) #fi,
+                  "gas"      : intToHex( TX_GAS_LIMIT ),
+                  "value"    : intToHex( TX_VALUE ),
+                  "input"    : bytesToHex( TX_DATA ),
+                  "gasPrice" : intToHex( TX_GAS_PRICE ),
+                  "chainId"  : intToHex( TX_CHAIN_ID ),
+                  "v"        : intToHex( TX_V ),
+                  "r"        : bytesToHex( TX_R ),
+                  "s"        : bytesToHex( TX_S )
+            })
+           ... </k>
+           <currentTxID>        MSG_ID       </currentTxID>
            <message>
-                  <msgID>      TX_ID         </msgID>
-                  <txChainID>  _ => CHAIN_ID </txChainID>
-                  <txNonce>    _ => TXNONCE  </txNonce>
-                  <txType>     _ => Legacy   </txType>
-                  ...
-            </message>
-            <origin> _ => FROM </origin>
-            <chainID> CHAIN_ID </chainID>
-            <account> <acctID> FROM </acctID> <nonce> TXNONCE </nonce> ... </account>
+                <msgID>         MSG_ID       </msgID>
+                <txNonce>       TX_NONCE     </txNonce>
+                <txGasPrice>    TX_GAS_PRICE </txGasPrice>
+                <txGasLimit>    TX_GAS_LIMIT </txGasLimit>
+                <to>            TX_TO        </to>
+                <value>         TX_VALUE     </value>
+                <sigV>          TX_V         </sigV>
+                <sigR>          TX_R         </sigR>
+                <sigS>          TX_S         </sigS>
+                <data>          TX_DATA      </data>
+                <txChainID>     TX_CHAIN_ID  </txChainID>
+                <txType>        Legacy       </txType>
+                ...
+           </message>
 
-      // TODO, should the tx really be processed here, or should we first
-      // parse all other transactions? What would it need to defer the
-      // execution until the end of parsing? For example, the sender is
-      // currently not part of the <message>-cell, and therefore cannot
-      // be kept around for all txs, but only once globally
-      rule <k> #rpcLoadParams( TX_ID, [ .JSONs ] ) => #processTx(TX_ID) ... </k>
-      rule <k> #rpcLoadParams( TX_ID, [ FIRST, REST ] ) => #rpcLoadParams( TX_ID, FIRST ) ~> #rpcLoadParams( TX_ID, [ REST ] ) ... </k>
-      rule <k> #rpcLoadParams( _, { .JSONs } ) => .K ... </k>
-      rule <k> #rpcLoadParams( TX_ID, { FIRST, REST } ) => #rpcLoadParams( TX_ID, FIRST ) ~> #rpcLoadParams( TX_ID, { REST } ) ... </k>
+      rule <k> #createReceipt() => RPCResponse({
+                  "type"              : "0x0",
+                  "transactionHash"   : Keccak256(#rlpEncode( [ TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS ] )),
+                  "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
+                  "blockHash"         : intToHex( BLOCK_HASH ),
+                  "blockNumber"       : intToHex( BLOCK_NUMBER ),
+                  "from"              : intToHex( ACCT ),
+                  "to"                : intToHex( TT ),
+                  "cumulativeGasUsed" : intToHex( CGAS ), // TODO: What is the difference between cumulativeGasUsed and gasUsed
+                  "gasUsed"           : intToHex( CGAS ), 
+                  "contractAddress"   : #if TT ==K .Account #then intToHex( #newAddr(ACCT, TN) ) #else null #fi,
+                  "logs"              : [ .JSONs ], // TODO
+                  "status"            : #if SC ==K EVMC_SUCCESS #then true #else false #fi,
+                  "effectiveGasPrice" : null // TODO
+            }) ... </k>
+           <currentTxID>       TXID   </currentTxID>
+            <message>
+                  <msgID>      TXID   </msgID>
+                  <txNonce>    TN     </txNonce>
+                  <txGasPrice> TP     </txGasPrice>
+                  <txGasLimit> TG     </txGasLimit>
+                  <txType>     Legacy </txType>
+                  <to>         TT     </to>
+                  <value>      TV     </value>
+                  <sigV>       TW     </sigV>
+                  <sigR>       TR     </sigR>
+                  <sigS>       TS     </sigS>
+                  <data>       TD     </data>
+                  ...
+            </message>
+            <number>           BLOCK_NUMBER </number>
+            <currentBlockHash> BLOCK_HASH   </currentBlockHash>
+            <statusCode>       SC           </statusCode>
+            <gasUsed>          CGAS         </gasUsed>
+            <origin>           ACCT         </origin>
 
-      rule <k> #rpcLoadParams( TX_ID, "from": FROM ) => .K ... </k>
-            <message>
-                  <msgID>     TX_ID          </msgID>
-                  <txNonce>    _ => TXNONCE  </txNonce>
-                  ...
-            </message>
-            <origin> _ => ACCT_ID </origin>
-            <account> <acctID> ACCT_ID </acctID> <nonce> TXNONCE </nonce> ... </account>
-        requires ACCT_ID ==Int #parseAddr( FROM )
+```
+===============================================================================
+Writing RPCResponses to Disk
 
-      rule <k> #rpcLoadParams( TX_ID, "to": TO ) => .K ... </k>
-            <message>
-                  <msgID> TX_ID </msgID>
-                  <txGasLimit> _ => #parseAddr( TO ) </txGasLimit>
-                  ...
-            </message>
-            
-      rule <k> #rpcLoadParams( TX_ID, "gas": GAS_LIMIT ) => .K ... </k>
-            <message>
-                  <msgID> TX_ID </msgID>
-                  <txGasLimit> _ => #parseWord( GAS_LIMIT ) </txGasLimit>
-                  ...
-            </message>
+This section defines rules to write RPCResponses to disk.
 
-      rule <k> #rpcLoadParams( TX_ID, "gasPrice": GAS_PRICE ) => .K ... </k>
-            <message>
-                  <msgID> TX_ID </msgID>
-                  <txGasPrice> _ => #parseWord( GAS_PRICE ) </txGasPrice>
-                  ...
-            </message>
-      rule <k> #rpcLoadParams( TX_ID, "value": VALUE ) => .K ... </k>
-            <message>
-                  <msgID> TX_ID </msgID>
-                  <value> _ => #parseWord( VALUE ) </value>
-                  ...
-            </message>
+```k
 
-      rule <k> #rpcLoadParams( TX_ID, "data": DATA ) => .K ... </k>
-            <message>
-                  <msgID> TX_ID </msgID>
-                  <data> _ => #parseByteStack( DATA ) </data>
-                  ...
-            </message>
+      syntax String ::= #responseFile(
+            String, // IO dir
+            Int     // request id
+      ) [function]
+
+      rule #responseFile( IO_DIR, REQ_ID ) => IO_DIR +String "/responses/response_" +String Int2String( REQ_ID ) +String ".json"
+
+      rule <k> RPCResponse( JSON_RESPONSE )
+            ~> #saveRpcResponse( IO_DIR )
+            => #writeFile( #responseFile( IO_DIR, REQ_ID ), JSON2String( JSON_RESPONSE ) )
+            ...
+            </k>
+            <rpcRequestId> REQ_ID </rpcRequestId>
+
 ```
 
 ===============================================================================
@@ -130,6 +297,10 @@ Loading RPCRequests from Disk
 This secion defines rules to read a RPCRequests from disk.
 
 ```k
+
+      syntax String ::= #requestsFile( String ) [function, total]
+
+      rule #requestsFile( IO_DIR ) => IO_DIR +String "/requests.json"
 
       rule <k> #loadRpcRequests( IO_DIR )
             => #let CONTENTS:IOString = #readFile( #requestsFile( IO_DIR ) )

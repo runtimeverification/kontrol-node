@@ -20,9 +20,6 @@ module KONTROL-NODE
     imports TRACE-JSON
     imports KONTROL-NODE-CONFIG
 
-
-    syntax RPCResponse ::= String | Int
-
     syntax EthereumSimulation ::= Start
     syntax Start ::= #start(
       String // IO directory
@@ -39,14 +36,13 @@ Create the initial configuration by reading the inputs from the IO directory
         => #unlockAccounts()
         ~> #loadStateDump( IO_DIR, 0)
         ~> #loadRpcRequests( IO_DIR )
-        ~> #mineBlock // We should mine after every tx
         ~> #saveStateDump( IO_DIR )
         ...
        </k>
        <ioDir> _ => IO_DIR </ioDir>
 ```
 
-  Unlock test accounts. These are the same ten accounts used by most dev tools.
+  Unlocked test accounts. These are the same ten accounts used by most dev tools.
   Mnemonic: test test test test test test test test test test test junk
 
 ```k
@@ -82,14 +78,16 @@ Create the initial configuration by reading the inputs from the IO directory
     rule <k> #processTx( TX_ID )
           => #signTX TX_ID FROM
           ~> #setup_G0 TX_ID
-          ~> #validateTx TX_ID
-          ~> #updateTimestamp
-          ~> #executeTx TX_ID
-          ~> #makeTxReceipt TX_ID
+          ~> #validateTx TX_ID // checks gas
+          ~> #updateTimestamp  // advances the block timestamp by some arbitrary delta
+          ~> #executeTx TX_ID 
           ~> #finalizeBlock
-          ~> #computeHeaderHash
+          ~> #computeHeaderHash // Looks like we don't compute the header hash for the very first black
+          ~> #updateBlockHeader
+          ~> #saveRpcResponse( IO_DIR )
           ...
           </k>
+          <ioDir> IO_DIR </ioDir>
           <origin> FROM </origin>
 
     // ECDSASign returns [r,s,recid]
@@ -99,6 +97,8 @@ Create the initial configuration by reading the inputs from the IO directory
     syntax KItem ::= "#signTX" Int Int
                    | "#signTX" Int String
  // -------------------------------------
+    
+    // Sign a transaction with an account managed by this node
     rule <k> #signTX TXID ACCTFROM:Int => #signTX TXID ECDSASign( Keccak256raw(#rlpEncodeTxData (LegacySignedTxData(TN, TP, TG, TT, TV, TD, B))), #padToWidth( 32, #asByteStack(KEY))) ... </k>
         <accountKeys> ... ACCTFROM |-> KEY ... </accountKeys>
         <mode> NORMAL </mode>
@@ -114,6 +114,7 @@ Create the initial configuration by reading the inputs from the IO directory
            ...
          </message>
 
+    // Sign a transaction with a given signature
     rule <k> #signTX TXID SIG:String => .K ... </k>
          <chainID> B </chainID>
          <message>
@@ -124,12 +125,12 @@ Create the initial configuration by reading the inputs from the IO directory
            ...
          </message>
 
+    // Signing failed. TODO: Send error response and continue with next request
     rule <k> #signTX TXID ACCTFROM:Int => .K ... </k>
          <accountKeys> KEYMAP                      </accountKeys>
          <mode>        NORMAL                      </mode>
          <txPending>   ListItem(TXID) => .List ... </txPending>
          <txOrder>     ListItem(TXID) => .List ... </txOrder>
-         <rpcResponse> _ => -1 </rpcResponse> // TODO: Come up with error code values for this cell
       requires notBool ACCTFROM in_keys(KEYMAP)
 
 
@@ -147,6 +148,8 @@ Create the initial configuration by reading the inputs from the IO directory
 
     syntax KItem ::= "#validateTx" Int
  // ----------------------------------
+
+    // Revert if insufficient gas
     rule <k> #validateTx TXID => #end #if BAL <Int GLIMIT *Int GPRICE #then EVMC_BALANCE_UNDERFLOW #else EVMC_OUT_OF_GAS #fi ... </k>
          <callGas> G0_INIT </callGas>
          <origin> ACCTFROM </origin>
@@ -164,6 +167,7 @@ Create the initial configuration by reading the inputs from the IO directory
       requires GLIMIT <Int G0_INIT
         orBool BAL <Int GLIMIT *Int GPRICE
 
+    // Sufficient gas
     rule <k> #validateTx TXID => .K ... </k>
          <origin> ACCTFROM </origin>
          <callGas> G0_INIT => GLIMIT -Int G0_INIT </callGas>
@@ -187,6 +191,8 @@ Create the initial configuration by reading the inputs from the IO directory
 
     syntax KItem ::= "#executeTx" Int
  // ---------------------------------
+
+    // Execute a contract creation transaction
     rule <k> #executeTx TXID:Int
           => #accessAccounts ACCTFROM #newAddr(ACCTFROM, NONCE) #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
@@ -219,6 +225,7 @@ Create the initial configuration by reading the inputs from the IO directory
          </account>
          <currentBalanceMutations> CBM => #if TRBAL #then CBM[ ACCTFROM <- BAL -Int (GLIMIT *Int GPRICE) ] #else CBM #fi </currentBalanceMutations>
 
+    // Exeucte a contract call transaction
     rule <k> #executeTx TXID:Int
           => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
@@ -254,46 +261,6 @@ Create the initial configuration by reading the inputs from the IO directory
          <currentBalanceMutations> CBM => #if TRBAL #then CBM[ ACCTFROM <- BAL -Int (GLIMIT *Int GPRICE) ] #else CBM #fi </currentBalanceMutations>
       requires ACCTTO =/=K .Account
 
-    syntax KItem ::= "#makeTxReceipt" Int
- // -------------------------------------
-    rule <k> #makeTxReceipt TXID => .K ... </k>
-         <rpcResponse> _ =>  Keccak256(#rlpEncode( [ TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS ] )) </rpcResponse>
-         <txReceipts>
-           ( .Bag
-          => <txReceipt>
-               <txHash> Keccak256(#rlpEncode( [ TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS ] )) </txHash>
-               <txCumulativeGas> CGAS                           </txCumulativeGas>
-               <logSet>          LOGS                           </logSet>
-               <bloomFilter>     #bloomFilter(LOGS)             </bloomFilter>
-               <txStatus>        bool2Word(SC ==K EVMC_SUCCESS) </txStatus>
-               <txID>            TXID                           </txID>
-               <sender>          ACCT                           </sender>
-               <txBlockNumber>   BN                             </txBlockNumber>
-               <contractAddress>
-                 #if TT ==K .Account #then #newAddr(ACCT, TN) #else .Account #fi
-               </contractAddress>
-             </txReceipt>
-           )
-           ...
-         </txReceipts>
-         <message>
-           <msgID>      TXID </msgID>
-           <txNonce>    TN  </txNonce>
-           <txGasPrice> TP  </txGasPrice>
-           <txGasLimit> TG  </txGasLimit>
-           <to>         TT  </to>
-           <value>      TV  </value>
-           <sigV>       TW  </sigV>
-           <sigR>       TR  </sigR>
-           <sigS>       TS  </sigS>
-           <data>       TD  </data>
-           ...
-         </message>
-         <statusCode> SC   </statusCode>
-         <gasUsed>    CGAS </gasUsed>
-         <log>        LOGS </log>
-         <number>     BN   </number>
-         <origin>     ACCT </origin>
 ```
 
   Block Mining
@@ -302,27 +269,20 @@ Create the initial configuration by reading the inputs from the IO directory
   The productions below are used to perform the mining of blocks, advancing the blockchain state.
 
 ```k
-    syntax KItem ::= "#mineBlock"
+    syntax KItem ::= "#updateBlockHeader"  [symbol(updateBlockHeader)]
                    | "#updateParentHash"
                    | "#incrementBlockNumber"
                    | "#clearGas"
                    | "#clearTxLists"
-              //   | "#updateTrieRoots"
-              //   | "#updateStateRoot"
-              //   | "#updateTransactionsRoot"
-              //   | "#updateReceiptsRoot"
-              //   | "#initStateTrie"
-              //   | "#updateStateTrie"
-              //   | #updateStateTrie ( JSONs )
- // -------------------------------------------
+                   | "#computeHeaderHash" [symbol(computeHeaderHash)]
 
-    rule <k> #mineBlock
+    rule <k> #updateBlockHeader
           => #updateParentHash
+          ~> #startBlock
           ~> #incrementBlockNumber
-          ~> #clearGas
           ~> #clearTxLists
-          ... </k>
-
+          ~> #clearGas ... </k>
+    
     rule <k> #updateParentHash => .K ... </k>
          <previousHash> _ => HP </previousHash>
          <currentBlockHash> HP </currentBlockHash>
@@ -334,14 +294,7 @@ Create the initial configuration by reading the inputs from the IO directory
          <txOrder>   _ => .List </txOrder>
 
     rule <k> #clearGas => .K ... </k> <gas> _ => 0 </gas>
-```
 
-  Helper Funcs
-  ------------
-
-```k
-    syntax KItem ::= "#computeHeaderHash" [symbol(computeHeaderHash)]
- // -----------------------------------------------------------------
     rule <k> #computeHeaderHash => .K ... </k>
          <currentBlockHash> _ => #blockHeaderHash(HP, HO, HC, HR, HT, HE, HB, HD, HI, HL, HG, HS, HX, HM, HN) </currentBlockHash>
          <previousHash>     HP </previousHash>
@@ -360,28 +313,6 @@ Create the initial configuration by reading the inputs from the IO directory
          <mixHash>          HM </mixHash>
          <blockNonce>       HN </blockNonce>
 
-    syntax KItem ::= "#updateBlockHeader" [symbol(updateBlockHeader)]
- // -----------------------------------------------------------------
-    rule <k> #updateBlockHeader
-          => #updateParentHash
-          ~> #startBlock
-          ~> #incrementBlockNumber
-          ~> #clearTxLists
-          ~> #clearGas ... </k>
-
-    syntax KItem ::= "#setAcctBalance" Int Int
- // ------------------------------------------
-    rule <k> #setAcctBalance KEY BAL => .K ... </k>
-         <traceBalance> TRBAL </traceBalance>
-         <accounts>
-           <account>
-             <acctID> KEY </acctID>
-             <balance> _ => BAL </balance>
-             ...
-           </account>
-           ...
-         </accounts>
-         <currentBalanceMutations> CBM => #if TRBAL #then CBM[ KEY <- BAL ] #else CBM #fi </currentBalanceMutations>
 endmodule
 
 ```

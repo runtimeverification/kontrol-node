@@ -7,33 +7,17 @@ module KONTROL-NODE-CONFIG
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
 
-    syntax RPCResponse ::= ".RPCResponse" [symbol(EmptyRPCResponse)]
-    syntax RPCRequest
-
     configuration <simbolikVM>
-            <ioDir> "":String </ioDir>
             <foundry/>
-            <rpcRequestId> 0 </rpcRequestId>
-            <rpcResponse> .RPCResponse </rpcResponse>
-            <accountKeys> .Map </accountKeys>
-            <timeFreeze> true </timeFreeze>
-            <timeDiff> 0 </timeDiff>
-            <currentTxID> 0 </currentTxID>
-            <currentBlockHash> 0 </currentBlockHash>
-            <txReceipts>
-                <txReceipt multiplicity ="*" type="Map">
-                    <txHash>          "":String  </txHash>
-                    <txCumulativeGas> 0          </txCumulativeGas>
-                    <logSet>          .List      </logSet>
-                    <bloomFilter>     .Bytes     </bloomFilter>
-                    <txStatus>        0          </txStatus>
-                    <txID>            0          </txID>
-                    <sender>          .Account   </sender>
-                    <txBlockNumber>   0          </txBlockNumber>
-                    <contractAddress> .Account   </contractAddress>
-                </txReceipt>
-            </txReceipts>
+            <ioDir>                   "":String </ioDir>
+            <rpcRequestId>            0         </rpcRequestId>
+            <accountKeys>             .Map      </accountKeys>
+            <timeFreeze>              true      </timeFreeze>
+            <timeDiff>                0         </timeDiff>
+            <currentTxID>             0         </currentTxID>
+            <currentBlockHash>        0         </currentBlockHash>
 
+            // Tracing
             <activeTracing>           true  </activeTracing>          // signals if the tracing is gloablly enabled
             <traceNonce>              true  </traceNonce>             // signals if nonce tracing is enabled
             <traceBalance>            true  </traceBalance>           // signals if balance tracing enabled
