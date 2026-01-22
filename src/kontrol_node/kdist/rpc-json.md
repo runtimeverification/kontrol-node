@@ -181,23 +181,14 @@ configuration.
                      | #createReceipt()          // return value of eth_getTransactionReceipt
 
       rule <k> #createTransactionHash()
-            => RPCResponse( Keccak256( #rlpEncode( [ TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS ] ) ) )
+            => RPCResponse( TX_HASH )
             ... </k>
-            <currentTxID>      TXID   </currentTxID>
-            <message>
-                  <msgID>      TXID   </msgID>
-                  <txNonce>    TN     </txNonce>
-                  <txGasPrice> TP     </txGasPrice>
-                  <txGasLimit> TG     </txGasLimit>
-                  <txType>     Legacy </txType>
-                  <to>         TT     </to>
-                  <value>      TV     </value>
-                  <sigV>       TW     </sigV>
-                  <sigR>       TR     </sigR>
-                  <sigS>       TS     </sigS>
-                  <data>       TD     </data>
+            <currentTxID>  TXID    </currentTxID>
+            <txReceipt>
+                  <txHash> TX_HASH </txHash>
+                  <txID>   TXID    </txID>
                   ...
-            </message>
+            </txReceipt>
 
       rule <k> #createTransaction()
             => RPCResponse({
@@ -233,39 +224,40 @@ configuration.
 
       rule <k> #createReceipt() => RPCResponse({
                   "type"              : "0x0",
-                  "transactionHash"   : Keccak256(#rlpEncode( [ TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS ] )),
+                  "transactionHash"   : TX_HASH,
                   "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
                   "blockHash"         : intToHex( BLOCK_HASH ),
                   "blockNumber"       : intToHex( BLOCK_NUMBER ),
-                  "from"              : intToHex( ACCT ),
-                  "to"                : intToHex( TT ),
+                  "from"              : intToHex( FROM ),
+                  "to"                : intToHex( TO ),
                   "cumulativeGasUsed" : intToHex( CGAS ), // TODO: What is the difference between cumulativeGasUsed and gasUsed
                   "gasUsed"           : intToHex( CGAS ), 
-                  "contractAddress"   : #if TT ==K .Account #then intToHex( #newAddr(ACCT, TN) ) #else null #fi,
+                  "contractAddress"   : #if TO ==K .Account #then intToHex( #newAddr(FROM, TX_NONCE) ) #else null #fi,
                   "logs"              : [ .JSONs ], // TODO
-                  "status"            : #if SC ==K EVMC_SUCCESS #then true #else false #fi,
+                  "status"            : #if TX_STATUS ==K EVMC_SUCCESS #then true #else false #fi,
                   "effectiveGasPrice" : null // TODO
             }) ... </k>
-           <currentTxID>       TXID   </currentTxID>
-            <message>
-                  <msgID>      TXID   </msgID>
-                  <txNonce>    TN     </txNonce>
-                  <txGasPrice> TP     </txGasPrice>
-                  <txGasLimit> TG     </txGasLimit>
-                  <txType>     Legacy </txType>
-                  <to>         TT     </to>
-                  <value>      TV     </value>
-                  <sigV>       TW     </sigV>
-                  <sigR>       TR     </sigR>
-                  <sigS>       TS     </sigS>
-                  <data>       TD     </data>
+           <currentTxID>         TXID                           </currentTxID>
+           <txReceipt>
+               <txHash>          TX_HASH                        </txHash>
+               <txCumulativeGas> CGAS                           </txCumulativeGas>
+               <logSet>          _                              </logSet>
+               <bloomFilter>     _                              </bloomFilter>
+               <txStatus>        TX_STATUS                      </txStatus>
+               <txID>            TXID                           </txID>
+               <sender>          FROM                           </sender>
+               <txBlockNumber>   BLOCK_NUMBER                   </txBlockNumber>
+           </txReceipt>
+           <message>
+                  <msgID>        TXID                           </msgID>
+                  <txNonce>      TX_NONCE                       </txNonce>
+                  <to>           TO                             </to>
                   ...
-            </message>
-            <number>           BLOCK_NUMBER </number>
-            <currentBlockHash> BLOCK_HASH   </currentBlockHash>
-            <statusCode>       SC           </statusCode>
-            <gasUsed>          CGAS         </gasUsed>
-            <origin>           ACCT         </origin>
+           </message>
+           <block>
+                  <previousHash> BLOCK_HASH                     </previousHash>
+                  ...
+           </block>
 
 ```
 ===============================================================================

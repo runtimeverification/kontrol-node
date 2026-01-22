@@ -82,8 +82,9 @@ Create the initial configuration by reading the inputs from the IO directory
           ~> #updateTimestamp  // advances the block timestamp by some arbitrary delta
           ~> #executeTx TX_ID 
           ~> #finalizeBlock
-          ~> #computeHeaderHash // Looks like we don't compute the header hash for the very first black
+          ~> #makeTxReceipts
           ~> #updateBlockHeader
+          ~> #createTransactionHash()
           ~> #saveRpcResponse( IO_DIR )
           ...
           </k>
@@ -96,7 +97,6 @@ Create the initial configuration by reading the inputs from the IO directory
 
     syntax KItem ::= "#signTX" Int Int
                    | "#signTX" Int String
- // -------------------------------------
     
     // Sign a transaction with an account managed by this node
     rule <k> #signTX TXID ACCTFROM:Int => #signTX TXID ECDSASign( Keccak256raw(#rlpEncodeTxData (LegacySignedTxData(TN, TP, TG, TT, TV, TD, B))), #padToWidth( 32, #asByteStack(KEY))) ... </k>
@@ -135,7 +135,7 @@ Create the initial configuration by reading the inputs from the IO directory
 
 
     syntax KItem ::= "#setup_G0" Int
- // --------------------------------
+
     rule <k> #setup_G0 TXID => .K ... </k>
          <schedule> SCHED </schedule>
          <callGas> _ => G0(SCHED, DATA, (ACCTTO ==K .Account) ) </callGas>
@@ -147,7 +147,6 @@ Create the initial configuration by reading the inputs from the IO directory
          </message>
 
     syntax KItem ::= "#validateTx" Int
- // ----------------------------------
 
     // Revert if insufficient gas
     rule <k> #validateTx TXID => #end #if BAL <Int GLIMIT *Int GPRICE #then EVMC_BALANCE_UNDERFLOW #else EVMC_OUT_OF_GAS #fi ... </k>
@@ -186,11 +185,9 @@ Create the initial configuration by reading the inputs from the IO directory
        andBool BAL >=Int GLIMIT *Int GPRICE
 
     syntax KItem ::= "#updateTimestamp"
- // -----------------------------------
     rule <k> #updateTimestamp => .K ... </k> <timestamp> TS => TS +Int TD </timestamp> <timeDiff> TD </timeDiff>
 
     syntax KItem ::= "#executeTx" Int
- // ---------------------------------
 
     // Execute a contract creation transaction
     rule <k> #executeTx TXID:Int
@@ -263,55 +260,190 @@ Create the initial configuration by reading the inputs from the IO directory
 
 ```
 
-  Block Mining
-  ------------
+Transaction Receipts
 
-  The productions below are used to perform the mining of blocks, advancing the blockchain state.
+```k
+    syntax KItem ::= "#makeTxReceipts"
+                   | "#makeTxReceiptsAux" List
+
+    rule <k> #makeTxReceipts => #makeTxReceiptsAux TXLIST ... </k>
+         <txOrder> TXLIST </txOrder>
+    rule <k> #makeTxReceiptsAux .List => .K ... </k>
+    rule <k> #makeTxReceiptsAux (ListItem(TXID) TXLIST) => #makeTxReceipt TXID ~> #makeTxReceiptsAux TXLIST ... </k>
+
+    syntax KItem ::= "#makeTxReceipt" Int
+
+    rule <k> #makeTxReceipt TXID => .K ... </k>
+         <txReceipts>
+           ( .Bag
+          => <txReceipt>
+               <txHash> #unparseDataBytes( #hashTxData( #getTxData (TXID ) ) ) </txHash>
+               <txCumulativeGas> CGAS                           </txCumulativeGas>
+               <logSet>          LOGS                           </logSet>
+               <bloomFilter>     #bloomFilter(LOGS)             </bloomFilter>
+               <txStatus>        bool2Word(SC ==K EVMC_SUCCESS) </txStatus>
+               <txID>            TXID                           </txID>
+               <sender>          ACCT                           </sender>
+               <txBlockNumber>   BN                             </txBlockNumber>
+             </txReceipt>
+           )
+           ...
+         </txReceipts>
+         <message>
+           <msgID>    TXID </msgID>
+           ...
+         </message>
+         <statusCode> SC   </statusCode>
+         <gasUsed>    CGAS </gasUsed>
+         <log>        LOGS </log>
+         <number>     BN   </number>
+         <origin>     ACCT </origin>
+
+
+```
+
+
+Block Mining
+------------
+
+The productions below are used to perform the mining of blocks, advancing the blockchain state.
 
 ```k
     syntax KItem ::= "#updateBlockHeader"  [symbol(updateBlockHeader)]
-                   | "#updateParentHash"
-                   | "#incrementBlockNumber"
-                   | "#clearGas"
-                   | "#clearTxLists"
-                   | "#computeHeaderHash" [symbol(computeHeaderHash)]
 
     rule <k> #updateBlockHeader
-          => #updateParentHash
-          ~> #startBlock
-          ~> #incrementBlockNumber
-          ~> #clearTxLists
-          ~> #clearGas ... </k>
-    
-    rule <k> #updateParentHash => .K ... </k>
-         <previousHash> _ => HP </previousHash>
-         <currentBlockHash> HP </currentBlockHash>
+          => #startBlock
+          ... </k>
+          <stateTrie>        TREE            </stateTrie> // TODO: We never set the initial trie
+          <txReceipts>       TXRECEIPTS      </txReceipts> // TODO: Should these be cleared?
+          <callState>
+            <gas>              _  => 0         </gas>
+            ...
+          </callState>
+          <network>
+            <txOrder>          TXLIST => .List </txOrder>
+            <txPending>        _      => .List </txPending>
+            ...
+          </network>
+          <block>
+            <previousHash>     PH => #blockHeaderHash(PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, gas2Int( HG ), HS, HX, HM, HN)        </previousHash>
+            <ommersHash>       HO              </ommersHash>
+            <coinbase>         HC              </coinbase>
+            <stateRoot>        HR => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( TREE ) ) )</stateRoot>  // TODO: should <prevHash> use the old or new state root?
+            <transactionsRoot> HT => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #transactionsRoot( TXLIST ) ) ) ) </transactionsRoot>
+            <receiptsRoot>     HE => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #receiptsRoot( <txReceipts> TXRECEIPTS </txReceipts> ) ) ) ) </receiptsRoot>
+            <logsBloom>        HB              </logsBloom>
+            <difficulty>       HD              </difficulty>
+            <number>           BN => BN +Int 1 </number>
+            <gasLimit>         HL              </gasLimit>
+            <gasUsed>          HG              </gasUsed>
+            <timestamp>        HS              </timestamp>
+            <extraData>        HX              </extraData>
+            <mixHash>          HM              </mixHash>
+            <blockNonce>       HN              </blockNonce>
+            ...
+          </block>
+```
 
-    rule <k> #incrementBlockNumber => .K ... </k> <number> BN => BN +Int 1 </number>
+State Root
+----------
 
-    rule <k> #clearTxLists => .K ... </k>
-         <txPending> _ => .List </txPending>
-         <txOrder>   _ => .List </txOrder>
+```k
+          syntax MerkleTree ::= #stateRoot ( NetworkCell, Schedule ) [function]
+                              | #putAccountsInTrie( MerkleTree, AccountsCell ) [function]
 
-    rule <k> #clearGas => .K ... </k> <gas> _ => 0 </gas>
+          rule #stateRoot(
+                  <network>
+                    <accounts> ACCTSCELL </accounts>
+                    ...
+                  </network>,
+                  SCHED
+                )
+              => #putAccountsInTrie(
+                    MerkleUpdateMap(
+                        .MerkleTree,
+                        #precompiledAccountsMap(#precompiledAccountsSet(SCHED))
+                    ),
+                    <accounts> ACCTSCELL </accounts>
+                  )
 
-    rule <k> #computeHeaderHash => .K ... </k>
-         <currentBlockHash> _ => #blockHeaderHash(HP, HO, HC, HR, HT, HE, HB, HD, HI, HL, HG, HS, HX, HM, HN) </currentBlockHash>
-         <previousHash>     HP </previousHash>
-         <ommersHash>       HO </ommersHash>
-         <coinbase>         HC </coinbase>
-         <stateRoot>        HR </stateRoot>
-         <transactionsRoot> HT </transactionsRoot>
-         <receiptsRoot>     HE </receiptsRoot>
-         <logsBloom>        HB </logsBloom>
-         <difficulty>       HD </difficulty>
-         <number>           HI </number>
-         <gasLimit>         HL </gasLimit>
-         <gasUsed>          HG </gasUsed>
-         <timestamp>        HS </timestamp>
-         <extraData>        HX </extraData>
-         <mixHash>          HM </mixHash>
-         <blockNonce>       HN </blockNonce>
+          rule #putAccountsInTrie( TREE, <accounts> .Bag </accounts> ) => TREE
+          rule #putAccountsInTrie(
+                  (TREE => MerkleUpdate(
+                      TREE,
+                      #parseByteStack( #unparseData(ACCT,20) ),
+                      #unparseDataBytes( #rlpEncodeFullAccount(NONCE, BAL, STORAGE, CODE) )
+                  )),
+                  <accounts>
+                    (<account>
+                      <acctID>  ACCT    </acctID>
+                      <nonce>   NONCE   </nonce>
+                      <balance> BAL     </balance>
+                      <storage> STORAGE </storage>
+                      <code>    CODE    </code>
+                      ...
+                    </account> => .Bag)
+                    ...
+                  </accounts>
+                )
+
+```
+
+Transactions Root
+-----------------
+
+```k
+          syntax MerkleTree ::= #transactionsRoot( List )              [function]
+                              | #transactionsRootAux( MerkleTree, Int, List ) [function]
+
+          rule #transactionsRoot( TXLIST )
+            => #transactionsRootAux( .MerkleTree, 0, TXLIST )
+          
+          rule #transactionsRootAux( TREE, _, .List ) => TREE
+          rule #transactionsRootAux(
+                  ( TREE => MerkleUpdate(
+                      TREE,
+                      #rlpEncodeWord(I),
+                      #unparseDataBytes( #rlpEncodeTxData( #getTxData( TXID ) ) )
+                  ) ),
+                  ( I                => I +Int 1 ),
+                  ( ListItem( TXID ) => .List ) _
+                )
+
+```
+
+Receipts Root
+-------------
+
+```k
+          syntax MerkleTree ::= #receiptsRoot( TxReceiptsCell )                     [function]
+                              | #receiptsRootAux( MerkleTree, Int, TxReceiptsCell ) [function]
+
+
+          rule #receiptsRoot( TXRECEIPTS )
+            => #receiptsRootAux( .MerkleTree, 0, TXRECEIPTS )
+
+          rule #receiptsRootAux( TREE, _, _ ) => TREE
+          rule #receiptsRootAux(
+                ( TREE           => MerkleUpdate(
+                    TREE,
+                    #rlpEncodeWord(I),
+                    #unparseDataBytes( #rlpEncodeReceipt(TS, TG, TB, TL) ) )
+                ),
+                ( I              => I +Int 1 ),
+                <txReceipts>
+                    ( <txReceipt>
+                      <txID>            TXID </txID>
+                      <txStatus>        TS   </txStatus>
+                      <txCumulativeGas> TG   </txCumulativeGas>
+                      <bloomFilter>     TB   </bloomFilter>
+                      <logSet>          TL   </logSet>
+                      ...
+                    </txReceipt> => .Bag )
+                    ...
+                </txReceipts>
+              )
+
 
 endmodule
 

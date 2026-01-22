@@ -49,6 +49,21 @@ module KONTROL-NODE-CONFIG
             <traceInitCode>                false </traceInitCode>
             <currentInitCodeMutations>     .Map  </currentInitCodeMutations>
             <recordedCreate>               false </recordedCreate>
+
+            // Block-related
+            <stateTrie> .MerkleTree </stateTrie>
+            <txReceipts>
+                <txReceipt multiplicity ="*" type="Map">
+                    <txHash>          "":String  </txHash>
+                    <txCumulativeGas> 0          </txCumulativeGas>
+                    <logSet>          .List      </logSet>
+                    <bloomFilter>     .Bytes     </bloomFilter>
+                    <txStatus>        0          </txStatus>
+                    <txID>            0          </txID>
+                    <sender>          .Account   </sender>
+                    <txBlockNumber>   0          </txBlockNumber>
+                </txReceipt>
+            </txReceipts>
         </simbolikVM>
 
 endmodule

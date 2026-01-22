@@ -65,6 +65,19 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // ideally, new rules are introduced in the future in evm-semantics that moduralize mutations of nonce and balance 
     //  that would allow for tracing rules that do not re-implement evm-semantics specifications
 
+    // Idea: Maybe we can hook into the rules without re-implementing them entirely by using a similar hook mechanism as below
+    // <k> something ~> ... </k>
+
+    // <k> something => #before( something ) ... </k>
+    // <hooked> False </hooked> [priority(10)]
+
+    // <k> #before( something ) => something ~> #after( something ) ... </k>
+    // <hooked> False => True </hooked> [owise]
+
+    // <k> #after ( something ) => .K ... </k>
+    // <hooked> True => False </hooked> [owise]
+
+
     // evm.md:1483 [sstore] `STORE`
     rule [sstore]:
          <k> SSTORE INDEX NEW => .K ... </k>
