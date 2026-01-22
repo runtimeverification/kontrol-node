@@ -42,8 +42,8 @@ Create the initial configuration by reading the inputs from the IO directory
        <ioDir> _ => IO_DIR </ioDir>
 ```
 
-  Unlocked test accounts. These are the same ten accounts used by most dev tools.
-  Mnemonic: test test test test test test test test test test test junk
+Unlocked test accounts. These are the same ten accounts used by most dev tools.
+Mnemonic: test test test test test test test test test test test junk
 
 ```k
 
@@ -63,33 +63,72 @@ Create the initial configuration by reading the inputs from the IO directory
       #parseAddr("0xa0Ee7A142d267C1f36714E4a8F75612F20a79720") |-> #parseWord("0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6")
     </accountKeys>
 ```
-
-  Transaction Signing and execution
-  ---------------------------------
-
-  The next block of K code contains the set of functions used to implement `eth_sendTransaction`.
-  The information send with the request is used to load a new `<message>` cell, sign, validate, and execute it.
-  Once these steps are performed, a receipt is generated.
+###############################################################################
+# eth_sendTransaction
 
 ```k
-    // Assumes the transaction is fully loaded into the <message>-cell
-    // and that the initial state is fully initialized.
-    // It then executes the transaction
-    rule <k> #processTx( TX_ID )
-          => #signTX TX_ID FROM
-          ~> #setup_G0 TX_ID
-          ~> #validateTx TX_ID // checks gas
-          ~> #updateTimestamp  // advances the block timestamp by some arbitrary delta
-          ~> #executeTx TX_ID 
-          ~> #finalizeBlock
-          ~> #makeTxReceipts
-          ~> #updateBlockHeader
-          ~> #createTransactionHash()
-          ~> #saveRpcResponse( IO_DIR )
-          ...
-          </k>
-          <ioDir> IO_DIR </ioDir>
-          <origin> FROM </origin>
+
+
+      rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
+            => #signTX !TX_ID FROM
+            ~> #validateTx !TX_ID
+            ~> #executeTx !TX_ID 
+            ~> #finishTx
+            ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
+            ~> #finalizeBlock
+            ~> #makeTxReceipts
+            ~> #updateBlockHeader
+            ~> #ethSendTransactionResponse
+            ~> #saveRpcResponse( IO_DIR )
+            ...
+            </k>
+            <ioDir>              IO_DIR      </ioDir>
+            <rpcRequestID>       _ => REQ_ID </rpcRequestID>
+            <origin>             _ => FROM   </origin>
+            <currentTxID>        _ => !TX_ID </currentTxID>
+            <schedule>           SCHED       </schedule>
+            <callState>
+              <callGas> _ => G0(SCHED, DATA, (TO ==K .Account) ) </callGas>
+              ...
+            </callState>
+            <block>
+              <timestamp> TS => TS +Int 1 </timestamp>
+              ...
+            </block>
+            <network>
+              <chainID>      CHAIN_ID </chainID>
+              <account>
+                <acctID> FROM     </acctID>
+                <nonce>  TXNONCE  </nonce>
+                ...
+              </account>
+              <txOrder>   ... (.List => ListItem(!TX_ID )) </txOrder>
+              <txPending> ... (.List => ListItem(!TX_ID )) </txPending>
+              <messages>
+                    ( .Bag => 
+                          <message>
+                                <msgID>      !TX_ID         </msgID>
+                                <txChainID>  CHAIN_ID  </txChainID>
+                                <txNonce>    TXNONCE   </txNonce>
+                                <txType>     Legacy    </txType>
+                                <to>         TO        </to>
+                                <txGasLimit> GAS_LIMIT </txGasLimit>
+                                <txGasPrice> GAS_PRICE </txGasPrice>
+                                <value>      VALUE     </value>
+                                <data>       DATA      </data>
+                                ...
+                          </message>
+                    )
+                    ...
+              </messages>
+              ...
+            </network>
+```
+
+Transaction Signing
+-------------------
+
+```k
 
     // ECDSASign returns [r,s,recid]
     // previously of EIP155, v is computed as:  v = recid + 27
@@ -134,21 +173,10 @@ Create the initial configuration by reading the inputs from the IO directory
       requires notBool ACCTFROM in_keys(KEYMAP)
 
 
-    syntax KItem ::= "#setup_G0" Int
-
-    rule <k> #setup_G0 TXID => .K ... </k>
-         <schedule> SCHED </schedule>
-         <callGas> _ => G0(SCHED, DATA, (ACCTTO ==K .Account) ) </callGas>
-         <message>
-           <msgID> TXID   </msgID>
-           <data>  DATA   </data>
-           <to>    ACCTTO </to>
-           ...
-         </message>
-
     syntax KItem ::= "#validateTx" Int
 
     // Revert if insufficient gas
+    // TODO: Send error response and continue with next request
     rule <k> #validateTx TXID => #end #if BAL <Int GLIMIT *Int GPRICE #then EVMC_BALANCE_UNDERFLOW #else EVMC_OUT_OF_GAS #fi ... </k>
          <callGas> G0_INIT </callGas>
          <origin> ACCTFROM </origin>
@@ -184,9 +212,6 @@ Create the initial configuration by reading the inputs from the IO directory
       requires GLIMIT >=Int G0_INIT
        andBool BAL >=Int GLIMIT *Int GPRICE
 
-    syntax KItem ::= "#updateTimestamp"
-    rule <k> #updateTimestamp => .K ... </k> <timestamp> TS => TS +Int TD </timestamp> <timeDiff> TD </timeDiff>
-
     syntax KItem ::= "#executeTx" Int
 
     // Execute a contract creation transaction
@@ -194,8 +219,6 @@ Create the initial configuration by reading the inputs from the IO directory
           => #accessAccounts ACCTFROM #newAddr(ACCTFROM, NONCE) #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
           ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE
-          ~> #finishTx
-          ~> #finalizeTx(false, Ctxfloor(SCHED, CODE))
          ...
          </k>
          <traceBalance> TRBAL </traceBalance>
@@ -227,8 +250,6 @@ Create the initial configuration by reading the inputs from the IO directory
           => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
           ~> #call ACCTFROM ACCTTO ACCTTO VALUE VALUE DATA false
-          ~> #finishTx
-          ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
          ...
          </k>
          <traceBalance> TRBAL </traceBalance>

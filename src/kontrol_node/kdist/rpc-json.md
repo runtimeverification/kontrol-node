@@ -93,7 +93,6 @@ intermediate representation.
 
 ```k
       syntax KItem ::= #rpcLoad( JSON )
-                     | "#dispatchRequest"
 
       syntax RPCRequest       ::= #rpcLoadRequest( JSON )         [function]
       syntax RPCRequestParams ::= #rpcLoadParams( String, JSON )  [function]
@@ -101,7 +100,6 @@ intermediate representation.
       rule <k> #rpcLoad( [ .JSONs ] ) => .K ... </k>
       rule <k> #rpcLoad( [ FIRST, REST ] )
             => #rpcLoadRequest( FIRST )
-            ~> #dispatchRequest
             ~> #rpcLoad( [ REST ] ) ... </k>
 
       rule #rpcLoadRequest( J )
@@ -132,39 +130,7 @@ This section defines rules to load rpc requests into the current configuration
 and dispatch their execution.
 
 ```k
-      rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
-            ~> #dispatchRequest
-            => #processTx( !TX_ID )
-            ...
-            </k>
-            <chainID>      CHAIN_ID </chainID>
-            <account>
-                  <acctID> FROM     </acctID>
-                  <nonce>  TXNONCE  </nonce>
-                  ...
-            </account>
-            <rpcRequestId>       _ => REQ_ID             </rpcRequestId>
-            <origin>             _ => FROM               </origin>
-            <currentTxID>        _ => !TX_ID             </currentTxID>// TODO: Is this cell used? If not, remove
-            <txOrder>   ... (.List => ListItem(!TX_ID )) </txOrder>
-            <txPending> ... (.List => ListItem(!TX_ID )) </txPending>
-            <messages>
-                  ( .Bag => 
-                        <message>
-                              <msgID>      !TX_ID         </msgID>
-                              <txChainID>  CHAIN_ID  </txChainID>
-                              <txNonce>    TXNONCE   </txNonce>
-                              <txType>     Legacy    </txType>
-                              <to>         TO        </to>
-                              <txGasLimit> GAS_LIMIT </txGasLimit>
-                              <txGasPrice> GAS_PRICE </txGasPrice>
-                              <value>      VALUE     </value>
-                              <data>       DATA      </data>
-                              ...
-                        </message>
-                  )
-                  ...
-            </messages>
+
 
 ```
 
@@ -176,11 +142,11 @@ configuration.
 
 ```k 
 
-      syntax KItem ::= #createTransactionHash()  // return value of eth_sendTransaction
-                     | #createTransaction()      // return value of eth_getTransactionByHash
-                     | #createReceipt()          // return value of eth_getTransactionReceipt
+      syntax KItem ::= "#ethSendTransactionResponse"
+                     | "#ethGetTransactionByHashResponse"
+                     | "#ethGetTransactionReceiptResponse"
 
-      rule <k> #createTransactionHash()
+      rule <k> #ethSendTransactionResponse
             => RPCResponse( TX_HASH )
             ... </k>
             <currentTxID>  TXID    </currentTxID>
@@ -190,7 +156,7 @@ configuration.
                   ...
             </txReceipt>
 
-      rule <k> #createTransaction()
+      rule <k> #ethGetTransactionByHashResponse
             => RPCResponse({
                   "type"     : "0x0",
                   "nonce"    : intToHex( TX_NONCE ),
@@ -222,7 +188,7 @@ configuration.
                 ...
            </message>
 
-      rule <k> #createReceipt() => RPCResponse({
+      rule <k> #ethGetTransactionReceiptResponse => RPCResponse({
                   "type"              : "0x0",
                   "transactionHash"   : TX_HASH,
                   "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
@@ -276,10 +242,14 @@ This section defines rules to write RPCResponses to disk.
 
       rule <k> RPCResponse( JSON_RESPONSE )
             ~> #saveRpcResponse( IO_DIR )
-            => #writeFile( #responseFile( IO_DIR, REQ_ID ), JSON2String( JSON_RESPONSE ) )
+            => #writeFile( #responseFile( IO_DIR, REQ_ID ), JSON2String( {
+                  "jsonrpc" : "2.0",
+                  "id"      : REQ_ID,
+                  "result"  : JSON_RESPONSE
+            }) )
             ...
             </k>
-            <rpcRequestId> REQ_ID </rpcRequestId>
+            <rpcRequestID> REQ_ID </rpcRequestID>
 
 ```
 

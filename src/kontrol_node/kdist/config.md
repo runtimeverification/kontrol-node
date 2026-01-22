@@ -7,15 +7,17 @@ module KONTROL-NODE-CONFIG
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
 
+    syntax RPCError ::= ".RPCError"
+                      | "SigningError"
+                      | "InsufficientGasError"
+
     configuration <simbolikVM>
             <foundry/>
             <ioDir>                   "":String </ioDir>
-            <rpcRequestId>            0         </rpcRequestId>
+            <rpcRequestID>            0         </rpcRequestID>
             <accountKeys>             .Map      </accountKeys>
             <timeFreeze>              true      </timeFreeze>
-            <timeDiff>                0         </timeDiff>
             <currentTxID>             0         </currentTxID>
-            <currentBlockHash>        0         </currentBlockHash>
 
             // Tracing
             <activeTracing>           true  </activeTracing>          // signals if the tracing is gloablly enabled
