@@ -47,7 +47,7 @@ This section defines an intermediate represention for JSON RPC requests.
                                 | EthGetCode( Int, Int ) // address, block number
                                 | EthGetBlockByNumber( Int )
                                 | EthGetBlockByHash( String )
-                                | EthGetTransactionCount()
+                                | EthGetTransactionCount( Int, Int ) // address, block number
                                 | EthGetStorageAt( Int, Int, Int ) // address, slot, block number
                                 | AnvilStateDump()
                                 | DebugTraceTransaction( String ) // tx hash
@@ -89,12 +89,41 @@ intermediate representation.
                #let DATA  = #getBytes( "data", J, .Bytes ) #in
                EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
 
-      rule #rpcLoadParams( "eth_getTransactionReceipt", TX_HASH:String )
+      rule #rpcLoadParams( "eth_getTransactionReceipt", [ TX_HASH:String ] )
             => EthGetTransactionReceipt( TX_HASH )
 
-      rule #rpcLoadParams( "eth_getTransactionByHash", TX_HASH:String )
+      rule #rpcLoadParams( "eth_getTransactionByHash", [ TX_HASH:String ] )
             => EthGetTransactionByHash( TX_HASH )
-      
+
+      rule #rpcLoadParams( "eth_getCode", [ ADDR:String, BLOCK_NUM:String ] )
+            => #let ADDR_INT = #parseAddr( ADDR ) #in
+               #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+               EthGetCode( ADDR_INT, BLOCK_INT )
+
+      rule #rpcLoadParams( "eth_getBlockByNumber", [ BLOCK_NUM:String ] )
+            => #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+               EthGetBlockByNumber( BLOCK_INT )
+
+      rule #rpcLoadParams( "eth_getBlockByHash", [ BLOCK_HASH:String ] )
+            => EthGetBlockByHash( BLOCK_HASH )
+
+      rule #rpcLoadParams( "eth_getTransactionCount", [ ADDR:String, BLOCK_NUM:String ] )
+            => #let ADDR_INT = #parseAddr( ADDR ) #in
+               #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+               EthGetTransactionCount( ADDR_INT, BLOCK_INT )
+
+      rule #rpcLoadParams( "eth_getStorageAt", [ ADDR:String, SLOT:String, BLOCK_NUM:String ] )
+            => #let ADDR_INT = #parseAddr( ADDR ) #in
+               #let SLOT_INT = #parseWord( SLOT ) #in
+               #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+               EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
+
+      rule #rpcLoadParams( "anvil_stateDump", [ ] )
+            => AnvilStateDump()
+
+      rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String ] )
+            => DebugTraceTransaction( TX_HASH )
+
 ```
 ===============================================================================
 Writing RPCResponses to Disk

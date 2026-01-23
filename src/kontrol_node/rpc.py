@@ -50,7 +50,6 @@ HASH_LENGTH: Final[int] = 32 * 2 + 2
 
 # Simbolik needs at minimum the following RPC methods
 # eth_sendTransaction
-# eth_waitForTransactionReceipt <--- should be removed from Simbolik
 # eth_getTransactionByHash
 # eth_getTransactionReceipt
 # eth_getCode

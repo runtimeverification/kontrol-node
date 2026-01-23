@@ -223,6 +223,143 @@ eth_getTransactionByHash
             </message>
 ```
 
+===============================================================================
+eth_getCode
+
+```k
+         rule <k> RPCRequest( REQ_ID, EthGetCode( ADDR, _BLOCK_NUM ) ) // TODO: block number
+               => RPCResponse( bytesToHex(CODE) )
+               ~> #saveRpcResponse( IO_DIR )
+               ...
+              </k>
+              <ioDir>        IO_DIR      </ioDir>
+              <rpcRequestID> _ => REQ_ID </rpcRequestID>
+              <account>
+                <acctID> ADDR </acctID>
+                <code>   CODE </code>
+                ...
+              </account>
+```
+
+===============================================================================
+eth_getBlockByNumber
+
+```k
+        syntax KItem ::= "#ethGetBlockByNumberResponse"
+
+        rule <k> RPCRequest( REQ_ID, eth_getBlockByNumber( BLOCK_NUMBER) )
+               ~> #loadStateDump( IO_DIR, BLOCK_NUMBER )
+               ~> #ethGetBlockByNumberResponse
+               ~> #saveRpcResponse( IO_DIR )
+               ~> #loadStateDump( IO_DIR, ORIGINAL_BLOCK_NUMBER )
+               ...
+              </k>
+              <ioDir>        IO_DIR      </ioDir>
+              <rpcRequestID> _ => REQ_ID </rpcRequestID>
+              <block>
+                <number> ORIGINAL_BLOCK_NUMBER </number>
+                ...
+              </block>
+
+        rule <k> #ethGetBlockByNumberResponse
+              => RPCResponse({
+                    "hash"             : intToHex( 0 ), // TODO
+                    "parentHash"       : intToHex( PREV_HASH ),
+                    "sha3Uncles"       : intToHex( OMMERS_HASH ),
+                    "miner"            : intToHex( COINBASE ),
+                    "stateRoot"        : intToHex( STATE_ROOT ),
+                    "transactionsRoot" : intToHex( TRANSACTIONS_ROOT ),
+                    "receiptsRoot"     : intToHex( RECEIPTS_ROOT ),
+                    "logsBloom"        : "0x0", // TODO
+                    "difficulty"       : intToHex( DIFFICULTY ),
+                    "number"           : intToHex( BLOCK_NUMBER ),
+                    "gasLimit"         : intToHex( GAS_LIMIT ),
+                    "gasUsed"          : intToHex( GAS_USED ),
+                    "timestamp"        : intToHex( TIMESTAMP ),
+                    "extraData"        : bytesToHex( EXTRA_DATA ),
+                    "mixHash"          : intToHex( MIX_HASH ),
+                    "nonce"            : intToHex( NONCE ),
+                    "size"             : intToHex( SIZE ),
+                    "transactions"     : [ .JSONs ], // TODO
+                    "uncles"           : [ .JSONs ]  // TODO
+                })
+              ... </k>
+              <block>
+                <previousHash>     PREV_HASH        </previousHash>
+                <ommersHash>       OMMERS_HASH      </ommersHash>
+                <coinbase>         COINBASE         </coinbase>
+                <stateRoot>        STATE_ROOT       </stateRoot>
+                <transactionsRoot> TRANSACTIONS_ROOT </transactionsRoot>
+                <receiptsRoot>     RECEIPTS_ROOT    </receiptsRoot>
+                <difficulty>       DIFFICULTY       </difficulty>
+                <number>           BLOCK_NUMBER     </number>
+                <gasLimit>         GAS_LIMIT        </gasLimit>
+                <gasUsed>          GAS_USED         </gasUsed>
+                <timestamp>        TIMESTAMP        </timestamp>
+                <extraData>        EXTRA_DATA       </extraData>
+                <mixHash>          MIX_HASH         </mixHash>
+                <nonce>            NONCE            </nonce>
+                <size>             SIZE             </size>
+                ...
+              </block>
+```
+
+===============================================================================
+eth_getBlockByHash
+
+```k
+```
+
+===============================================================================
+eth_getTransactionCount
+
+```k
+         rule <k> RPCRequest( REQ_ID, EthGetTransactionCount( ADDR, _BLOCK_NUM ) ) // TODO: block number
+               => RPCResponse( intToHex( NONCE ) )
+               ~> #saveRpcResponse( IO_DIR )
+               ...
+              </k>
+              <ioDir>        IO_DIR      </ioDir>
+              <rpcRequestID> _ => REQ_ID </rpcRequestID>
+              <account>
+                <acctID> ADDR  </acctID>
+                <nonce>  NONCE </nonce>
+                ...
+              </account>
+```
+
+===============================================================================
+eth_getStorageAt
+
+```k
+         rule <k> RPCRequest( REQ_ID, EthGetStorageAt( ADDR, SLOT, _BLOCK_NUM ) ) // TODO: block number
+               => RPCResponse( intToHex( STORAGE[ SLOT ] orDefault 0 ) )
+               ~> #saveRpcResponse( IO_DIR )
+               ...
+              </k>
+              <ioDir>        IO_DIR      </ioDir>
+              <rpcRequestID> _ => REQ_ID </rpcRequestID>
+              <account>
+                <acctID>  ADDR    </acctID>
+                <storage> STORAGE </storage>
+                ...
+              </account>
+```
+
+===============================================================================
+anvil_stateDump
+
+```k
+```
+
+===============================================================================
+debug_traceTransaction
+
+```k
+```
+
+
+
 Transaction Signing
 -------------------
 
