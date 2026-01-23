@@ -97,11 +97,11 @@ intermediate representation.
 
       rule #rpcLoadParams( "eth_getCode", [ ADDR:String, BLOCK_NUM:String ] )
             => #let ADDR_INT = #parseAddr( ADDR ) #in
-               #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+               #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
                EthGetCode( ADDR_INT, BLOCK_INT )
 
       rule #rpcLoadParams( "eth_getBlockByNumber", [ BLOCK_NUM:String ] )
-            => #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+            => #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
                EthGetBlockByNumber( BLOCK_INT )
 
       rule #rpcLoadParams( "eth_getBlockByHash", [ BLOCK_HASH:String ] )
@@ -109,16 +109,16 @@ intermediate representation.
 
       rule #rpcLoadParams( "eth_getTransactionCount", [ ADDR:String, BLOCK_NUM:String ] )
             => #let ADDR_INT = #parseAddr( ADDR ) #in
-               #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+               #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
                EthGetTransactionCount( ADDR_INT, BLOCK_INT )
 
       rule #rpcLoadParams( "eth_getStorageAt", [ ADDR:String, SLOT:String, BLOCK_NUM:String ] )
             => #let ADDR_INT = #parseAddr( ADDR ) #in
                #let SLOT_INT = #parseWord( SLOT ) #in
-               #let BLOCK_INT = #parseBlockNum( BLOCK_NUM ) #in
+               #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
                EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
 
-      rule #rpcLoadParams( "anvil_stateDump", [ ] )
+      rule #rpcLoadParams( "anvil_stateDump", [ _ ] )
             => AnvilStateDump()
 
       rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String ] )

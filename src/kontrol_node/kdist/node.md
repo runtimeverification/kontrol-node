@@ -72,23 +72,13 @@ Mnemonic: test test test test test test test test test test test junk
       syntax KItem ::= "#ethSendTransactionResponse"
 
       rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
-            => #signTX !TX_ID FROM
-            ~> #validateTx !TX_ID
-            ~> #executeTx !TX_ID 
-            ~> #finishTx
-            ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
-            ~> #finalizeBlock
-            ~> #makeTxReceipts
-            ~> #updateBlockHeader
-            ~> #ethSendTransactionResponse
-            ~> #saveRpcResponse( IO_DIR )
+            => #signTx(!TX_ID, FROM)
             ...
             </k>
-            <ioDir>              IO_DIR      </ioDir>
-            <rpcRequestID>       _ => REQ_ID </rpcRequestID>
-            <origin>             _ => FROM   </origin>
-            <currentTxID>        _ => !TX_ID </currentTxID>
-            <schedule>           SCHED       </schedule>
+            <rpcRequestID> _ => REQ_ID </rpcRequestID>
+            <origin>       _ => FROM   </origin>
+            <currentTxID>  _ => !TX_ID </currentTxID>
+            <schedule>     SCHED       </schedule>
             <callState>
               <callGas> _ => G0(SCHED, DATA, (TO ==K .Account) ) </callGas>
               ...
@@ -98,9 +88,9 @@ Mnemonic: test test test test test test test test test test test junk
               ...
             </block>
             <network>
-              <chainID>      CHAIN_ID </chainID>
+              <chainID>  CHAIN_ID </chainID>
               <account>
-                <acctID> FROM     </acctID>
+                <acctID> FROM     </acctID> // TODO: What if FROM account does not exist yet?
                 <nonce>  TXNONCE  </nonce>
                 ...
               </account>
@@ -109,7 +99,7 @@ Mnemonic: test test test test test test test test test test test junk
               <messages>
                     ( .Bag => 
                           <message>
-                                <msgID>      !TX_ID         </msgID>
+                                <msgID>      !TX_ID    </msgID>
                                 <txChainID>  CHAIN_ID  </txChainID>
                                 <txNonce>    TXNONCE   </txNonce>
                                 <txType>     Legacy    </txType>
@@ -125,6 +115,52 @@ Mnemonic: test test test test test test test test test test test junk
               </messages>
               ...
             </network>
+
+      rule <k> #signTxError
+            => RPCResponse({
+                  "code"    : -32000,
+                  "message" : "Could not sign transaction: account not found"
+              })
+            ~> #saveRpcResponse( IO_DIR )
+            ...
+           </k>
+           <ioDir> IO_DIR </ioDir>
+
+      rule <k> #signTxSuccess
+            => #applyIntrinsicGas( TX_ID )
+            ...
+           </k>
+           <currentTxID> TX_ID </currentTxID>
+
+      rule <k> #intrinsicGasError( _ERR_CODE )
+            => RPCResponse({
+                  "code"    : -32000,
+                  "message" : "Intrinsic gas error "
+              })
+            ~> #saveRpcResponse( IO_DIR )
+            ...
+            </k>
+            <ioDir> IO_DIR </ioDir>
+
+      rule <k> #intrinsicGasSuccess
+            => #executeTx( TX_ID )
+            ~> #finishTx
+            ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
+            ~> #finalizeBlock
+            ~> #makeTxReceipts
+            ~> #updateBlockHeader
+            ~> #ethSendTransactionResponse
+            ~> #saveRpcResponse( IO_DIR )
+            ...
+            </k>
+            <ioDir>       IO_DIR </ioDir>
+            <currentTxID> TX_ID  </currentTxID>
+            <schedule>    SCHED  </schedule>
+            <message>
+                  <msgID> TX_ID </msgID>
+                  <data>  DATA  </data>
+                  ...
+            </message>
 
       rule <k> #ethSendTransactionResponse
             => RPCResponse( TX_HASH )
@@ -182,7 +218,7 @@ eth_getTransactionReceipt
             <block>
                   <previousHash> BLOCK_HASH                     </previousHash>
                   ...
-              </block>
+            </block>
 ```
 
 ###############################################################################
@@ -208,7 +244,13 @@ eth_getTransactionByHash
             </k>
             <ioDir>        IO_DIR      </ioDir>
             <rpcRequestID> _ => REQ_ID </rpcRequestID>
+            <txReceipt>
+                <txHash> TX_HASH </txHash>
+                <txID>   TXID    </txID>
+                ...
+            </txReceipt>
             <message>
+                  <msgID>      TXID      </msgID>
                   <txNonce>    TX_NONCE  </txNonce>
                   <to>         TO        </to>
                   <txGasLimit> GAS_LIMIT </txGasLimit>
@@ -247,7 +289,7 @@ eth_getBlockByNumber
 ```k
         syntax KItem ::= "#ethGetBlockByNumberResponse"
 
-        rule <k> RPCRequest( REQ_ID, eth_getBlockByNumber( BLOCK_NUMBER) )
+        rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER) )
                ~> #loadStateDump( IO_DIR, BLOCK_NUMBER )
                ~> #ethGetBlockByNumberResponse
                ~> #saveRpcResponse( IO_DIR )
@@ -266,20 +308,20 @@ eth_getBlockByNumber
                     "hash"             : intToHex( 0 ), // TODO
                     "parentHash"       : intToHex( PREV_HASH ),
                     "sha3Uncles"       : intToHex( OMMERS_HASH ),
-                    "miner"            : intToHex( COINBASE ),
+                    "miner"            : intToHex( MINER ),
                     "stateRoot"        : intToHex( STATE_ROOT ),
                     "transactionsRoot" : intToHex( TRANSACTIONS_ROOT ),
                     "receiptsRoot"     : intToHex( RECEIPTS_ROOT ),
                     "logsBloom"        : "0x0", // TODO
-                    "difficulty"       : intToHex( DIFFICULTY ),
+                    "difficulty"       : intToHex( BLOCK_DIFFICULTY ),
                     "number"           : intToHex( BLOCK_NUMBER ),
                     "gasLimit"         : intToHex( GAS_LIMIT ),
                     "gasUsed"          : intToHex( GAS_USED ),
-                    "timestamp"        : intToHex( TIMESTAMP ),
+                    "timestamp"        : intToHex( BLOCK_TIMESTAMP ),
                     "extraData"        : bytesToHex( EXTRA_DATA ),
                     "mixHash"          : intToHex( MIX_HASH ),
                     "nonce"            : intToHex( NONCE ),
-                    "size"             : intToHex( SIZE ),
+                    "size"             : "0x0", // TODO
                     "transactions"     : [ .JSONs ], // TODO
                     "uncles"           : [ .JSONs ]  // TODO
                 })
@@ -287,19 +329,18 @@ eth_getBlockByNumber
               <block>
                 <previousHash>     PREV_HASH        </previousHash>
                 <ommersHash>       OMMERS_HASH      </ommersHash>
-                <coinbase>         COINBASE         </coinbase>
+                <coinbase>         MINER            </coinbase>
                 <stateRoot>        STATE_ROOT       </stateRoot>
                 <transactionsRoot> TRANSACTIONS_ROOT </transactionsRoot>
                 <receiptsRoot>     RECEIPTS_ROOT    </receiptsRoot>
-                <difficulty>       DIFFICULTY       </difficulty>
+                <difficulty>       BLOCK_DIFFICULTY </difficulty>
                 <number>           BLOCK_NUMBER     </number>
                 <gasLimit>         GAS_LIMIT        </gasLimit>
                 <gasUsed>          GAS_USED         </gasUsed>
-                <timestamp>        TIMESTAMP        </timestamp>
+                <timestamp>        BLOCK_TIMESTAMP  </timestamp>
                 <extraData>        EXTRA_DATA       </extraData>
                 <mixHash>          MIX_HASH         </mixHash>
-                <nonce>            NONCE            </nonce>
-                <size>             SIZE             </size>
+                <blockNonce>       NONCE            </blockNonce>
                 ...
               </block>
 ```
@@ -333,7 +374,7 @@ eth_getStorageAt
 
 ```k
          rule <k> RPCRequest( REQ_ID, EthGetStorageAt( ADDR, SLOT, _BLOCK_NUM ) ) // TODO: block number
-               => RPCResponse( intToHex( STORAGE[ SLOT ] orDefault 0 ) )
+               => RPCResponse( intToHex( {STORAGE[ SLOT ] orDefault 0}:>Int ) )
                ~> #saveRpcResponse( IO_DIR )
                ...
               </k>
@@ -369,27 +410,33 @@ Transaction Signing
     // previously of EIP155, v is computed as:  v = recid + 27
     // post of EIP155, v is computed as :       v = 2 * CHAIN_ID + recid + 35
 
-    syntax KItem ::= "#signTX" Int Int
-                   | "#signTX" Int String
+    syntax KItem ::= #signTx(Int, Int)
+                   | #signTx(Int, String)
+                   | "#signTxSuccess"
+                   | "#signTxError"
     
     // Sign a transaction with an account managed by this node
-    rule <k> #signTX TXID ACCTFROM:Int => #signTX TXID ECDSASign( Keccak256raw(#rlpEncodeTxData (LegacySignedTxData(TN, TP, TG, TT, TV, TD, B))), #padToWidth( 32, #asByteStack(KEY))) ... </k>
+    rule <k> #signTx(TXID, ACCTFROM:Int)
+          => #signTx(TXID, ECDSASign( Keccak256raw(#rlpEncodeTxData(#getTxData(TXID))), #padToWidth( 32, #asByteStack(KEY))))
+          ...
+        </k>
         <accountKeys> ... ACCTFROM |-> KEY ... </accountKeys>
         <mode> NORMAL </mode>
-        <chainID> B </chainID>
          <message>
            <msgID> TXID </msgID>
-           <txNonce>    TN     </txNonce>
-           <txGasPrice> TP     </txGasPrice>
-           <txGasLimit> TG     </txGasLimit>
-           <to>         TT     </to>
-           <value>      TV     </value>
-           <data>       TD     </data>
            ...
          </message>
-
+    
+    // Error signing a transaction with an unknown account
+    rule <k> #signTx(TXID, ACCTFROM:Int) => #signTxError ... </k>
+         <accountKeys> KEYMAP                      </accountKeys>
+         <mode>        NORMAL                      </mode>
+         <txPending>   ListItem(TXID) => .List ... </txPending> // TODO: Is this the best place to remove the tx from pending?
+         <txOrder>     ListItem(TXID) => .List ... </txOrder>
+      requires notBool ACCTFROM in_keys(KEYMAP)
+  
     // Sign a transaction with a given signature
-    rule <k> #signTX TXID SIG:String => .K ... </k>
+    rule <k> #signTx(TXID, SIG:String) => #signTxSuccess ... </k>
          <chainID> B </chainID>
          <message>
            <msgID> TXID </msgID>
@@ -399,20 +446,15 @@ Transaction Signing
            ...
          </message>
 
-    // Signing failed. TODO: Send error response and continue with next request
-    rule <k> #signTX TXID ACCTFROM:Int => .K ... </k>
-         <accountKeys> KEYMAP                      </accountKeys>
-         <mode>        NORMAL                      </mode>
-         <txPending>   ListItem(TXID) => .List ... </txPending>
-         <txOrder>     ListItem(TXID) => .List ... </txOrder>
-      requires notBool ACCTFROM in_keys(KEYMAP)
-
-
-    syntax KItem ::= "#validateTx" Int
+    syntax KItem ::= #applyIntrinsicGas( Int )
+                   | "#intrinsicGasSuccess"
+                   | #intrinsicGasError( ExceptionalStatusCode )
 
     // Revert if insufficient gas
-    // TODO: Send error response and continue with next request
-    rule <k> #validateTx TXID => #end #if BAL <Int GLIMIT *Int GPRICE #then EVMC_BALANCE_UNDERFLOW #else EVMC_OUT_OF_GAS #fi ... </k>
+    rule <k> #applyIntrinsicGas( TXID )
+          => #intrinsicGasError( #if BAL <Int GLIMIT *Int GPRICE #then EVMC_BALANCE_UNDERFLOW #else EVMC_OUT_OF_GAS #fi)
+          ...
+         </k>
          <callGas> G0_INIT </callGas>
          <origin> ACCTFROM </origin>
          <account>
@@ -430,7 +472,8 @@ Transaction Signing
         orBool BAL <Int GLIMIT *Int GPRICE
 
     // Sufficient gas
-    rule <k> #validateTx TXID => .K ... </k>
+    rule <k> #applyIntrinsicGas( TXID )
+          => #intrinsicGasSuccess ... </k>
          <origin> ACCTFROM </origin>
          <callGas> G0_INIT => GLIMIT -Int G0_INIT </callGas>
          <account>
@@ -447,10 +490,10 @@ Transaction Signing
       requires GLIMIT >=Int G0_INIT
        andBool BAL >=Int GLIMIT *Int GPRICE
 
-    syntax KItem ::= "#executeTx" Int
+    syntax KItem ::= #executeTx( Int )
 
     // Execute a contract creation transaction
-    rule <k> #executeTx TXID:Int
+    rule <k> #executeTx( TXID:Int )
           => #accessAccounts ACCTFROM #newAddr(ACCTFROM, NONCE) #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
           ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE
@@ -481,7 +524,7 @@ Transaction Signing
          <currentBalanceMutations> CBM => #if TRBAL #then CBM[ ACCTFROM <- BAL -Int (GLIMIT *Int GPRICE) ] #else CBM #fi </currentBalanceMutations>
 
     // Exeucte a contract call transaction
-    rule <k> #executeTx TXID:Int
+    rule <k> #executeTx( TXID:Int )
           => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
           ~> #call ACCTFROM ACCTTO ACCTTO VALUE VALUE DATA false
@@ -689,7 +732,6 @@ Receipts Root
                 ( I              => I +Int 1 ),
                 <txReceipts>
                     ( <txReceipt>
-                      <txID>            TXID </txID>
                       <txStatus>        TS   </txStatus>
                       <txCumulativeGas> TG   </txCumulativeGas>
                       <bloomFilter>     TB   </bloomFilter>
