@@ -48,12 +48,12 @@ K configuration.
 
     syntax JSON  ::= ( JSON )  [bracket]
     syntax JSONs ::= ( JSONs ) [bracket]
-    syntax JSON  ::= accountsCellToJSON( AccountsCell )          [function, total, symbol(accountsCellToJSON)]
-                   | accountCellToJSON( AccountCell )            [function, total, symbol(accountCellToJSON)]
-                   | storageToJSON(Map)                          [function, total, symbol(accStorageToJson)]
+    syntax JSON  ::= accountsToJSON( AccountsCell )          [function, total, symbol(accountsToJSON)]
+                   | accountToJSON( AccountCell )            [function, total, symbol(accountToJSON)]
+                   | storageToJSON(Map)                      [function, total, symbol(accStorageToJson)]
 
-    syntax JSONs ::= accountsCellToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsCellToJSONs)]
-                   | storageToJSONs( Map, JSONs )                [function, total, symbol(accStorageToJSONs)]
+    syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsToJSONs)]
+                   | storageToJSONs( Map, JSONs )            [function, total, symbol(accStorageToJSONs)]
 
 
     // Duplicated in trace-json.md where this is called intMapToJson
@@ -61,7 +61,7 @@ K configuration.
     rule storageToJSONs( .Map, ACCU ) => ACCU
     rule storageToJSONs( (KEY |-> VAL) ST, ACCU) => storageToJSONs( ST, ( intToHex(KEY) : intToHex(VAL), ACCU ) )
 
-    rule accountCellToJSON (
+    rule accountToJSON (
         <account>
             <acctID>            ACC_ID            </acctID>
             <balance>           ACC_BALANCE       </balance>
@@ -77,10 +77,10 @@ K configuration.
         "nonce" : ACC_NONCE
     }
 
-    rule accountsCellToJSON( ACCS ) => { accountsCellToJSONs( ACCS, .JSONs ) }
-    rule accountsCellToJSONs( <accounts> <account> ACC </account> ACCS:Bag </accounts>, ACCU)
-            => accountsCellToJSONs( <accounts> ACCS </accounts>, (accountCellToJSON( <account> ACC </account> ) , ACCU) ) 
-    rule accountsCellToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
+    rule accountsToJSON( ACCS ) => { accountsToJSONs( ACCS, .JSONs ) }
+    rule accountsToJSONs( <accounts> <account> ACC </account> ACCS:Bag </accounts>, ACCU)
+            => accountsToJSONs( <accounts> ACCS </accounts>, (accountToJSON( <account> ACC </account> ) , ACCU) ) 
+    rule accountsToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
 
     rule <k> #createStateDump()
         => #StateDump({
@@ -95,7 +95,7 @@ K configuration.
                 "prevrandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
                 "blob_excess_gas_and_price": BLOCK_EXCESS_BLOB_GAS
             },
-            "accounts": accountsCellToJSON( <accounts> ACCOUNTS </accounts> )
+            "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> )
         }) ...
     </k>
     <block>
