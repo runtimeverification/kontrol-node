@@ -6,6 +6,7 @@ requires "trace.md"
 requires "trace-json.md"
 requires "state-json.md"
 requires "config.md"
+requires "json-utils.md"
 requires "rpc-json.md"
 
 module KONTROL-NODE
@@ -19,6 +20,7 @@ module KONTROL-NODE
     imports RPC-JSON
     imports TRACE-JSON
     imports KONTROL-NODE-CONFIG
+    imports JSON-UTILS
 
     syntax EthereumSimulation ::= Start
     syntax Start ::= #start(
@@ -67,7 +69,7 @@ Mnemonic: test test test test test test test test test test test junk
 # eth_sendTransaction
 
 ```k
-
+      syntax KItem ::= "#ethSendTransactionResponse"
 
       rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
             => #signTX !TX_ID FROM
@@ -123,6 +125,102 @@ Mnemonic: test test test test test test test test test test test junk
               </messages>
               ...
             </network>
+
+      rule <k> #ethSendTransactionResponse
+            => RPCResponse( TX_HASH )
+            ... </k>
+            <currentTxID>  TXID    </currentTxID>
+            <txReceipt>
+                  <txHash> TX_HASH </txHash>
+                  <txID>   TXID    </txID>
+                  ...
+            </txReceipt>
+```
+###############################################################################
+eth_getTransactionReceipt
+
+```k
+      rule <k> RPCRequest( REQ_ID, EthGetTransactionReceipt( TX_HASH ) )
+            => RPCResponse({
+                  "type"              : "0x0",
+                  "transactionHash"   : TX_HASH,
+                  "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
+                  "blockHash"         : intToHex( BLOCK_HASH ),
+                  "blockNumber"       : intToHex( BLOCK_NUMBER ),
+                  "from"              : intToHex( FROM ),
+                  "to"                : intToHex( TO ),
+                  "cumulativeGasUsed" : intToHex( CGAS ), // TODO: What is the difference between cumulativeGasUsed and gasUsed
+                  "gasUsed"           : intToHex( CGAS ), 
+                  "contractAddress"   : #if TO ==K .Account #then intToHex( #newAddr(FROM, TX_NONCE) ) #else null #fi,
+                  "logs"              : [ .JSONs ], // TODO
+                  "logsBloom"         : "", // TODO
+                  "status"            : #if TX_STATUS ==K EVMC_SUCCESS #then "1" #else "0" #fi,
+                  "effectiveGasPrice" : "0" // TODO
+              })
+             ~> #saveRpcResponse( IO_DIR )
+             ...
+            </k>
+            <ioDir>        IO_DIR      </ioDir>
+            <rpcRequestID> _ => REQ_ID </rpcRequestID>
+            <currentTxID>         TXID                           </currentTxID>
+            <txReceipt>
+                <txHash>          TX_HASH                        </txHash>
+                <txCumulativeGas> CGAS                           </txCumulativeGas>
+                <logSet>          _                              </logSet>
+                <bloomFilter>     _                              </bloomFilter>
+                <txStatus>        TX_STATUS                      </txStatus>
+                <txID>            TXID                           </txID>
+                <sender>          FROM                           </sender>
+                <txBlockNumber>   BLOCK_NUMBER                   </txBlockNumber>
+            </txReceipt>
+            <message>
+                  <msgID>        TXID                           </msgID>
+                  <txNonce>      TX_NONCE                       </txNonce>
+                  <to>           TO                             </to>
+                  ...
+            </message>
+            <block>
+                  <previousHash> BLOCK_HASH                     </previousHash>
+                  ...
+              </block>
+```
+
+###############################################################################
+eth_getTransactionByHash
+
+```k
+      rule <k> RPCRequest( REQ_ID, EthGetTransactionByHash( TX_HASH ) )
+            => RPCResponse({
+                  "type"             : "0x0",
+                  "nonce"            : intToHex( TX_NONCE ),
+                  "to"               : intToHex( TO ), // TODO: null for contract creation
+                  "gas"              : intToHex( GAS_LIMIT ),
+                  "value"            : intToHex( VALUE ),
+                  "input"            : bytesToHex( DATA ),
+                  "gasPrice"         : intToHex( GAS_PRICE ),
+                  "chainId"          : intToHex( CHAIN_ID ),
+                  "v"                : intToHex( SIG_V ),
+                  "r"                : bytesToHex( SIG_R ),
+                  "s"                : bytesToHex( SIG_S )
+              })
+             ~> #saveRpcResponse( IO_DIR )
+             ...
+            </k>
+            <ioDir>        IO_DIR      </ioDir>
+            <rpcRequestID> _ => REQ_ID </rpcRequestID>
+            <message>
+                  <txNonce>    TX_NONCE  </txNonce>
+                  <to>         TO        </to>
+                  <txGasLimit> GAS_LIMIT </txGasLimit>
+                  <txGasPrice> GAS_PRICE </txGasPrice>
+                  <value>      VALUE     </value>
+                  <data>       DATA      </data>
+                  <txChainID>  CHAIN_ID  </txChainID>
+                  <sigV>       SIG_V     </sigV>
+                  <sigR>       SIG_R     </sigR>
+                  <sigS>       SIG_S     </sigS>
+                  ...
+            </message>
 ```
 
 Transaction Signing

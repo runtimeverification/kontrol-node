@@ -13,6 +13,7 @@ requires "driver.md"
 requires "fs.md"
 requires "json.md"
 requires "config.md"
+requires "json-utils.md"
 
 module STATE-JSON
     imports EVM
@@ -25,6 +26,7 @@ module STATE-JSON
     imports FILE-SYSTEM
     imports SERIALIZATION
     imports KONTROL-NODE-CONFIG
+    imports JSON-UTILS
 
     syntax KItem ::= #saveStateDump( String )
                    | #loadStateDump( String, Int )
@@ -48,21 +50,11 @@ K configuration.
     syntax JSONs ::= ( JSONs ) [bracket]
     syntax JSON  ::= accountsCellToJSON( AccountsCell )          [function, total, symbol(accountsCellToJSON)]
                    | accountCellToJSON( AccountCell )            [function, total, symbol(accountCellToJSON)]
-                   | codeToJson(Bytes)                           [function, total, symbol(codeToJson)]
                    | storageToJSON(Map)                          [function, total, symbol(accStorageToJson)]
 
     syntax JSONs ::= accountsCellToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsCellToJSONs)]
                    | storageToJSONs( Map, JSONs )                [function, total, symbol(accStorageToJSONs)]
 
-    syntax String ::= intToHex(Int)    [function, total]
-
-    // Duplicated in trace-json.md where this is called intToHex
-    rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
-      requires A >=Int 0
-    rule intToHex( A:Int ) => "-0x" +String Base2String( absInt(A), 16) [owise]
-
-    // Duplicated in trace-json.md where this is called bytesToJson
-    rule codeToJson( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
 
     // Duplicated in trace-json.md where this is called intMapToJson
     rule storageToJSON( ST ) => { storageToJSONs( ST, .JSONs ) }
@@ -80,7 +72,7 @@ K configuration.
         </account>
     ) => intToHex(ACC_ID) : {
         "balance": intToHex( ACC_BALANCE ),
-        "code": codeToJson( ACC_CODE ),
+        "code": bytesToHex( ACC_CODE ),
         "storage": storageToJSON( ACC_STORAGE ),
         "nonce" : ACC_NONCE
     }

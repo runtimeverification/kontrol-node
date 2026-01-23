@@ -6,9 +6,10 @@ requires "driver.md"
 requires "trace.md"
 requires "fs.md"
 requires "config.md"
+requires "json-utils.md"
 
 module TRACE-JSON
-  
+    imports JSON-UTILS
     imports EVM
     imports FOUNDRY
     imports EVM-TRACING
@@ -35,10 +36,6 @@ module TRACE-JSON
                   | bytesMapToJsons(Map)                 [function, total, symbol(bytesMapToJsons)]
                   | storageMapToJsons(Map)               [function, total, symbol(storageMapToJsons)]
  // -------------------------------------------------------------------------------------------------
-    syntax String ::= intToHex(Int)    [function, total, symbol(intToHex)]
-                   | bytesToHex(Bytes) [function, total, symbol(bytesToHex)]
- // ------------------------------------------------------------------------
-
 
 
     rule opcodeToJson( STOP ) => "STOP"
@@ -196,11 +193,6 @@ module TRACE-JSON
     rule wordstackToJson( WS ) => [ wordstackToJsons( WS, .JSONs ) ] [priority(50)]
     rule wordstackToJsons( .WordStack, ACC ) => ACC
     rule wordstackToJsons( W:WS, ACC ) => wordstackToJsons(WS, (intToHex( W ), ACC) )
-
-    rule bytesToJson( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
-    rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
-      requires A >=Int 0
-    rule intToHex( A:Int ) => "-0x" +String Base2String( absInt(A), 16) [owise]
 
     rule intMapToJson( M:Map ) => { intMapToJsons(M) }
     rule intMapToJsons( .Map) => .JSONs
