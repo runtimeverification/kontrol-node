@@ -42,15 +42,15 @@ This section defines an intermediate represention for JSON RPC requests.
                                     Int , // value
                                     Bytes // input
                                   )
-                                | EthGetTransactionReceipt( String ) // tx hash
-                                | EthGetTransactionByHash( String ) // tx hash
-                                | EthGetCode( Int, Int ) // address, block number
-                                | EthGetBlockByNumber( Int )
-                                | EthGetBlockByHash( String )
+                                | EthGetTransactionReceipt( Int )    // tx hash
+                                | EthGetTransactionByHash( Int )     // tx hash
+                                | EthGetCode( Int, Int )             // address, block number
+                                | EthGetBlockByNumber( Int )         // block number
+                                | EthGetBlockByHash( Int )           // block hash
                                 | EthGetTransactionCount( Int, Int ) // address, block number
-                                | EthGetStorageAt( Int, Int, Int ) // address, slot, block number
-                                | AnvilStateDump()
-                                | DebugTraceTransaction( String ) // tx hash
+                                | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
+                                | AnvilStateDump()                   // TODO: add options
+                                | DebugTraceTransaction( Int )       // tx hash
 ```
 
 ===============================================================================
@@ -90,10 +90,10 @@ intermediate representation.
                EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
 
       rule #rpcLoadParams( "eth_getTransactionReceipt", [ TX_HASH:String ] )
-            => EthGetTransactionReceipt( TX_HASH )
+            => EthGetTransactionReceipt( #parseWord( TX_HASH ) )
 
       rule #rpcLoadParams( "eth_getTransactionByHash", [ TX_HASH:String ] )
-            => EthGetTransactionByHash( TX_HASH )
+            => EthGetTransactionByHash( #parseWord( TX_HASH ) )
 
       rule #rpcLoadParams( "eth_getCode", [ ADDR:String, BLOCK_NUM:String ] )
             => #let ADDR_INT = #parseAddr( ADDR ) #in
@@ -105,7 +105,7 @@ intermediate representation.
                EthGetBlockByNumber( BLOCK_INT )
 
       rule #rpcLoadParams( "eth_getBlockByHash", [ BLOCK_HASH:String ] )
-            => EthGetBlockByHash( BLOCK_HASH )
+            => EthGetBlockByHash( #parseWord( BLOCK_HASH ) )
 
       rule #rpcLoadParams( "eth_getTransactionCount", [ ADDR:String, BLOCK_NUM:String ] )
             => #let ADDR_INT = #parseAddr( ADDR ) #in
@@ -122,7 +122,7 @@ intermediate representation.
             => AnvilStateDump()
 
       rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String ] )
-            => DebugTraceTransaction( TX_HASH )
+            => DebugTraceTransaction( #parseWord( TX_HASH ) )
 
 ```
 ===============================================================================

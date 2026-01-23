@@ -56,7 +56,7 @@ module KONTROL-NODE-CONFIG
             <stateTrie> .MerkleTree </stateTrie>
             <txReceipts>
                 <txReceipt multiplicity ="*" type="Map">
-                    <txHash>          "":String  </txHash>
+                    <txHash>          0          </txHash>
                     <txCumulativeGas> 0          </txCumulativeGas>
                     <logSet>          .List      </logSet>
                     <bloomFilter>     .Bytes     </bloomFilter>
@@ -66,6 +66,7 @@ module KONTROL-NODE-CONFIG
                     <txBlockNumber>   0          </txBlockNumber>
                 </txReceipt>
             </txReceipts>
+            <blockStorage> .Map </blockStorage>
         </simbolikVM>
 
 endmodule

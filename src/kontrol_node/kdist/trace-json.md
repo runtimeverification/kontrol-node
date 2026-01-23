@@ -388,7 +388,7 @@ module TRACE-JSON
     rule <k> #storeTraceItem TRITEM
           => #appendFile(
                 #traceFile( IO_DIR, MSG_ID ),
-                JSON2String( traceItemToJson( TRITEM ) ) +String "\n"
+                JSON2String( traceItemToJson( TRITEM ) ) +String ",\n"
              ) ...
          </k>
          <ioDir> IO_DIR </ioDir>

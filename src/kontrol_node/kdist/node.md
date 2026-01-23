@@ -38,7 +38,6 @@ Create the initial configuration by reading the inputs from the IO directory
         => #unlockAccounts()
         ~> #loadStateDump( IO_DIR, 0)
         ~> #loadRpcRequests( IO_DIR )
-        ~> #saveStateDump( IO_DIR )
         ...
        </k>
        <ioDir> _ => IO_DIR </ioDir>
@@ -67,6 +66,11 @@ Mnemonic: test test test test test test test test test test test junk
 ```
 ###############################################################################
 # eth_sendTransaction
+
+When eth_sendTransaction is called, we sign it, apply the inrinsic gas costs,
+execute it, mine a block including it, and return the transaction hash.
+Additionally, we eagerly compute the transaction trace and and save it to disk.
+Similarly, we save a state snapshot after the block was mined.
 
 ```k
     syntax KItem ::= "#ethSendTransactionResponse"
@@ -148,9 +152,10 @@ Mnemonic: test test test test test test test test test test test junk
         ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
         ~> #finalizeBlock
         ~> #makeTxReceipts
-        ~> #updateBlockHeader
+        ~> #mineBlock
         ~> #ethSendTransactionResponse
         ~> #saveRpcResponse( IO_DIR )
+        ~> #saveStateDump( IO_DIR )
         ...
         </k>
         <ioDir>       IO_DIR </ioDir>
@@ -163,7 +168,7 @@ Mnemonic: test test test test test test test test test test test junk
         </message>
 
     rule <k> #ethSendTransactionResponse
-        => RPCResponse( TX_HASH )
+        => RPCResponse( intToHex( TX_HASH ) )
         ... </k>
         <currentTxID>  TXID    </currentTxID>
         <txReceipt>
@@ -179,7 +184,7 @@ eth_getTransactionReceipt
     rule <k> RPCRequest( REQ_ID, EthGetTransactionReceipt( TX_HASH ) )
         => RPCResponse({
                 "type"              : "0x0",
-                "transactionHash"   : TX_HASH,
+                "transactionHash"   : intToHex( TX_HASH ),
                 "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
                 "blockHash"         : intToHex( BLOCK_HASH ),
                 "blockNumber"       : intToHex( BLOCK_NUMBER ),
@@ -290,17 +295,17 @@ eth_getBlockByNumber
     syntax KItem ::= "#ethGetBlockByNumberResponse"
 
     rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER) )
-            ~> #loadStateDump( IO_DIR, BLOCK_NUMBER )
+            => #setBlockData( #getBlockData( BLOCK_NUMBER ) )
             ~> #ethGetBlockByNumberResponse
             ~> #saveRpcResponse( IO_DIR )
-            ~> #loadStateDump( IO_DIR, ORIGINAL_BLOCK_NUMBER )
+            ~> #setBlockData( #getBlockData( ORIGINAL_BLOCK_NUMBER ) )
             ...
             </k>
             <ioDir>        IO_DIR      </ioDir>
             <rpcRequestID> _ => REQ_ID </rpcRequestID>
             <block>
-            <number> ORIGINAL_BLOCK_NUMBER </number>
-            ...
+                <number> ORIGINAL_BLOCK_NUMBER </number>
+                ...
             </block>
 
     rule <k> #ethGetBlockByNumberResponse
@@ -350,6 +355,19 @@ eth_getBlockByHash
 
 ```k
 
+    rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( BLOCK_HASH) )
+            => #setBlockData( #getBlockData( BLOCK_HASH ) )
+            ~> #ethGetBlockByNumberResponse
+            ~> #saveRpcResponse( IO_DIR )
+            ~> #setBlockData( #getBlockData( ORIGINAL_BLOCK_NUMBER ) )
+            ...
+            </k>
+            <ioDir>        IO_DIR      </ioDir>
+            <rpcRequestID> _ => REQ_ID </rpcRequestID>
+            <block>
+                <number> ORIGINAL_BLOCK_NUMBER </number>
+                ...
+            </block>
 ```
 
 ===============================================================================
@@ -392,12 +410,52 @@ eth_getStorageAt
 anvil_stateDump
 
 ```k
+    rule <k> RPCRequest( REQ_ID, AnvilStateDump() )
+        => RPCResponse(
+                #let CONTENTS:IOString = #readFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER ) )
+                #in String2JSON( {CONTENTS}:>String )
+           )
+        ~> #saveRpcResponse( IO_DIR )
+        ...
+        </k>
+        <ioDir>        IO_DIR      </ioDir>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <number> BLOCK_NUMBER </number>
+
 ```
 
 ===============================================================================
 debug_traceTransaction
 
+At the point the debug_traceTransaction method is called, the transaction has already been
+processed and its trace stored on disk. We just need to read the trace and return it.
+Since the trace can be large, we avoid loading it into memory as a JSON object, and 
+just build the response string directly.
+
 ```k
+
+    rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
+        => #writeFile( #responseFile( IO_DIR, REQ_ID ),
+            "{ \"jsonrpc\": \"2.0\"" +String
+            ", \"id\": " +String intToHex( REQ_ID ) +String
+            ", \"result\": " +String
+                "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "true" #else "false" #fi +String
+                ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
+                ", \"return_value\": \"0x\"" +String // TODO
+                ", \"structLogs\": [" +String {#readFile( #traceFile( IO_DIR, TXID) )}:>String +String
+            "] } }"
+        ) ...
+        </k>
+        <ioDir>        IO_DIR      </ioDir>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <txReceipt>
+            <txHash> TX_HASH </txHash>
+            <txID>   TXID    </txID>
+            <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
+            <txStatus> TX_STATUS </txStatus>
+            ...
+        </txReceipt>
+
 ```
 
 
@@ -577,7 +635,7 @@ Transaction Receipts
          <txReceipts>
            ( .Bag =>
             <txReceipt>
-                <txHash> #unparseDataBytes( #hashTxData( #getTxData (TXID ) ) ) </txHash>
+                <txHash>          #asInteger( #hashTxData( #getTxData(TXID ) ) ) </txHash>
                 <txCumulativeGas> CGAS                           </txCumulativeGas>
                 <logSet>          LOGS                           </logSet>
                 <bloomFilter>     #bloomFilter(LOGS)             </bloomFilter>
@@ -609,13 +667,15 @@ Block Mining
 The productions below are used to perform the mining of blocks, advancing the blockchain state.
 
 ```k
-    syntax KItem ::= "#updateBlockHeader"  [symbol(updateBlockHeader)]
+    syntax KItem ::= "#mineBlock"  [symbol(mineBlock)]
+                   | #setBlockData( BlockData )
 
-    rule <k> #updateBlockHeader
-          => #startBlock
-          ... </k>
-          <stateTrie>        TREE            </stateTrie> // TODO: We never set the initial trie
-          <txReceipts>       TXRECEIPTS      </txReceipts> // TODO: Should these be cleared?
+    syntax BlockData ::= #getBlockData( Int )        [function]
+    syntax Int       ::= #hashBlockData( BlockData ) [function]
+
+    rule <k> #mineBlock => #startBlock ... </k>
+          <stateTrie>  TREE       </stateTrie> // TODO: We never set the initial trie
+          <txReceipts> TXRECEIPTS </txReceipts> // TODO: Should these be cleared?
           <callState>
                 <gas>              _  => 0         </gas>
                 ...
@@ -626,23 +686,110 @@ The productions below are used to perform the mining of blocks, advancing the bl
                 ...
           </network>
           <block>
-                <previousHash>     PH => #blockHeaderHash(PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, gas2Int( HG ), HS, HX, HM, HN)        </previousHash>
-                <ommersHash>       HO              </ommersHash>
-                <coinbase>         HC              </coinbase>
-                <stateRoot>        HR => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( TREE ) ) )</stateRoot>  // TODO: should <prevHash> use the old or new state root?
-                <transactionsRoot> HT => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #transactionsRoot( TXLIST ) ) ) ) </transactionsRoot>
-                <receiptsRoot>     HE => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #receiptsRoot( <txReceipts> TXRECEIPTS </txReceipts> ) ) ) ) </receiptsRoot>
-                <logsBloom>        HB              </logsBloom>
-                <difficulty>       HD              </difficulty>
                 <number>           BN => BN +Int 1 </number>
-                <gasLimit>         HL              </gasLimit>
-                <gasUsed>          HG              </gasUsed>
-                <timestamp>        HS              </timestamp>
-                <extraData>        HX              </extraData>
-                <mixHash>          HM              </mixHash>
-                <blockNonce>       HN              </blockNonce>
+                <previousHash>     _  =>  #hashBlockData( #getBlockData( BN ) ) </previousHash>
+                <stateRoot>        _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( TREE ) ) )</stateRoot>
+                <transactionsRoot> _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #transactionsRoot( TXLIST ) ) ) ) </transactionsRoot>
+                <receiptsRoot>     _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #receiptsRoot( <txReceipts> TXRECEIPTS </txReceipts> ) ) ) ) </receiptsRoot>
                 ...
           </block>
+          <blockStorage> M => M[ BN                                    <- #getBlockData( BN )]
+                               [ #hashBlockData( #getBlockData( BN ) ) <- #getBlockData( BN )]
+          </blockStorage>
+       
+
+    syntax BlockData ::= BlockData(
+        Int, // previousHash
+        Int, // ommersHash
+        Int, // coinbase
+        Int, // stateRoot
+        Int, // transactionsRoot
+        Int, // receiptsRoot
+        Bytes, // logsBloom
+        Int, // difficulty
+        Int, // number
+        Int, // gasLimit
+        Gas, // gasUsed
+        Int, // timestamp
+        Bytes, // extraData
+        Int, // mixHash
+        Int, // blockNonce
+        Int, // base fee
+        Int, // withdrawalsRoot
+        Int, // blobGasUsed
+        Int, // excessBlobGas
+        Int, // beaconRoot
+        Int, // requestsRoot
+        JSON // omnersBlockHeaders
+    )
+
+    rule [[ #getBlockData( BN ) => BlockData(
+        PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
+    ) ]]
+        <block>
+            <previousHash>     PH </previousHash>
+            <ommersHash>       HO </ommersHash>
+            <coinbase>         HC </coinbase>
+            <stateRoot>        HR </stateRoot>
+            <transactionsRoot> HT </transactionsRoot>
+            <receiptsRoot>     HE </receiptsRoot>
+            <logsBloom>        HB </logsBloom>
+            <difficulty>       HD </difficulty>
+            <number>           BN </number>
+            <gasLimit>         HL </gasLimit>
+            <gasUsed>          HG </gasUsed>
+            <timestamp>        HS </timestamp>
+            <extraData>        HX </extraData>
+            <mixHash>          HM </mixHash>
+            <blockNonce>       HN </blockNonce>
+            <baseFee>          BF </baseFee>
+            <withdrawalsRoot>  WR </withdrawalsRoot>
+            <blobGasUsed>      BG </blobGasUsed>
+            <excessBlobGas>    EG </excessBlobGas>
+            <beaconRoot>       BR </beaconRoot>
+            <requestsRoot>     RR </requestsRoot>
+            <ommerBlockHeaders> OBH </ommerBlockHeaders>
+        </block>
+
+    rule [[ #getBlockData( BN ) => {BLOCK_STORAGE[ BN ]}:>BlockData ]]
+        <blockStorage> BLOCK_STORAGE:Map </blockStorage>
+        <number> CURRENT_BN </number>
+        requires BN =/=Int CURRENT_BN andBool BN in_keys(BLOCK_STORAGE)
+
+    rule <k> #setBlockData( BlockData(
+            PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
+         ))
+        => .K ... </k>
+        <block>
+            <previousHash>     _ => PH </previousHash>
+            <ommersHash>       _ => HO </ommersHash>
+            <coinbase>         _ => HC </coinbase>
+            <stateRoot>        _ => HR </stateRoot>
+            <transactionsRoot> _ => HT </transactionsRoot>
+            <receiptsRoot>     _ => HE </receiptsRoot>
+            <logsBloom>        _ => HB </logsBloom>
+            <difficulty>       _ => HD </difficulty>
+            <number>           _ => BN </number>
+            <gasLimit>         _ => HL </gasLimit>
+            <gasUsed>          _ => HG </gasUsed>
+            <timestamp>        _ => HS </timestamp>
+            <extraData>        _ => HX </extraData>
+            <mixHash>          _ => HM </mixHash>
+            <blockNonce>       _ => HN </blockNonce>
+            <baseFee>          _ => BF </baseFee>
+            <withdrawalsRoot>  _ => WR </withdrawalsRoot>
+            <blobGasUsed>      _ => BG </blobGasUsed>
+            <excessBlobGas>    _ => EG </excessBlobGas>
+            <beaconRoot>       _ => BR </beaconRoot>
+            <requestsRoot>     _ => RR </requestsRoot>
+            <ommerBlockHeaders> _ => OBH </ommerBlockHeaders>
+        </block>
+
+
+    rule #hashBlockData(BlockData(
+            PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, _BF, _WR, _BG, _EG, _BR, _RR, _OBH
+         ))
+        => #blockHeaderHash(PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, gas2Int( HG ), HS, HX, HM, HN)
 ```
 
 State Root
