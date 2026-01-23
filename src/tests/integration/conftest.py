@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from kontrol_node.cli import VMOptions
-from kontrol_node.rpc import StatefulKJsonRpcServer
+from kontrol_node.options import VMOptions
+from kontrol_node.rpc import KontrolNodeServer
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -18,7 +18,7 @@ SERVER_HOST: Final = 'localhost'
 
 
 @pytest.fixture
-def server() -> Iterator[StatefulKJsonRpcServer]:
+def server() -> Iterator[KontrolNodeServer]:
     """Fixture to start a JSON-RPC server instance on a dynamically assigned port.
 
     This fixture sets up a new `StatefulKJsonRpcServer` instance for each test function, running it on a
@@ -29,9 +29,7 @@ def server() -> Iterator[StatefulKJsonRpcServer]:
     """
     sys.setrecursionlimit(15000000)
 
-    server = StatefulKJsonRpcServer(
-        VMOptions({'definition_dir': None, 'port': 0, 'host': SERVER_HOST, 'steps_tracing': True})
-    )
+    server = KontrolNodeServer(VMOptions({'host': SERVER_HOST, 'port': 0}))
 
     server_thread = threading.Thread(target=server.serve)
     server_thread.start()

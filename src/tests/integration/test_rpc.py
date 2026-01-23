@@ -11,7 +11,7 @@ from .conftest import SERVER_HOST
 from .utils import INPUT_FILES, OUTPUT_FILES, TEST_DATA_DIR, assert_or_update_output
 
 if TYPE_CHECKING:
-    from kontrol_node.rpc import StatefulKJsonRpcServer
+    from kontrol_node.rpc import KontrolNodeServer
 
 
 def execute_json_rpc(port: int, payload: dict) -> str:
@@ -28,7 +28,7 @@ RPC_TESTS_SKIPPED: Final = tuple((TEST_DATA_DIR / 'rpc-tests-skipped').read_text
 @pytest.mark.parametrize('test_id', RPC_TESTS_ALL)
 def test_rpc_file(
     test_id: str,
-    server: StatefulKJsonRpcServer,
+    server: KontrolNodeServer,
     update_expected_output: bool,
 ) -> None:
     if test_id in RPC_TESTS_SKIPPED:
