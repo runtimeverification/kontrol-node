@@ -7,13 +7,8 @@ module KONTROL-NODE-CONFIG
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
 
-    syntax RPCError ::= ".RPCError"
-                      | "SigningError"
-                      | "InsufficientGasError"
-
     configuration <simbolikVM>
             <foundry/>
-            <ioDir>                   "":String </ioDir>
             <rpcRequestID>            0         </rpcRequestID>
             <accountKeys>             .Map      </accountKeys>
             <timeFreeze>              true      </timeFreeze>

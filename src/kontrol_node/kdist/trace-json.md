@@ -385,14 +385,14 @@ module TRACE-JSON
 
     rule #traceFile( IO_DIR, MSG_ID ) => IO_DIR +String "/transactions/trace_" +String Int2String( MSG_ID ) +String ".json"
 
-    rule <k> #storeTraceItem TRITEM
-          => #appendFile(
-                #traceFile( IO_DIR, MSG_ID ),
-                JSON2String( traceItemToJson( TRITEM ) ) +String ",\n"
-             ) ...
-         </k>
-         <ioDir> IO_DIR </ioDir>
-         <msgID> MSG_ID </msgID>
+    // rule <k> #storeTraceItem TRITEM
+    //       => #appendFile(
+    //             #traceFile( IO_DIR, MSG_ID ),
+    //             JSON2String( traceItemToJson( TRITEM ) ) +String ",\n"
+    //          ) ...
+    //      </k>
+    //      <ioDir> IO_DIR </ioDir>
+    //      <msgID> MSG_ID </msgID>
 
 endmodule
 ```

@@ -19,7 +19,7 @@ class KontrolNodeSourceTarget(Target):
     SRC_DIR: Final = Path(__file__).parent
 
     def build(self, output_dir: Path, deps: dict[str, Path], args: dict[str, Any], verbose: bool) -> None:
-        shutil.copy(self.SRC_DIR / 'node.md', output_dir / 'node.md')
+        shutil.copy(self.SRC_DIR / 'io.md', output_dir / 'io.md')
 
     def source(self) -> tuple[Path, ...]:
         return (self.SRC_DIR,)
@@ -40,9 +40,9 @@ __TARGETS__: Final = {
     'simbolik': KontrolNodeTarget(
         {
             'target': KompileTarget.LLVM,
-            'main_file': KSRC_DIR / 'node.md',
-            'main_module': 'KONTROL-NODE',
-            'syntax_module': 'KONTROL-NODE',
+            'main_file': KSRC_DIR / 'io.md',
+            'main_module': 'KONTROL-IO',
+            'syntax_module': 'KONTROL-IO',
             'includes': [KONTROL_KSRC_DIR],
             'optimization': 2,
         },

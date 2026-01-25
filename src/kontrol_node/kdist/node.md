@@ -4,10 +4,9 @@ requires "driver.md"
 requires "no_code_size_checks.md"
 requires "trace.md"
 requires "trace-json.md"
-requires "state-json.md"
 requires "config.md"
 requires "json-utils.md"
-requires "rpc-json.md"
+requires "json.md"
 
 module KONTROL-NODE
     imports FOUNDRY
@@ -16,31 +15,11 @@ module KONTROL-NODE
     imports ETHEREUM-SIMULATION
     imports NO-CODE-SIZE-CHECKS
     imports EVM-TRACING
-    imports STATE-JSON
-    imports RPC-JSON
     imports TRACE-JSON
     imports KONTROL-NODE-CONFIG
+    imports JSON
     imports JSON-UTILS
 
-    syntax EthereumSimulation ::= Start
-    syntax Start ::= #start(
-      String // IO directory
-    ) [symbol(start)]
-
-    configuration <simbolikVM/>
-```
-
-Create the initial configuration by reading the inputs from the IO directory
-
-```k
-
-  rule <k> #start( IO_DIR )
-        => #unlockAccounts()
-        ~> #loadStateDump( IO_DIR, 0)
-        ~> #loadRpcRequests( IO_DIR )
-        ...
-       </k>
-       <ioDir> _ => IO_DIR </ioDir>
 ```
 
 Unlocked test accounts. These are the same ten accounts used by most dev tools.
@@ -65,7 +44,10 @@ Mnemonic: test test test test test test test test test test test junk
         </accountKeys>
 ```
 ###############################################################################
-# eth_sendTransaction
+# Requests
+
+###############################################################################
+## eth_sendTransaction
 
 When eth_sendTransaction is called, we sign it, apply the inrinsic gas costs,
 execute it, mine a block including it, and return the transaction hash.
@@ -125,10 +107,8 @@ Similarly, we save a state snapshot after the block was mined.
                 "code"    : -32000,
                 "message" : "Could not sign transaction: account not found"
             })
-        ~> #saveRpcResponse( IO_DIR )
         ...
         </k>
-        <ioDir> IO_DIR </ioDir>
 
     rule <k> #signTxSuccess
         => #applyIntrinsicGas( TX_ID )
@@ -141,10 +121,8 @@ Similarly, we save a state snapshot after the block was mined.
                 "code"    : -32000,
                 "message" : "Intrinsic gas error "
             })
-        ~> #saveRpcResponse( IO_DIR )
         ...
         </k>
-        <ioDir> IO_DIR </ioDir>
 
     rule <k> #intrinsicGasSuccess
         => #executeTx( TX_ID )
@@ -154,11 +132,8 @@ Similarly, we save a state snapshot after the block was mined.
         ~> #makeTxReceipts
         ~> #mineBlock
         ~> #ethSendTransactionResponse
-        ~> #saveRpcResponse( IO_DIR )
-        ~> #saveStateDump( IO_DIR )
         ...
         </k>
-        <ioDir>       IO_DIR </ioDir>
         <currentTxID> TX_ID  </currentTxID>
         <schedule>    SCHED  </schedule>
         <message>
@@ -178,7 +153,7 @@ Similarly, we save a state snapshot after the block was mined.
         </txReceipt>
 ```
 ###############################################################################
-eth_getTransactionReceipt
+## eth_getTransactionReceipt
 
 ```k
     rule <k> RPCRequest( REQ_ID, EthGetTransactionReceipt( TX_HASH ) )
@@ -198,10 +173,8 @@ eth_getTransactionReceipt
                 "status"            : #if TX_STATUS ==K EVMC_SUCCESS #then "1" #else "0" #fi,
                 "effectiveGasPrice" : "0" // TODO
             })
-            ~> #saveRpcResponse( IO_DIR )
             ...
         </k>
-        <ioDir>        IO_DIR      </ioDir>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <currentTxID>         TXID                           </currentTxID>
         <txReceipt>
@@ -227,7 +200,7 @@ eth_getTransactionReceipt
 ```
 
 ###############################################################################
-eth_getTransactionByHash
+## eth_getTransactionByHash
 
 ```k
     rule <k> RPCRequest( REQ_ID, EthGetTransactionByHash( TX_HASH ) )
@@ -244,10 +217,8 @@ eth_getTransactionByHash
                 "r"                : bytesToHex( SIG_R ),
                 "s"                : bytesToHex( SIG_S )
             })
-            ~> #saveRpcResponse( IO_DIR )
             ...
         </k>
-        <ioDir>        IO_DIR      </ioDir>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <txReceipt>
             <txHash> TX_HASH </txHash>
@@ -271,15 +242,13 @@ eth_getTransactionByHash
 ```
 
 ===============================================================================
-eth_getCode
+## eth_getCode
 
 ```k
     rule <k> RPCRequest( REQ_ID, EthGetCode( ADDR, _BLOCK_NUM ) ) // TODO: block number
         => RPCResponse( bytesToHex(CODE) )
-        ~> #saveRpcResponse( IO_DIR )
         ...
         </k>
-        <ioDir>        IO_DIR      </ioDir>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <account>
             <acctID> ADDR </acctID>
@@ -289,7 +258,7 @@ eth_getCode
 ```
 
 ===============================================================================
-eth_getBlockByNumber
+## eth_getBlockByNumber
 
 ```k
     syntax KItem ::= "#ethGetBlockByNumberResponse"
@@ -297,11 +266,9 @@ eth_getBlockByNumber
     rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER) )
             => #setBlockData( #getBlockData( BLOCK_NUMBER ) )
             ~> #ethGetBlockByNumberResponse
-            ~> #saveRpcResponse( IO_DIR )
             ~> #setBlockData( #getBlockData( ORIGINAL_BLOCK_NUMBER ) )
             ...
             </k>
-            <ioDir>        IO_DIR      </ioDir>
             <rpcRequestID> _ => REQ_ID </rpcRequestID>
             <block>
                 <number> ORIGINAL_BLOCK_NUMBER </number>
@@ -351,18 +318,16 @@ eth_getBlockByNumber
 ```
 
 ===============================================================================
-eth_getBlockByHash
+## eth_getBlockByHash
 
 ```k
 
     rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( BLOCK_HASH) )
             => #setBlockData( #getBlockData( BLOCK_HASH ) )
             ~> #ethGetBlockByNumberResponse
-            ~> #saveRpcResponse( IO_DIR )
             ~> #setBlockData( #getBlockData( ORIGINAL_BLOCK_NUMBER ) )
             ...
             </k>
-            <ioDir>        IO_DIR      </ioDir>
             <rpcRequestID> _ => REQ_ID </rpcRequestID>
             <block>
                 <number> ORIGINAL_BLOCK_NUMBER </number>
@@ -371,15 +336,13 @@ eth_getBlockByHash
 ```
 
 ===============================================================================
-eth_getTransactionCount
+## eth_getTransactionCount
 
 ```k
     rule <k> RPCRequest( REQ_ID, EthGetTransactionCount( ADDR, _BLOCK_NUM ) ) // TODO: block number
           => RPCResponse( intToHex( NONCE ) )
-          ~> #saveRpcResponse( IO_DIR )
           ...
         </k>
-        <ioDir>        IO_DIR      </ioDir>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <account>
             <acctID> ADDR  </acctID>
@@ -389,15 +352,13 @@ eth_getTransactionCount
 ```
 
 ===============================================================================
-eth_getStorageAt
+## eth_getStorageAt
 
 ```k
     rule <k> RPCRequest( REQ_ID, EthGetStorageAt( ADDR, SLOT, _BLOCK_NUM ) ) // TODO: block number
         => RPCResponse( intToHex( {STORAGE[ SLOT ] orDefault 0}:>Int ) )
-        ~> #saveRpcResponse( IO_DIR )
         ...
         </k>
-        <ioDir>        IO_DIR      </ioDir>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <account>
             <acctID>  ADDR    </acctID>
@@ -407,25 +368,24 @@ eth_getStorageAt
 ```
 
 ===============================================================================
-anvil_stateDump
+## anvil_stateDump
 
 ```k
-    rule <k> RPCRequest( REQ_ID, AnvilStateDump() )
-        => RPCResponse(
-                #let CONTENTS:IOString = #readFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER ) )
-                #in String2JSON( {CONTENTS}:>String )
-           )
-        ~> #saveRpcResponse( IO_DIR )
-        ...
-        </k>
-        <ioDir>        IO_DIR      </ioDir>
-        <rpcRequestID> _ => REQ_ID </rpcRequestID>
-        <number> BLOCK_NUMBER </number>
+    // rule <k> RPCRequest( REQ_ID, AnvilStateDump() )
+    //     => RPCResponse(
+    //             #let CONTENTS:IOString = #readFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER ) )
+    //             #in String2JSON( {CONTENTS}:>String )
+    //        )
+    //     ...
+    //     </k>
+    //     <ioDir>        IO_DIR      </ioDir>
+    //     <rpcRequestID> _ => REQ_ID </rpcRequestID>
+    //     <number> BLOCK_NUMBER </number>
 
 ```
 
 ===============================================================================
-debug_traceTransaction
+## debug_traceTransaction
 
 At the point the debug_traceTransaction method is called, the transaction has already been
 processed and its trace stored on disk. We just need to read the trace and return it.
@@ -434,34 +394,33 @@ just build the response string directly.
 
 ```k
 
-    rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
-        => #writeFile( #responseFile( IO_DIR, REQ_ID ),
-            "{ \"jsonrpc\": \"2.0\"" +String
-            ", \"id\": " +String intToHex( REQ_ID ) +String
-            ", \"result\": " +String
-                "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "true" #else "false" #fi +String
-                ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
-                ", \"return_value\": \"0x\"" +String // TODO
-                ", \"structLogs\": [" +String {#readFile( #traceFile( IO_DIR, TXID) )}:>String +String
-            "] } }"
-        ) ...
-        </k>
-        <ioDir>        IO_DIR      </ioDir>
-        <rpcRequestID> _ => REQ_ID </rpcRequestID>
-        <txReceipt>
-            <txHash> TX_HASH </txHash>
-            <txID>   TXID    </txID>
-            <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
-            <txStatus> TX_STATUS </txStatus>
-            ...
-        </txReceipt>
+    // rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
+    //     => RPCRawResponse(
+    //         "{ \"jsonrpc\": \"2.0\"" +String
+    //         ", \"id\": " +String intToHex( REQ_ID ) +String
+    //         ", \"result\": " +String
+    //             "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "true" #else "false" #fi +String
+    //             ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
+    //             ", \"return_value\": \"0x\"" +String // TODO
+    //             ", \"structLogs\": [" +String {#readFile( #traceFile( IO_DIR, TXID) )}:>String +String
+    //         "] } }"
+    //     ) ...
+    //     </k>
+    //     <ioDir>        IO_DIR      </ioDir>
+    //     <rpcRequestID> _ => REQ_ID </rpcRequestID>
+    //     <txReceipt>
+    //         <txHash> TX_HASH </txHash>
+    //         <txID>   TXID    </txID>
+    //         <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
+    //         <txStatus> TX_STATUS </txStatus>
+    //         ...
+    //     </txReceipt>
 
 ```
 
 
-
-Transaction Signing
--------------------
+###############################################################################
+# Transaction Signing
 
 ```k
 
@@ -618,18 +577,18 @@ Transaction Signing
 
 ```
 
-Transaction Receipts
+###############################################################################
+# Transaction Receipts
 
 ```k
     syntax KItem ::= "#makeTxReceipts"
                    | "#makeTxReceiptsAux" List
+                   | "#makeTxReceipt" Int
 
     rule <k> #makeTxReceipts => #makeTxReceiptsAux TXLIST ... </k>
          <txOrder> TXLIST </txOrder>
     rule <k> #makeTxReceiptsAux .List => .K ... </k>
     rule <k> #makeTxReceiptsAux (ListItem(TXID) TXLIST) => #makeTxReceipt TXID ~> #makeTxReceiptsAux TXLIST ... </k>
-
-    syntax KItem ::= "#makeTxReceipt" Int
 
     rule <k> #makeTxReceipt TXID => .K ... </k>
          <txReceipts>
@@ -661,8 +620,9 @@ Transaction Receipts
 ```
 
 
-Block Mining
-------------
+###############################################################################
+# Block Mining
+
 
 The productions below are used to perform the mining of blocks, advancing the blockchain state.
 
@@ -792,7 +752,8 @@ The productions below are used to perform the mining of blocks, advancing the bl
         => #blockHeaderHash(PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, gas2Int( HG ), HS, HX, HM, HN)
 ```
 
-State Root
+###############################################################################
+## State Root
 ----------
 
 ```k
@@ -836,8 +797,9 @@ State Root
 
 ```
 
-Transactions Root
------------------
+###############################################################################
+## Transactions Root
+
 
 ```k
     syntax MerkleTree ::= #transactionsRoot( List )              [function]
@@ -859,8 +821,8 @@ Transactions Root
 
 ```
 
-Receipts Root
--------------
+###############################################################################
+## Receipts Root
 
 ```k
     syntax MerkleTree ::= #receiptsRoot( TxReceiptsCell )                     [function]
@@ -889,8 +851,326 @@ Receipts Root
             ...
         </txReceipts>
         )
+```
 
+###############################################################################
+# JSON RPC Intermediate Representation
+
+This section defines an intermediate represention for JSON RPC requests.
+
+```k
+      syntax KItem ::= RPCResponse | RPCRequest
+
+      syntax RPCResponse ::= RPCResponse( JSON )
+                           | RPCRawResponse( String )
+      syntax RPCRequest  ::= RPCRequest( Int, RPCRequestParams)
+
+      syntax RPCRequestParams ::= EthSendTransaction(
+                                    Int , // from
+                                    Int , // to
+                                    Int , // gas
+                                    Int , // gas price
+                                    Int , // value
+                                    Bytes // input
+                                  )
+                                | EthGetTransactionReceipt( Int )    // tx hash
+                                | EthGetTransactionByHash( Int )     // tx hash
+                                | EthGetCode( Int, Int )             // address, block number
+                                | EthGetBlockByNumber( Int )         // block number
+                                | EthGetBlockByHash( Int )           // block hash
+                                | EthGetTransactionCount( Int, Int ) // address, block number
+                                | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
+                                | AnvilStateDump()                   // TODO: add options
+                                | DebugTraceTransaction( Int )       // tx hash
+```
+
+###############################################################################
+## Convert JSON RPC representation to intermedaite representation
+
+This section defines rules to convert from the JSON representation to the
+intermediate representation.
+
+```k
+    syntax KItem ::= #rpcLoad( JSON )
+
+    syntax RPCRequest       ::= #rpcLoadRequest( JSON )         [function]
+    syntax RPCRequestParams ::= #rpcLoadParams( String, JSON )  [function]
+
+    // RPC requests can be batched, in this case we iterate over the list
+    rule <k> #rpcLoad( [ .JSONs ] ) => .K ... </k>
+    rule <k> #rpcLoad( [ FIRST, REST ] )
+        => #rpcLoadRequest( FIRST )
+        ~> #rpcLoad( [ REST ] ) ... </k>
+    // If the request is not batched, we just load a single request
+    rule <k> #rpcLoad( { FIRST } ) 
+        => #rpcLoadRequest( { FIRST } ) ... </k>
+    // If the request is malformed, we ignore it
+    // TODO: add error handling
+    rule <k> #rpcLoad( _ ) => .K ... </k> [owise]
+
+    rule #rpcLoadRequest( J )
+            => #let REQ_ID     = #getInt(    "id",     J) #in
+            #let METHOD     = #getString( "method", J) #in
+            #let PARAMS_RAW = #getJSON(   "params", J) #in
+            #let REQ_PARAMS = #rpcLoadParams( METHOD, PARAMS_RAW ) #in
+            RPCRequest(REQ_ID, REQ_PARAMS)
+
+    syntax Int ::= "DEFAULTSENDER" [function]
+    rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+
+    rule #rpcLoadParams( "eth_sendTransaction", [ J ])
+        => #let FROM  = #getAddr( "from", J, DEFAULTSENDER ) #in
+            #let TO    = #getAddr( "to"  , J, 0 ) #in
+            #let GAS_LIMIT = #getWord( "gas" , J, pow24 ) #in
+            #let GAS_PRICE = #getWord( "gas_price", J, 1 ) #in
+            #let VALUE = #getWord( "value", J, 0 ) #in
+            #let DATA  = #getBytes( "data", J, .Bytes ) #in
+            EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
+
+    rule #rpcLoadParams( "eth_getTransactionReceipt", [ TX_HASH:String ] )
+        => EthGetTransactionReceipt( #parseWord( TX_HASH ) )
+
+    rule #rpcLoadParams( "eth_getTransactionByHash", [ TX_HASH:String ] )
+        => EthGetTransactionByHash( #parseWord( TX_HASH ) )
+
+    rule #rpcLoadParams( "eth_getCode", [ ADDR:String, BLOCK_NUM:String ] )
+        => #let ADDR_INT = #parseAddr( ADDR ) #in
+            #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+            EthGetCode( ADDR_INT, BLOCK_INT )
+
+    rule #rpcLoadParams( "eth_getBlockByNumber", [ BLOCK_NUM:String ] )
+        => #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+            EthGetBlockByNumber( BLOCK_INT )
+
+    rule #rpcLoadParams( "eth_getBlockByHash", [ BLOCK_HASH:String ] )
+        => EthGetBlockByHash( #parseWord( BLOCK_HASH ) )
+
+    rule #rpcLoadParams( "eth_getTransactionCount", [ ADDR:String, BLOCK_NUM:String ] )
+        => #let ADDR_INT = #parseAddr( ADDR ) #in
+            #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+            EthGetTransactionCount( ADDR_INT, BLOCK_INT )
+
+    rule #rpcLoadParams( "eth_getStorageAt", [ ADDR:String, SLOT:String, BLOCK_NUM:String ] )
+        => #let ADDR_INT = #parseAddr( ADDR ) #in
+            #let SLOT_INT = #parseWord( SLOT ) #in
+            #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+            EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
+
+    rule #rpcLoadParams( "anvil_stateDump", [ _ ] )
+        => AnvilStateDump()
+
+    rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String ] )
+        => DebugTraceTransaction( #parseWord( TX_HASH ) )
+```
+###############################################################################
+# State Snapshots
+
+## JSON encoding of Snapshots
+
+This section defines rule to create a StateDump JSON object from the current
+K configuration.
+
+```k
+
+    syntax KItem ::= #createStateDump()         // Internal use only, create a StateDump from the current configuration
+                   | #stLoad( JSON )            // Internal use only, populate a StateDump into the current configuration (reverse of #createStateDump)
+                   | #StateDump( JSON )         // Internal use only, wrap a StateDump JSON object to disambiguate it from other KItems containing JSON data
+
+    syntax JSON  ::= ( JSON )  [bracket]
+    syntax JSONs ::= ( JSONs ) [bracket]
+    syntax JSON  ::= accountsToJSON( AccountsCell )          [function, total, symbol(accountsToJSON)]
+                   | accountToJSON( AccountCell )            [function, total, symbol(accountToJSON)]
+                   | storageToJSON(Map)                      [function, total, symbol(accStorageToJson)]
+
+    syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsToJSONs)]
+                   | storageToJSONs( Map, JSONs )            [function, total, symbol(accStorageToJSONs)]
+
+
+    // Duplicated in trace-json.md where this is called intMapToJson
+    rule storageToJSON( ST ) => { storageToJSONs( ST, .JSONs ) }
+    rule storageToJSONs( .Map, ACCU ) => ACCU
+    rule storageToJSONs( (KEY |-> VAL) ST, ACCU) => storageToJSONs( ST, ( intToHex(KEY) : intToHex(VAL), ACCU ) )
+
+    rule accountToJSON (
+        <account>
+            <acctID>            ACC_ID            </acctID>
+            <balance>           ACC_BALANCE       </balance>
+            <code>              ACC_CODE          </code>
+            <storage>           ACC_STORAGE       </storage>
+            <nonce>             ACC_NONCE         </nonce>
+            ...
+        </account>
+    ) => intToHex(ACC_ID) : {
+        "balance": intToHex( ACC_BALANCE ),
+        "code": bytesToHex( ACC_CODE ),
+        "storage": storageToJSON( ACC_STORAGE ),
+        "nonce" : ACC_NONCE
+    }
+
+    rule accountsToJSON( ACCS ) => { accountsToJSONs( ACCS, .JSONs ) }
+    rule accountsToJSONs( <accounts> <account> ACC </account> ACCS:Bag </accounts>, ACCU)
+            => accountsToJSONs( <accounts> ACCS </accounts>, (accountToJSON( <account> ACC </account> ) , ACCU) ) 
+    rule accountsToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
+
+    rule <k> #createStateDump()
+        => #StateDump({
+            "bestBlockNumber": BLOCK_NUMBER,
+            "block": {
+                "number": intToHex( BLOCK_NUMBER ),
+                "beneficiary": intToHex( BLOCK_COINBASE ),
+                "timestamp": intToHex( BLOCK_TIMESTAMP ),
+                "gas_limit": BLOCK_GAS_LIMIT,
+                "basefee": BLOCK_BASE_FEE,
+                "difficulty": intToHex( BLOCK_DIFFICULTY ),
+                "prevrandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "blob_excess_gas_and_price": BLOCK_EXCESS_BLOB_GAS
+            },
+            "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> )
+        }) ...
+    </k>
+    <block>
+        <number>        BLOCK_NUMBER          </number>
+        <coinbase>      BLOCK_COINBASE        </coinbase>
+        <timestamp>     BLOCK_TIMESTAMP       </timestamp>
+        <gasLimit>      BLOCK_GAS_LIMIT       </gasLimit>
+        <baseFee>       BLOCK_BASE_FEE        </baseFee>
+        <difficulty>    BLOCK_DIFFICULTY      </difficulty>
+        <excessBlobGas> BLOCK_EXCESS_BLOB_GAS </excessBlobGas>
+        ...
+    </block>
+    <accounts> ACCOUNTS </accounts>
+```
+
+###############################################################################
+## JSON decoding of snapshots
+
+This secion defines rules to load a StateDump JSON object into the current
+K configuration.
+
+It's very similar to the [state-utils.md](https://github.com/runtimeverification/evm-semantics/blob/master/kevm-pyk/src/kevm_pyk/kproj/evm-semantics/state-utils.md)
+module defined in `evm-semantics`, but targets specifically the Anvil's
+StateDump format - not the ethereum/test format.
+
+```k
+
+    syntax KItem ::= #stLoad( JSON )
+                   | #stLoadBlock( JSON )
+                   | #stLoadBlob( JSON )
+                   | #stLoadAccounts( JSON )
+                   | #stLoadAccount( Int, JSON )
+                   | #stLoadStorage( Int, Map )
+
+    // ------------
+    // StateDump root object
+
+    // Finished decoding StateDump
+    rule <k> #stLoad( { .JSONs } ) => .K ... </k>
+ 
+    // Break up the StateDump into it's compnents
+    rule <k> #stLoad( { KEY : VALUE , REST } ) => #stLoad( KEY : VALUE ) ~> #stLoad( { REST } )... </k>
+
+    // Handle components
+    rule <k> #stLoad( "best_block_number" : _        ) => .K ... </k> // TODO: Do we need this?
+    rule <k> #stLoad( "block"             : BLOCK    ) => #stLoadBlock( BLOCK ) ... </k>
+    rule <k> #stLoad( "accounts"          : ACCOUNTS ) => #stLoadAccounts( ACCOUNTS ) ... </k>
+
+    // Discard all other components
+    rule <k> #stLoad( _:String : _VAL ) => .K ...</k> [owise]
+
+    // ------------
+    // Block
+
+    // Finished block
+    rule <k> #stLoadBlock( { .JSONs } ) => .K ... </k>
+
+    // Break up a block into it's components
+    rule <k> #stLoadBlock( { KEY : VALUE, REST } ) => #stLoadBlock( KEY : VALUE ) ~> #stLoadBlock( { REST } ) ... </k>
+
+    // Handle components
+    rule <k> #stLoadBlock( "number"      : VAL ) => .K ... </k> <number>     _ => #parseWord( VAL ) </number>
+    rule <k> #stLoadBlock( "beneficiary" : VAL ) => .K ... </k> <coinbase>   _ => #parseWord( VAL ) </coinbase>
+    rule <k> #stLoadBlock( "timestamp"   : VAL ) => .K ... </k> <timestamp>  _ => #parseWord( VAL ) </timestamp>
+    rule <k> #stLoadBlock( "gas_limit"   : VAL ) => .K ... </k> <gasLimit>   _ => VAL </gasLimit>
+    rule <k> #stLoadBlock( "basefee"     : VAL ) => .K ... </k> <baseFee>    _ => VAL </baseFee>
+    rule <k> #stLoadBlock( "difficulty"  : VAL ) => .K ... </k> <difficulty> _ => #parseWord( VAL ) </difficulty>
+    rule <k> #stLoadBlock( "blob_excess_gas_and_price": VAL ) => #stLoadBlob( VAL )... </k>
+
+    // Discard all other components
+    rule <k> #stLoadBlock( _:String : _VAL ) => .K ...</k> [owise] 
+
+    // ------------
+    // Blob
+
+    // Finished blob
+    rule <k> #stLoadBlob( { .JSONs } )=> .K ... </k>
+
+    // Break up a blob into it's components
+    rule <k> #stLoadBlob( { KEY : VALUE, REST } ) => #stLoadBlob( KEY : VALUE ) ~> #stLoadBlob( { REST } ) ... </k>
+
+    // Handle components
+    rule <k> #stLoadBlob( "excess_blob_gas" : VAL ) => .K ... </k> <excessBlobGas> _ => VAL </excessBlobGas>
+    rule <k> #stLoadBlob( "blob_gasprice"   : VAL ) => .K ... </k> <blobGasUsed>   _ => VAL </blobGasUsed>
+    
+    // Discard all other components
+    rule <k> #stLoadBlob( _:String : _VAL) => .K ...</k> [owise] 
+
+    // ------------
+    // Accounts
+
+    rule <k> #stLoadAccounts( { .JSONs } ) => .K ... </k>
+    rule <k> #stLoadAccounts( { KEY : VALUE, REST } ) => #stLoadAccounts( KEY : VALUE ) ~> #stLoadAccounts( { REST } ) ... </k>
+
+    rule <k> #stLoadAccounts( ACCT_ID : ACCT_DATA )
+          => #newAccount( #parseAddr( ACCT_ID ) )
+          ~> #stLoadAccount( #parseAddr( ACCT_ID ), ACCT_DATA ) ...
+         </k>
+
+    // ------------
+    // Account
+
+    // Finished account
+    rule <k> #stLoadAccount( _, { .JSONs } ) => .K ... </k>
+
+    // Break up an account into it's components
+    rule <k> #stLoadAccount( ACCT_ID, { KEY : VALUE, REST } )
+          => #stLoadAccount(ACCT_ID, KEY : VALUE)
+          ~> #stLoadAccount(ACCT_ID, { REST } )
+          ... </k>
+
+    // Handle components
+    rule <k> #stLoadAccount(ACCT_ID, "nonce" : VAL) => .K ... </k>
+         <account>
+            <acctID> ACCT_ID  </acctID>
+            <nonce>  _ => VAL </nonce>
+            ...
+        </account>
+    rule <k> #stLoadAccount(ACCT_ID, "balance" : VAL) => .K ... </k>
+         <account>
+            <acctID>  ACCT_ID  </acctID>
+            <balance> _ => #parseWord( VAL ) </balance>
+            ...
+        </account>
+    rule <k> #stLoadAccount(ACCT_ID, "code" : VAL) => .K ... </k>
+         <account>
+            <acctID> ACCT_ID  </acctID>
+            <code>   _ => parseByteStack( VAL ) </code>
+            ... 
+         </account>
+    rule <k> #stLoadAccount( ACCT_ID, "storage" : VAL) => #stLoadStorage( ACCT_ID, #parseMap( VAL ) ) ... </k>
+    
+    // Discard all other components
+    rule <k> #stLoadAccount( _, _ : _VAL ) => .K ...</k> [owise]
+
+    // ------------
+    // Account Storage
+
+    rule <k> #stLoadStorage( ACCT_ID, ST ) => .K ... </k>
+         <account>
+            <acctID> ACCT_ID </acctID>
+            <storage>     _ => ST </storage>
+            <origStorage> _ => ST </origStorage>
+            ...
+        </account>
 
 endmodule
-
 ```
