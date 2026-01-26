@@ -28,8 +28,8 @@ module KONTROL-NODE
 
     rule <k> #start( IO_DIR )
         => #unlockAccounts()
-        ~> #loadStateDump( IO_DIR, 0)
-        ~> #loadRpcRequest( IO_DIR )
+        ~> #loadLatestStateDump
+        ~> #loadRpcRequest
         ...
     </k>
     <ioDir> _ => IO_DIR </ioDir>
@@ -60,10 +60,10 @@ Mnemonic: test test test test test test test test test test test junk
 ###############################################################################
 # Requests
 
-## eth_getChainId
+## eth_chainId
 
 ```k
-    rule <k> RPCRequest( REQ_ID, EthGetChainId() ) 
+    rule <k> RPCRequest( REQ_ID, EthChainId() ) 
         => RPCResponse( CHAIN_ID )
         ...
         </k>
@@ -155,12 +155,12 @@ Similarly, we save a state snapshot after the block was mined.
         ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
         ~> #finalizeBlock
         ~> #makeTxReceipts
-        ~> #saveStateDump( IO_DIR )
+        ~> #saveStateDump
         ~> #mineBlock
+        ~> #saveMetadata
         ~> #ethSendTransactionResponse
         ...
         </k>
-        <ioDir>       IO_DIR </ioDir>
         <currentTxID> TX_ID  </currentTxID>
         <schedule>    SCHED  </schedule>
         <message>
@@ -414,12 +414,11 @@ Similarly, we save a state snapshot after the block was mined.
 ```k
     // rule <k> RPCRequest( REQ_ID, AnvilStateDump() )
     //     => RPCResponse(
-    //             #let CONTENTS:IOString = #readFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER ) )
+    //             #let CONTENTS:IOString = #readFile( #stateDumpFile( BLOCK_NUMBER ) )
     //             #in String2JSON( {CONTENTS}:>String )
     //        )
     //     ...
     //     </k>
-    //     <ioDir>        IO_DIR      </ioDir>
     //     <rpcRequestID> _ => REQ_ID </rpcRequestID>
     //     <number> BLOCK_NUMBER </number>
 
@@ -906,7 +905,7 @@ This section defines an intermediate represention for JSON RPC requests.
                            | RPCRawResponse( String )
       syntax RPCRequest  ::= RPCRequest( Int, RPCRequestParams)
 
-      syntax RPCRequestParams ::= EthGetChainId()
+      syntax RPCRequestParams ::= EthChainId()
                                 | EthSendTransaction(
                                     Int , // from
                                     Int , // to
@@ -958,8 +957,8 @@ intermediate representation.
             #let REQ_PARAMS = #rpcLoadParams( METHOD, PARAMS_RAW ) #in
             RPCRequest(REQ_ID, REQ_PARAMS)
 
-    rule #rpcLoadParams( "eth_getTransactionReceipt", [ .JSONs ] )
-        => EthGetChainId()
+    rule #rpcLoadParams( "eth_chainId", [ .JSONs ] )
+        => EthChainId()
 
     rule #rpcLoadParams( "eth_sendTransaction", [ J ])
         => #let FROM  = #getAddr( "from", J, DEFAULTSENDER ) #in
@@ -1029,7 +1028,7 @@ K configuration.
 
 ```k
 
-    syntax KItem ::= #createStateDump()         // Internal use only, create a StateDump from the current configuration
+    syntax KItem ::= "#createStateDump"         // Internal use only, create a StateDump from the current configuration
                    | #stLoad( JSON )            // Internal use only, populate a StateDump into the current configuration (reverse of #createStateDump)
                    | #StateDump( JSON )         // Internal use only, wrap a StateDump JSON object to disambiguate it from other KItems containing JSON data
 
@@ -1069,7 +1068,7 @@ K configuration.
             => accountsToJSONs( <accounts> ACCS </accounts>, (accountToJSON( <account> ACC </account> ) , ACCU) ) 
     rule accountsToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
 
-    rule <k> #createStateDump()
+    rule <k> #createStateDump
         => #StateDump({
             "bestBlockNumber": BLOCK_NUMBER,
             "block": {
@@ -1241,25 +1240,23 @@ This section defines rules to write RPCResponses to a file.
 
 ```k
 
-      syntax String ::= responseFile( String ) [function]
-      rule responseFile( IO_DIR:String ) =>
-            IO_DIR +String "/response.json"
+      syntax String ::= "#responseFile" [function, total]
+      rule [[ #responseFile => IO_DIR +String "/response.json" ]]
+        <ioDir> IO_DIR </ioDir>
 
       rule <k> RPCResponse( JSON_RESPONSE )
-            => #writeFile(responseFile(IO_DIR), JSON2String({
+            => #writeFile(#responseFile, JSON2String({
                   "jsonrpc" : "2.0",
                   "id"      : REQ_ID,
                   "result"  : JSON_RESPONSE
             }))
             ... </k>
-            <ioDir> IO_DIR </ioDir>
             <rpcRequestID> REQ_ID </rpcRequestID>
             
       rule <k> RPCRawResponse( RESPONSE:String )
-            => #writeFile(responseFile(IO_DIR), RESPONSE)
+            => #writeFile(#responseFile, RESPONSE)
             ...
            </k>
-           <ioDir> IO_DIR </ioDir>
 
 ```
 
@@ -1268,14 +1265,14 @@ This section defines rules to write RPCResponses to a file.
 This section defines rules to read a RPCRequests from a file.
 
 ```k
-    syntax KItem ::= #loadRpcRequest( String )
+    syntax KItem ::= "#loadRpcRequest"
     
-    syntax String ::= requestFile( String ) [function]
-    rule requestFile( IO_DIR:String ) =>
-        IO_DIR +String "/request.json"
+    syntax String ::= "#requestFile" [function, total]
+    rule [[ #requestFile => IO_DIR +String "/request.json" ]]
+        <ioDir> IO_DIR </ioDir>
 
-    rule <k> #loadRpcRequest( IO_DIR:String )
-        => #let CONTENTS:IOString = #readFile( requestFile(IO_DIR) )
+    rule <k> #loadRpcRequest
+        => #let CONTENTS:IOString = #readFile( #requestFile )
             #in #rpcLoad( String2JSON( {CONTENTS}:>String ) )
         ...
         </k>
@@ -1287,24 +1284,24 @@ This seciont defines rules to write a StateDump JSON object to disk.
 
 ```k
 
-    syntax KItem ::= #writeStateDump( String )
-                   | #saveStateDump( String )
+    syntax KItem ::= "#writeStateDump"
+                   | "#saveStateDump"
 
-    syntax String ::= #stateDumpFile(
-        String, // IO dir
-        Int     // block number
-    ) [function, total]
+    syntax String ::= #stateDumpFile( Int ) [function, total]
 
-    rule #stateDumpFile( IO_DIR, BLOCK_NUMBER ) => IO_DIR +String "/blocks/block_" +String Int2String( BLOCK_NUMBER ) +String ".json"
+    rule [[ #stateDumpFile( BLOCK_NUMBER )
+            => IO_DIR +String "/blocks/block_" +String Int2String( BLOCK_NUMBER ) +String ".json"
+        ]]
+        <ioDir> IO_DIR </ioDir>
 
-    rule <k> #saveStateDump( IO_DIR )
-          => #createStateDump()
-          ~> #writeStateDump( IO_DIR )
+    rule <k> #saveStateDump
+          => #createStateDump
+          ~> #writeStateDump
         </k>
 
     rule <k> #StateDump( SD )
-          ~> #writeStateDump( IO_DIR )
-          => #writeFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER), JSON2String( SD ) )
+          ~> #writeStateDump
+          => #writeFile( #stateDumpFile( BLOCK_NUMBER), JSON2String( SD ) )
           ...
         </k>
         <number> BLOCK_NUMBER </number>
@@ -1316,12 +1313,40 @@ This secion defines rules to read a StateDump JSON object from disk.
 
 ```k
 
-    syntax KItem ::= #loadStateDump( String, Int )
-    rule <k> #loadStateDump( IO_DIR, BLOCK_NUMBER )
-          => #let CONTENTS:IOString = #readFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER ) )
+    syntax KItem ::= #loadStateDump( Int )
+    rule <k> #loadStateDump( BLOCK_NUMBER )
+          => #let CONTENTS:IOString = #readFile( #stateDumpFile( BLOCK_NUMBER ) )
               #in #stLoad( String2JSON( {CONTENTS}:>String ) )
               ...
          </k>
+
+    syntax KItem ::= "#loadLatestStateDump"
+
+    rule <k> #loadLatestStateDump
+          => #loadStateDump( #getInt( "latest_block_number", #loadMetadata ) )
+          ...
+         </k>
+
+    syntax String ::= "#metadataFile" [function, total]
+    
+    rule [[ #metadataFile=> IO_DIR +String "/metadata.json" ]]
+        <ioDir> IO_DIR </ioDir>
+
+    syntax KItem ::= "#saveMetadata"
+    syntax JSON ::= "#loadMetadata" [function]
+
+    rule #loadMetadata =>
+            #let CONTENTS:IOString = #readFile( #metadataFile ) #in
+            String2JSON( {CONTENTS}:>String )
+
+    rule <k> #saveMetadata
+          => #writeFile(
+                #metadataFile,
+                JSON2String( { "latest_block_number": maxInt(0, CURRENT_BLOCK_NUMBER -Int 1) } )
+            )
+          ... </k>
+        <number> CURRENT_BLOCK_NUMBER </number>
+
 
 endmodule
 ```

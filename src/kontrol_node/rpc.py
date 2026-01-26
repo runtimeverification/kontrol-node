@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import cProfile
+import json
 import logging
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+import shutil
+import tempfile
 from typing import TYPE_CHECKING, Final
 
 from pyk.kdist import kdist
@@ -77,15 +80,20 @@ class InterpreterProcess:
     io_dir: Path
 
     def __init__(self) -> None:
-        base_dir = Path(__file__).resolve().parent
-        src_dir = base_dir.parent
-        test_dir = src_dir / 'tests'
-        self.io_dir = test_dir / 'integration' / 'io_dir'
+        self._setup_io_dir()
+
+    def _setup_io_dir(self) -> None:
+        self.io_dir = Path(tempfile.mkdtemp(prefix='io_dir', dir=os.getcwd()))
+        (self.io_dir / 'blocks').mkdir(parents=True, exist_ok=True)
+        genesis_src = Path(__file__).resolve().parent / 'genesis.json'
+        genesis_dst = self.io_dir / 'blocks' / 'block_0.json'
+        shutil.copyfile(genesis_src, genesis_dst)
+        metadata = { 'latest_block_number': 0 }
+        metadata_file = self.io_dir / 'metadata.json'
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f)
 
     def _run(self) -> None:
-        # TODO: use an temporary directory
-        # notice, we must copy the initial state dump there
-
         # Create the initial KORE configuration
         initial_kore = _kore_pgm_to_kore(
             pgm=_start_kore(str(self.io_dir)),
@@ -95,7 +103,9 @@ class InterpreterProcess:
             chainid=1,
             usegas=True,
         )
-
+        # Write input.kore for debugging
+        with open('input.kore', 'w') as f:
+            f.write(str(initial_kore))
         llvm_interpret(definition_dir=kdist.get('kontrol-node.simbolik'), pattern=initial_kore, check=False)
 
     def request(self, payload: bytes) -> bytes:
