@@ -3,8 +3,6 @@ from __future__ import annotations
 import cProfile
 import logging
 import os
-import subprocess
-import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -13,6 +11,7 @@ from pyk.kdist import kdist
 from pyk.konvert._utils import munge
 from pyk.kore.prelude import BOOL, INT, SORT_K_ITEM, bool_dv, inj, int_dv, str_dv, top_cell_initializer
 from pyk.kore.syntax import App, SortApp
+from pyk.ktool.krun import llvm_interpret
 
 if TYPE_CHECKING:
     from pyk.kore.syntax import Pattern
@@ -62,34 +61,28 @@ class KontrolNodeServer:
             self.http_server.shutdown()
 
     def port(self) -> int:
-        return self.options.port
+        return self.http_server.server_port
 
 
 class InterpreterProcess:
     """
-    The Python server and K semantics communicate with each other via files and stdin/stdout.
-    Every requests is written to a temporary file. Then the K process is notified via stdin.
-    When K has processed the request, it writes the response to another temporary file, and
-    notifies the Python server via stdout. The python then reads the response and forwards
-    it the client.
+    The Python server and K semantics communicate with each other via two files
+    `requests.json` and `response.json`.
+    The Python sever writes the request to the `requests.json` file.
+    It then runs the K interpreter.
+    The interpreter reads the `requests.json` file, proccesses the request, and writes
+    the response to the `response.json` file.
     """
 
-    process: subprocess.Popen[bytes]
-    output_buffer: bytes = b''
-    output_reader: threading.Thread
-    output_ready: threading.Event
     io_dir: Path
 
     def __init__(self) -> None:
-        self.output_reader = threading.Thread(target=self._output_reader, daemon=True)
-        self.output_ready = threading.Event()
-        self.output_buffer = b''
         base_dir = Path(__file__).resolve().parent
         src_dir = base_dir.parent
         test_dir = src_dir / 'tests'
         self.io_dir = test_dir / 'integration' / 'io_dir'
 
-    def run(self) -> None:
+    def _run(self) -> None:
         # TODO: use an temporary directory
         # notice, we must copy the initial state dump there
 
@@ -103,31 +96,12 @@ class InterpreterProcess:
             usegas=True,
         )
 
-        # Copy the initial KORE configuration to a file
-        input_file = self.io_dir / 'input.kore'
-        with open(input_file, 'w') as f:
-            f.write(initial_kore.text)
-
-        output_file = self.io_dir / 'output.kore'
-        steps = '-1'
-        interpreter: Path = kdist.get('kontrol-node.simbolik') / 'interpreter'
-
-        self.process = subprocess.Popen(
-            [str(interpreter), str(input_file), steps, str(output_file)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        self.output_reader.start()
+        llvm_interpret(definition_dir=kdist.get('kontrol-node.simbolik'), pattern=initial_kore, check=False)
 
     def request(self, payload: bytes) -> bytes:
-        assert self.process.stdin and self.process.stdout
         with open(self._request_file(), 'wb') as f:
             f.write(payload)
-        self.process.stdin.write(b'RequestReady')
-        self.process.stdin.flush()
-        self.output_ready.wait()
-        self.output_ready.clear()
+        self._run()
         with open(self._response_file(), 'rb') as f:
             response = f.read()
         return response
@@ -138,20 +112,10 @@ class InterpreterProcess:
     def _response_file(self) -> Path:
         return self.io_dir / 'response.json'
 
-    def _output_reader(self) -> None:
-        assert self.process.stdout
-        stdout = self.process.stdout
-        for chunk in iter(lambda: stdout.read(4096), b''):
-            self.output_buffer += chunk
-        if self.output_buffer == b'RequestProcessed':
-            self.output_ready.set()
-            self.output_buffer = b''
-
 
 def handler() -> type[BaseHTTPRequestHandler]:
 
     interpreter = InterpreterProcess()
-    interpreter.run()
 
     class KontrolNodeHandler(BaseHTTPRequestHandler):
 
@@ -164,9 +128,12 @@ def handler() -> type[BaseHTTPRequestHandler]:
             content_len = self.headers.get('Content-Length')
             assert type(content_len) is str
             content = self.rfile.read(int(content_len))
+
             result = interpreter.request(content)
-            self.send_header('Content-Type', 'application/json')
+
             self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header("Content-Length", str(len(result)))
             self.end_headers()
             self.wfile.write(result)
 

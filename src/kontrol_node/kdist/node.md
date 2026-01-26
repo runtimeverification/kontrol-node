@@ -1,24 +1,38 @@
 ```k
-requires "foundry.md"
+requires "config.md"
 requires "driver.md"
+requires "foundry.md"
+requires "fs.md"
+requires "json.md"
+requires "json-utils.md"
 requires "no_code_size_checks.md"
 requires "trace.md"
 requires "trace-json.md"
-requires "config.md"
-requires "json-utils.md"
-requires "json.md"
 
 module KONTROL-NODE
-    imports FOUNDRY
-    imports MAP
-    imports SERIALIZATION
     imports ETHEREUM-SIMULATION
-    imports NO-CODE-SIZE-CHECKS
     imports EVM-TRACING
-    imports TRACE-JSON
-    imports KONTROL-NODE-CONFIG
+    imports FILE-SYSTEM
+    imports FOUNDRY
     imports JSON
     imports JSON-UTILS
+    imports KONTROL-NODE-CONFIG
+    imports MAP
+    imports NO-CODE-SIZE-CHECKS
+    imports SERIALIZATION
+    imports TRACE-JSON
+
+    syntax EthereumSimulation ::= Start
+
+    syntax Start ::= #start( String ) [symbol(start)]
+
+    rule <k> #start( IO_DIR )
+        => #unlockAccounts()
+        ~> #loadStateDump( IO_DIR, 0)
+        ~> #loadRpcRequest( IO_DIR )
+        ...
+    </k>
+    <ioDir> _ => IO_DIR </ioDir>
 
 ```
 
@@ -45,6 +59,17 @@ Mnemonic: test test test test test test test test test test test junk
 ```
 ###############################################################################
 # Requests
+
+## eth_getChainId
+
+```k
+    rule <k> RPCRequest( REQ_ID, EthGetChainId() ) 
+        => RPCResponse( CHAIN_ID )
+        ...
+        </k>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <chainID> CHAIN_ID </chainID>
+```
 
 ###############################################################################
 ## eth_sendTransaction
@@ -130,10 +155,12 @@ Similarly, we save a state snapshot after the block was mined.
         ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
         ~> #finalizeBlock
         ~> #makeTxReceipts
+        ~> #saveStateDump( IO_DIR )
         ~> #mineBlock
         ~> #ethSendTransactionResponse
         ...
         </k>
+        <ioDir>       IO_DIR </ioDir>
         <currentTxID> TX_ID  </currentTxID>
         <schedule>    SCHED  </schedule>
         <message>
@@ -241,7 +268,6 @@ Similarly, we save a state snapshot after the block was mined.
         </message>
 ```
 
-===============================================================================
 ## eth_getCode
 
 ```k
@@ -257,7 +283,22 @@ Similarly, we save a state snapshot after the block was mined.
         </account>
 ```
 
-===============================================================================
+## eth_getBalance
+
+```k
+    rule <k> RPCRequest( REQ_ID, EthGetBalance( ADDR, _BLOCK_NUM ) ) // TODO: block number
+        => RPCResponse( intToHex( ACCT_BALANCE ) )
+        ...
+        </k>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <account>
+            <acctID> ADDR </acctID>
+            <balance> ACCT_BALANCE </balance>
+            ...
+        </account>
+```
+
+###############################################################################
 ## eth_getBlockByNumber
 
 ```k
@@ -317,7 +358,7 @@ Similarly, we save a state snapshot after the block was mined.
             </block>
 ```
 
-===============================================================================
+###############################################################################
 ## eth_getBlockByHash
 
 ```k
@@ -335,7 +376,7 @@ Similarly, we save a state snapshot after the block was mined.
             </block>
 ```
 
-===============================================================================
+###############################################################################
 ## eth_getTransactionCount
 
 ```k
@@ -351,7 +392,7 @@ Similarly, we save a state snapshot after the block was mined.
         </account>
 ```
 
-===============================================================================
+###############################################################################
 ## eth_getStorageAt
 
 ```k
@@ -367,7 +408,7 @@ Similarly, we save a state snapshot after the block was mined.
         </account>
 ```
 
-===============================================================================
+###############################################################################
 ## anvil_stateDump
 
 ```k
@@ -384,7 +425,7 @@ Similarly, we save a state snapshot after the block was mined.
 
 ```
 
-===============================================================================
+###############################################################################
 ## debug_traceTransaction
 
 At the point the debug_traceTransaction method is called, the transaction has already been
@@ -865,7 +906,8 @@ This section defines an intermediate represention for JSON RPC requests.
                            | RPCRawResponse( String )
       syntax RPCRequest  ::= RPCRequest( Int, RPCRequestParams)
 
-      syntax RPCRequestParams ::= EthSendTransaction(
+      syntax RPCRequestParams ::= EthGetChainId()
+                                | EthSendTransaction(
                                     Int , // from
                                     Int , // to
                                     Int , // gas
@@ -876,6 +918,7 @@ This section defines an intermediate represention for JSON RPC requests.
                                 | EthGetTransactionReceipt( Int )    // tx hash
                                 | EthGetTransactionByHash( Int )     // tx hash
                                 | EthGetCode( Int, Int )             // address, block number
+                                | EthGetBalance( Int, Int )          // address, block number
                                 | EthGetBlockByNumber( Int )         // block number
                                 | EthGetBlockByHash( Int )           // block hash
                                 | EthGetTransactionCount( Int, Int ) // address, block number
@@ -915,8 +958,8 @@ intermediate representation.
             #let REQ_PARAMS = #rpcLoadParams( METHOD, PARAMS_RAW ) #in
             RPCRequest(REQ_ID, REQ_PARAMS)
 
-    syntax Int ::= "DEFAULTSENDER" [function]
-    rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+    rule #rpcLoadParams( "eth_getTransactionReceipt", [ .JSONs ] )
+        => EthGetChainId()
 
     rule #rpcLoadParams( "eth_sendTransaction", [ J ])
         => #let FROM  = #getAddr( "from", J, DEFAULTSENDER ) #in
@@ -935,11 +978,16 @@ intermediate representation.
 
     rule #rpcLoadParams( "eth_getCode", [ ADDR:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
-            #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+            #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
             EthGetCode( ADDR_INT, BLOCK_INT )
 
+    rule #rpcLoadParams( "eth_getBalance", [ ADDR:String, BLOCK_NUM:String ] )
+        => #let ADDR_INT = #parseAddr( ADDR ) #in
+           #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in 
+            EthGetBalance( ADDR_INT, 0 )
+
     rule #rpcLoadParams( "eth_getBlockByNumber", [ BLOCK_NUM:String ] )
-        => #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+        => #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
             EthGetBlockByNumber( BLOCK_INT )
 
     rule #rpcLoadParams( "eth_getBlockByHash", [ BLOCK_HASH:String ] )
@@ -947,13 +995,13 @@ intermediate representation.
 
     rule #rpcLoadParams( "eth_getTransactionCount", [ ADDR:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
-            #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+           #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
             EthGetTransactionCount( ADDR_INT, BLOCK_INT )
 
     rule #rpcLoadParams( "eth_getStorageAt", [ ADDR:String, SLOT:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
             #let SLOT_INT = #parseWord( SLOT ) #in
-            #let BLOCK_INT = #parseWord( BLOCK_NUM ) #in
+            #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
             EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
 
     rule #rpcLoadParams( "anvil_stateDump", [ _ ] )
@@ -961,6 +1009,15 @@ intermediate representation.
 
     rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String ] )
         => DebugTraceTransaction( #parseWord( TX_HASH ) )
+
+    // Helpers
+    syntax Int ::= "DEFAULTSENDER" [function]
+    rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+
+    syntax Int ::= #parseBlockNumber( String ) [function]
+    rule [[ #parseBlockNumber( "latest" ) => CURRENT_BLOCK_NUMBER -Int 1 ]]
+        <number> CURRENT_BLOCK_NUMBER </number>
+    rule #parseBlockNumber( BN ) => #parseWord( BN ) [owise]
 ```
 ###############################################################################
 # State Snapshots
@@ -1087,7 +1144,9 @@ StateDump format - not the ethereum/test format.
     rule <k> #stLoadBlock( { KEY : VALUE, REST } ) => #stLoadBlock( KEY : VALUE ) ~> #stLoadBlock( { REST } ) ... </k>
 
     // Handle components
-    rule <k> #stLoadBlock( "number"      : VAL ) => .K ... </k> <number>     _ => #parseWord( VAL ) </number>
+    // Notice, the snapshot contains mined blocks. The <block>-cell contains the block
+    // that is currently beeing built.
+    rule <k> #stLoadBlock( "number"      : VAL ) => .K ... </k> <number>     _ => #parseWord( VAL ) +Int 1 </number>
     rule <k> #stLoadBlock( "beneficiary" : VAL ) => .K ... </k> <coinbase>   _ => #parseWord( VAL ) </coinbase>
     rule <k> #stLoadBlock( "timestamp"   : VAL ) => .K ... </k> <timestamp>  _ => #parseWord( VAL ) </timestamp>
     rule <k> #stLoadBlock( "gas_limit"   : VAL ) => .K ... </k> <gasLimit>   _ => VAL </gasLimit>
@@ -1171,6 +1230,98 @@ StateDump format - not the ethereum/test format.
             <origStorage> _ => ST </origStorage>
             ...
         </account>
+
+```
+###############################################################################
+# Input/Output
+
+## Sending RPC Responses
+
+This section defines rules to write RPCResponses to a file.
+
+```k
+
+      syntax String ::= responseFile( String ) [function]
+      rule responseFile( IO_DIR:String ) =>
+            IO_DIR +String "/response.json"
+
+      rule <k> RPCResponse( JSON_RESPONSE )
+            => #writeFile(responseFile(IO_DIR), JSON2String({
+                  "jsonrpc" : "2.0",
+                  "id"      : REQ_ID,
+                  "result"  : JSON_RESPONSE
+            }))
+            ... </k>
+            <ioDir> IO_DIR </ioDir>
+            <rpcRequestID> REQ_ID </rpcRequestID>
+            
+      rule <k> RPCRawResponse( RESPONSE:String )
+            => #writeFile(responseFile(IO_DIR), RESPONSE)
+            ...
+           </k>
+           <ioDir> IO_DIR </ioDir>
+
+```
+
+## Loading RPCRequests
+
+This section defines rules to read a RPCRequests from a file.
+
+```k
+    syntax KItem ::= #loadRpcRequest( String )
+    
+    syntax String ::= requestFile( String ) [function]
+    rule requestFile( IO_DIR:String ) =>
+        IO_DIR +String "/request.json"
+
+    rule <k> #loadRpcRequest( IO_DIR:String )
+        => #let CONTENTS:IOString = #readFile( requestFile(IO_DIR) )
+            #in #rpcLoad( String2JSON( {CONTENTS}:>String ) )
+        ...
+        </k>
+
+```
+## Persisting a StateDump to Disk
+
+This seciont defines rules to write a StateDump JSON object to disk.
+
+```k
+
+    syntax KItem ::= #writeStateDump( String )
+                   | #saveStateDump( String )
+
+    syntax String ::= #stateDumpFile(
+        String, // IO dir
+        Int     // block number
+    ) [function, total]
+
+    rule #stateDumpFile( IO_DIR, BLOCK_NUMBER ) => IO_DIR +String "/blocks/block_" +String Int2String( BLOCK_NUMBER ) +String ".json"
+
+    rule <k> #saveStateDump( IO_DIR )
+          => #createStateDump()
+          ~> #writeStateDump( IO_DIR )
+        </k>
+
+    rule <k> #StateDump( SD )
+          ~> #writeStateDump( IO_DIR )
+          => #writeFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER), JSON2String( SD ) )
+          ...
+        </k>
+        <number> BLOCK_NUMBER </number>
+
+```
+## Loading StateDump from Disk
+
+This secion defines rules to read a StateDump JSON object from disk.
+
+```k
+
+    syntax KItem ::= #loadStateDump( String, Int )
+    rule <k> #loadStateDump( IO_DIR, BLOCK_NUMBER )
+          => #let CONTENTS:IOString = #readFile( #stateDumpFile( IO_DIR, BLOCK_NUMBER ) )
+              #in #stLoad( String2JSON( {CONTENTS}:>String ) )
+              ...
+         </k>
 
 endmodule
 ```

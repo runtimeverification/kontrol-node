@@ -9,6 +9,7 @@ module KONTROL-NODE-CONFIG
 
     configuration <simbolikVM>
             <foundry/>
+            <ioDir>                   "":String </ioDir>
             <rpcRequestID>            0         </rpcRequestID>
             <accountKeys>             .Map      </accountKeys>
             <timeFreeze>              true      </timeFreeze>
