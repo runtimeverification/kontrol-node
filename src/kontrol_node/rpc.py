@@ -85,6 +85,7 @@ class InterpreterProcess:
     def _setup_io_dir(self) -> None:
         self.io_dir = Path(tempfile.mkdtemp(prefix='io_dir', dir=os.getcwd()))
         (self.io_dir / 'blocks').mkdir(parents=True, exist_ok=True)
+        (self.io_dir / 'transactions').mkdir(parents=True, exist_ok=True)
         genesis_src = Path(__file__).resolve().parent / 'genesis.json'
         genesis_dst = self.io_dir / 'blocks' / 'block_0.json'
         shutil.copyfile(genesis_src, genesis_dst)
@@ -93,25 +94,36 @@ class InterpreterProcess:
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f)
 
-    def _run(self) -> None:
+    def _run(self) -> Pattern:
         # Create the initial KORE configuration
         initial_kore = _kore_pgm_to_kore(
             pgm=_start_kore(str(self.io_dir)),
             pattern_sort=SortApp('SortEthereumSimulation'),
             schedule='PRAGUE',
             mode='NORMAL',
-            chainid=1,
+            chainid=31337,
             usegas=True,
         )
         # Write input.kore for debugging
         with open('input.kore', 'w') as f:
-            f.write(str(initial_kore))
-        llvm_interpret(definition_dir=kdist.get('kontrol-node.simbolik'), pattern=initial_kore, check=False)
+            f.write(initial_kore.text)
+        result = llvm_interpret(definition_dir=kdist.get('kontrol-node.simbolik'), pattern=initial_kore, check=False)
+        return result
 
     def request(self, payload: bytes) -> bytes:
+        # remove old response file if it exists
+        response_file = self._response_file()
+        if response_file.exists():
+            response_file.unlink()
+        # write request to file
         with open(self._request_file(), 'wb') as f:
             f.write(payload)
-        self._run()
+        # run the interpreter
+        output = self._run()
+        # write output.kore for debugging
+        with open('output.kore', 'w') as f:
+            f.write(output.text)
+        # read response from file
         with open(self._response_file(), 'rb') as f:
             response = f.read()
         return response

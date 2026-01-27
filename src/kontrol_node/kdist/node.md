@@ -92,6 +92,7 @@ Similarly, we save a state snapshot after the block was mined.
         <schedule>     SCHED       </schedule>
         <callState>
             <callGas> _ => G0(SCHED, DATA, (TO ==K .Account) ) </callGas>
+            <caller>  _ => FROM </caller>
             ...
         </callState>
         <block>
@@ -101,9 +102,9 @@ Similarly, we save a state snapshot after the block was mined.
         <network>
             <chainID>  CHAIN_ID </chainID>
             <account>
-            <acctID> FROM     </acctID> // TODO: What if FROM account does not exist yet?
-            <nonce>  TXNONCE  </nonce>
-            ...
+                <acctID> FROM     </acctID> // TODO: What if FROM account does not exist yet?
+                <nonce>  TXNONCE  </nonce>
+                ...
             </account>
             <txOrder>   ... (.List => ListItem(!TX_ID )) </txOrder>
             <txPending> ... (.List => ListItem(!TX_ID )) </txPending>
@@ -907,8 +908,8 @@ This section defines an intermediate represention for JSON RPC requests.
 
       syntax RPCRequestParams ::= EthChainId()
                                 | EthSendTransaction(
-                                    Int , // from
-                                    Int , // to
+                                    Account , // from
+                                    Account , // to
                                     Int , // gas
                                     Int , // gas price
                                     Int , // value
@@ -951,7 +952,7 @@ intermediate representation.
     rule <k> #rpcLoad( _ ) => .K ... </k> [owise]
 
     rule #rpcLoadRequest( J )
-            => #let REQ_ID     = #getInt(    "id",     J) #in
+            => #let REQ_ID  = #getInt(    "id",     J) #in
             #let METHOD     = #getString( "method", J) #in
             #let PARAMS_RAW = #getJSON(   "params", J) #in
             #let REQ_PARAMS = #rpcLoadParams( METHOD, PARAMS_RAW ) #in
@@ -961,12 +962,12 @@ intermediate representation.
         => EthChainId()
 
     rule #rpcLoadParams( "eth_sendTransaction", [ J ])
-        => #let FROM  = #getAddr( "from", J, DEFAULTSENDER ) #in
-            #let TO    = #getAddr( "to"  , J, 0 ) #in
+        => #let FROM       = #getAccount( "from", J, DEFAULTSENDER ) #in
+            #let TO        = #getAccount( "to"  , J, .Account ) #in
             #let GAS_LIMIT = #getWord( "gas" , J, pow24 ) #in
             #let GAS_PRICE = #getWord( "gas_price", J, 1 ) #in
-            #let VALUE = #getWord( "value", J, 0 ) #in
-            #let DATA  = #getBytes( "data", J, .Bytes ) #in
+            #let VALUE     = #getWord( "value", J, 0 ) #in
+            #let DATA      = #getBytes( "data", J, .Bytes ) #in
             EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
 
     rule #rpcLoadParams( "eth_getTransactionReceipt", [ TX_HASH:String ] )
@@ -1017,6 +1018,10 @@ intermediate representation.
     rule [[ #parseBlockNumber( "latest" ) => CURRENT_BLOCK_NUMBER -Int 1 ]]
         <number> CURRENT_BLOCK_NUMBER </number>
     rule #parseBlockNumber( BN ) => #parseWord( BN ) [owise]
+
+    syntax Account ::= #getAccount(JSONKey, JSON, Account) [function]
+    rule #getAccount( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
+                                        #if RAW ==K null #then DEF_VAL #else #parseAddr( {RAW}:>String ) #fi
 ```
 ###############################################################################
 # State Snapshots
@@ -1079,7 +1084,10 @@ K configuration.
                 "basefee": BLOCK_BASE_FEE,
                 "difficulty": intToHex( BLOCK_DIFFICULTY ),
                 "prevrandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                "blob_excess_gas_and_price": BLOCK_EXCESS_BLOB_GAS
+                "blob_excess_gas_and_price": {
+                    "excess_blob_gas": BLOCK_EXCESS_BLOB_GAS,
+                    "blob_gasprice": 1
+                }
             },
             "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> )
         }) ...
@@ -1146,10 +1154,10 @@ StateDump format - not the ethereum/test format.
     // Notice, the snapshot contains mined blocks. The <block>-cell contains the block
     // that is currently beeing built.
     rule <k> #stLoadBlock( "number"      : VAL ) => .K ... </k> <number>     _ => #parseWord( VAL ) +Int 1 </number>
-    rule <k> #stLoadBlock( "beneficiary" : VAL ) => .K ... </k> <coinbase>   _ => #parseWord( VAL ) </coinbase>
+    /* rule <k> #stLoadBlock( "beneficiary" : VAL ) => .K ... </k> <coinbase>   _ => #parseWord( VAL ) </coinbase> */
     rule <k> #stLoadBlock( "timestamp"   : VAL ) => .K ... </k> <timestamp>  _ => #parseWord( VAL ) </timestamp>
     rule <k> #stLoadBlock( "gas_limit"   : VAL ) => .K ... </k> <gasLimit>   _ => VAL </gasLimit>
-    rule <k> #stLoadBlock( "basefee"     : VAL ) => .K ... </k> <baseFee>    _ => VAL </baseFee>
+    /* rule <k> #stLoadBlock( "basefee"     : VAL ) => .K ... </k> <baseFee>    _ => VAL </baseFee> */
     rule <k> #stLoadBlock( "difficulty"  : VAL ) => .K ... </k> <difficulty> _ => #parseWord( VAL ) </difficulty>
     rule <k> #stLoadBlock( "blob_excess_gas_and_price": VAL ) => #stLoadBlob( VAL )... </k>
 
@@ -1167,7 +1175,7 @@ StateDump format - not the ethereum/test format.
 
     // Handle components
     rule <k> #stLoadBlob( "excess_blob_gas" : VAL ) => .K ... </k> <excessBlobGas> _ => VAL </excessBlobGas>
-    rule <k> #stLoadBlob( "blob_gasprice"   : VAL ) => .K ... </k> <blobGasUsed>   _ => VAL </blobGasUsed>
+    /* rule <k> #stLoadBlob( "blob_gasprice"   : VAL ) => .K ... </k> <blobGasUsed>   _ => VAL </blobGasUsed> */ // TODO
     
     // Discard all other components
     rule <k> #stLoadBlob( _:String : _VAL) => .K ...</k> [owise] 
@@ -1297,6 +1305,7 @@ This seciont defines rules to write a StateDump JSON object to disk.
     rule <k> #saveStateDump
           => #createStateDump
           ~> #writeStateDump
+          ...
         </k>
 
     rule <k> #StateDump( SD )
