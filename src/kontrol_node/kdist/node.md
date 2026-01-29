@@ -156,8 +156,8 @@ Similarly, we save a state snapshot after the block was mined.
         ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
         ~> #finalizeBlock
         ~> #makeTxReceipts
-        ~> #saveStateDump
         ~> #mineBlock
+        ~> #saveStateDump
         ~> #saveMetadata
         ~> #ethSendTransactionResponse
         ...
@@ -303,58 +303,41 @@ Similarly, we save a state snapshot after the block was mined.
 ## eth_getBlockByNumber
 
 ```k
-    syntax KItem ::= "#ethGetBlockByNumberResponse"
+    syntax KItem ::= #ethGetBlockResponse( BlockData )
 
     rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER, _HYDRATED_TXS ) ) // TODO: hydrated txs
-            ~> #ethGetBlockByNumberResponse
+            => #ethGetBlockResponse( #getBlockData( BLOCK_NUMBER ) )
             ...
             </k>
             <rpcRequestID> _ => REQ_ID </rpcRequestID>
-            <block>
-                <number> ORIGINAL_BLOCK_NUMBER </number>
-                ...
-            </block>
 
-    rule <k> #ethGetBlockByNumberResponse
+    rule <k> #ethGetBlockResponse( ( BlockData(
+            PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
+         )) )
             => RPCResponse({
-                "hash"             : intToHex( 0 ), // TODO
-                "parentHash"       : intToHex( PREV_HASH ),
-                "sha3Uncles"       : intToHex( OMMERS_HASH ),
-                "miner"            : intToHex( MINER ),
-                "stateRoot"        : intToHex( STATE_ROOT ),
-                "transactionsRoot" : intToHex( TRANSACTIONS_ROOT ),
-                "receiptsRoot"     : intToHex( RECEIPTS_ROOT ),
-                "logsBloom"        : "0x0", // TODO
-                "difficulty"       : intToHex( BLOCK_DIFFICULTY ),
-                "number"           : intToHex( BLOCK_NUMBER ),
-                "gasLimit"         : intToHex( GAS_LIMIT ),
-                "gasUsed"          : intToHex( GAS_USED ),
-                "timestamp"        : intToHex( BLOCK_TIMESTAMP ),
-                "extraData"        : bytesToHex( EXTRA_DATA ),
-                "mixHash"          : intToHex( MIX_HASH ),
-                "nonce"            : intToHex( NONCE ),
-                "size"             : "0x0", // TODO
+                "hash"             : #hashBlockData( BlockData(
+                    PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
+                )),
+                "parentHash"       : intToHex( PH ),
+                "sha3Uncles"       : intToHex( HO ),
+                "miner"            : intToHex( HC ),
+                "stateRoot"        : intToHex( HR ),
+                "transactionsRoot" : intToHex( HT ),
+                "receiptsRoot"     : intToHex( HE ),
+                "logsBloom"        : bytesToHex( HB ),
+                "difficulty"       : intToHex( HD ),
+                "number"           : intToHex( BN ),
+                "gasLimit"         : intToHex( HL ),
+                "gasUsed"          : intToHex( HG ),
+                "timestamp"        : intToHex( HS ),
+                "extraData"        : bytesToHex( HX ),
+                "mixHash"          : intToHex( HM ),
+                "nonce"            : intToHex( HN ),
+                "size"             : "0x1",
                 "transactions"     : [ .JSONs ], // TODO
                 "uncles"           : [ .JSONs ]  // TODO
             })
             ... </k>
-            <block>
-                <previousHash>     PREV_HASH        </previousHash>
-                <ommersHash>       OMMERS_HASH      </ommersHash>
-                <coinbase>         MINER            </coinbase>
-                <stateRoot>        STATE_ROOT       </stateRoot>
-                <transactionsRoot> TRANSACTIONS_ROOT </transactionsRoot>
-                <receiptsRoot>     RECEIPTS_ROOT    </receiptsRoot>
-                <difficulty>       BLOCK_DIFFICULTY </difficulty>
-                <number>           BLOCK_NUMBER     </number>
-                <gasLimit>         GAS_LIMIT        </gasLimit>
-                <gasUsed>          GAS_USED         </gasUsed>
-                <timestamp>        BLOCK_TIMESTAMP  </timestamp>
-                <extraData>        EXTRA_DATA       </extraData>
-                <mixHash>          MIX_HASH         </mixHash>
-                <blockNonce>       NONCE            </blockNonce>
-                ...
-            </block>
 ```
 
 ###############################################################################
@@ -363,16 +346,10 @@ Similarly, we save a state snapshot after the block was mined.
 ```k
 
     rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( BLOCK_HASH, _HYDRATED_TXS ) ) // TODO: hydrated txs
-            => #setBlockData( #getBlockData( BLOCK_HASH ) )
-            ~> #ethGetBlockByNumberResponse
-            ~> #setBlockData( #getBlockData( ORIGINAL_BLOCK_NUMBER ) )
+            => #ethGetBlockResponse( #getBlockDataByHash( BLOCK_HASH ) )
             ...
             </k>
             <rpcRequestID> _ => REQ_ID </rpcRequestID>
-            <block>
-                <number> ORIGINAL_BLOCK_NUMBER </number>
-                ...
-            </block>
 ```
 
 ###############################################################################
@@ -686,6 +663,7 @@ The productions below are used to perform the mining of blocks, advancing the bl
                    | #setBlockData( BlockData )
 
     syntax BlockData ::= #getBlockData( Int )        [function]
+                       | #getBlockDataByHash( Int )  [function]
     syntax Int       ::= #hashBlockData( BlockData ) [function]
 
     rule <k> #mineBlock => #startBlock ... </k>
@@ -708,9 +686,8 @@ The productions below are used to perform the mining of blocks, advancing the bl
                 <receiptsRoot>     _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #receiptsRoot( <txReceipts> TXRECEIPTS </txReceipts> ) ) ) ) </receiptsRoot>
                 ...
           </block>
-          <blockStorage> M => M[ BN                                    <- #getBlockData( BN )]
-                               [ #hashBlockData( #getBlockData( BN ) ) <- #getBlockData( BN )]
-          </blockStorage>
+          <blockStorage> M => M[ BN                                    <- #getBlockData( BN )] </blockStorage>
+          <blockHashes>  H => H[ #hashBlockData( #getBlockData( BN ) ) <- BN                 ] </blockHashes>
 
     rule [[ #getBlockData( BN ) => BlockData(
         PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
@@ -744,6 +721,11 @@ The productions below are used to perform the mining of blocks, advancing the bl
         <blockStorage> BLOCK_STORAGE:Map </blockStorage>
         <number> CURRENT_BN </number>
         requires BN =/=Int CURRENT_BN andBool BN in_keys(BLOCK_STORAGE)
+
+    rule [[ #getBlockDataByHash( BLOCK_HASH ) => {#getBlockData({BLOCK_STORAGE[ BLOCK_HASH ]}:>Int)}:>BlockData ]]
+        <blockStorage> BLOCK_STORAGE:Map </blockStorage>
+        <blockHashes>  BLOCK_HASHES:Map </blockHashes>
+        requires BLOCK_HASH in_keys(BLOCK_HASHES) andBool BLOCK_HASHES[ BLOCK_HASH ] in_keys(BLOCK_STORAGE)
 
     rule <k> #setBlockData( BlockData(
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
@@ -1029,9 +1011,12 @@ K configuration.
     syntax JSON  ::= accountsToJSON( AccountsCell )          [function, total, symbol(accountsToJSON)]
                    | accountToJSON( AccountCell )            [function, total, symbol(accountToJSON)]
                    | storageToJSON(Map)                      [function, total, symbol(accStorageToJson)]
+                   | blocksToJSON(Map)                       [function, total, symbol(blocksToJSON)]
+                   | blockToJSON(BlockData)                  [function, total, symbol(blockToJSON)]
 
     syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsToJSONs)]
                    | storageToJSONs( Map, JSONs )            [function, total, symbol(accStorageToJSONs)]
+                   | blocksToJSONs( Map, JSONs )             [function, total, symbol(blocksToJSONs)]
 
 
     // Duplicated in trace-json.md where this is called intMapToJson
@@ -1062,9 +1047,9 @@ K configuration.
 
     rule <k> #createStateDump
         => #StateDump({
-            "bestBlockNumber": BLOCK_NUMBER,
+            "bestBlockNumber": BLOCK_NUMBER -Int 1,
             "block": {
-                "number": intToHex( BLOCK_NUMBER ),
+                "number": intToHex( BLOCK_NUMBER -Int 1 ),
                 "beneficiary": intToHex( BLOCK_COINBASE ),
                 "timestamp": intToHex( BLOCK_TIMESTAMP ),
                 "gas_limit": BLOCK_GAS_LIMIT,
@@ -1076,7 +1061,8 @@ K configuration.
                     "blob_gasprice": 1
                 }
             },
-            "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> )
+            "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> ),
+            "blocks": blocksToJSON( BLOCK_STORAGE )
         }) ...
     </k>
     <block>
@@ -1090,6 +1076,41 @@ K configuration.
         ...
     </block>
     <accounts> ACCOUNTS </accounts>
+    <blockStorage> BLOCK_STORAGE </blockStorage>
+
+    rule blocksToJSON( BS ) => [ blocksToJSONs( BS, .JSONs ) ] [priority(50)]
+    rule blocksToJSONs( .Map, ACCU ) => ACCU
+    rule blocksToJSONs( (_ |-> VAL) BS, ACCU) => blockToJSON({VAL}:>BlockData), blocksToJSONs( BS, ACCU )
+
+    rule blockToJSON( BlockData(
+            PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
+         ))
+        => { "header": {
+                "parentHash":       intToHex( PH ),
+                "sha3Uncles":       intToHex( HO ),
+                "miner":            intToHex( HC ),
+                "stateRoot":        intToHex( HR ),
+                "transactionsRoot": intToHex( HT ),
+                "receiptsRoot":     intToHex( HE ),
+                "logsBloom":        bytesToHex( HB ),
+                "difficulty":       intToHex( HD ),
+                "number":           intToHex( BN ),
+                "gasLimit":         intToHex( HL ),
+                "gasUsed":          #if isInt(HG) #then intToHex( HG ) #else "0x0" #fi,
+                "timestamp":        intToHex( HS ),
+                "extraData":        bytesToHex( HX ),
+                "mixHash":          intToHex( HM ),
+                "nonce":            intToHex( HN ),
+                "baseFeePerGas":    intToHex( BF ),
+                "withdrawalsRoot":  intToHex( WR ),
+                "blobGasUsed":      intToHex( BG ),
+                "excessBlobGas":    intToHex( EG ),
+                "parentBeaconBlockRoot": intToHex( BR ),
+                "requestsHash":     intToHex( RR )
+            },
+            "transactions": [ .JSONs ],
+            "ommers": OBH
+        }
 ```
 
 ###############################################################################
@@ -1117,6 +1138,7 @@ StateDump format - not the ethereum/test format.
           ~> #loadCurrentBlock( LATEST_BLOCK_NUMBER ) ... </k>
           <accounts>     _ => .Bag </accounts>
           <blockStorage> _ => .Map </blockStorage>
+          <blockHashes>  _ => .Map </blockHashes>
 
     rule <k> #loadBlocks( .Blocks ) => .K ... </k>
     rule <k> #loadBlocks( BLOCK_DATA , REST )
@@ -1126,8 +1148,10 @@ StateDump format - not the ethereum/test format.
     rule <k> #loadBlock( BLOCK_DATA ) => .K ... </k>
         <blockStorage> BLOCK_STORAGE =>
                        BLOCK_STORAGE[ #getBlockNumber( BLOCK_DATA ) <- BLOCK_DATA ]
-                                    [ #hashBlockData( BLOCK_DATA )  <- BLOCK_DATA ]
         </blockStorage>
+        <blockHashes>  BLOCK_HASHES  =>
+                       BLOCK_HASHES[ #hashBlockData( BLOCK_DATA ) <- #getBlockNumber( BLOCK_DATA ) ]
+        </blockHashes>
 
     rule <k> #loadCurrentBlock( BLOCK_NUMBER ) => .K ... </k>
         <blockStorage> BLOCK_STORAGE </blockStorage>
@@ -1204,7 +1228,7 @@ StateDump format - not the ethereum/test format.
             Int, // excessBlobGas
             Int, // beaconRoot
             Int, // requestsRoot
-            JSON // omnersBlockHeaders
+            JSON // ommersBlockHeaders
         ) | #parseBlock( JSON ) [function]
 
     syntax Map ::= #parseStorage( JSON )         [function]
@@ -1257,7 +1281,7 @@ StateDump format - not the ethereum/test format.
             #getWord( "excessBlobGas",    BLOCK_HEADER, 0 ),
             #getWord( "parentBeaconBlockRoot", BLOCK_HEADER, 0 ),
             #getWord( "requestsHash",     BLOCK_HEADER, 0 ),
-            #getJSON( "omners",           BLOCK_JSON, [ .JSONs ] )
+            #getJSON( "ommers",           BLOCK_JSON, [ .JSONs ] )
         )
 
     rule #parseAccounts( { .JSONs } ) => .Accounts
@@ -1355,7 +1379,7 @@ This seciont defines rules to write a StateDump JSON object to disk.
 
     rule <k> #StateDump( SD )
           ~> #writeStateDump
-          => #writeFile( #snapshotFile( BLOCK_NUMBER), JSON2String( SD ) )
+          => #writeFile( #snapshotFile( BLOCK_NUMBER -Int 1), JSON2String( SD ) )
           ...
         </k>
         <number> BLOCK_NUMBER </number>

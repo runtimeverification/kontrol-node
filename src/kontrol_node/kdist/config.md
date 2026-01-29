@@ -63,6 +63,7 @@ module KONTROL-NODE-CONFIG
                 </txReceipt>
             </txReceipts>
             <blockStorage> .Map </blockStorage>
+            <blockHashes>  .Map </blockHashes>
         </simbolikVM>
 
 endmodule
