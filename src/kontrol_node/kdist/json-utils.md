@@ -10,18 +10,25 @@ module JSON-UTILS
 
     // From JSON to K
 
-    syntax JSON ::= #getJSON ( JSONKey, JSON )      [function]
+    syntax JSON ::= #getJSON ( JSONKey, JSON )       [function]
+                  | #getJSON ( JSONKey, JSON, JSON ) [function]
 
-    rule #getJSON( KEY, { KEY : J, _     } ) => J
-    rule #getJSON(   _, { .JSONs         } ) => null
-    rule #getJSON( KEY, { KEY2 : _, REST } ) => #getJSON( KEY, { REST } )
+    rule #getJSON( KEY, { KEY : J, _     }, _ ) => J
+    rule #getJSON(   _, { .JSONs         }, DEF_VAL ) => DEF_VAL
+    rule #getJSON( KEY, { KEY2 : _, REST }, DEF_VAL ) => #getJSON( KEY, { REST }, DEF_VAL )
         requires KEY =/=String KEY2
 
+    rule #getJSON( KEY, J ) => #getJSON( KEY, J, null )
+
     syntax Int ::= #getInt(JSONKey, JSON) [function]
+                 | #getInt(JSONKey, JSON, Int) [function]
     rule #getInt( KEY, J ) => {#getJSON( KEY, J )}:>Int
+    rule #getInt( KEY, J, DEF_VAL ) => {#getJSON( KEY, J, DEF_VAL )}:>Int
 
     syntax String ::= #getString(JSONKey, JSON) [function]
+                    | #getString(JSONKey, JSON, String) [function]
     rule #getString( KEY, J ) => {#getJSON( KEY, J )}:>String
+    rule #getString( KEY, J, DEF_VAL ) => {#getJSON( KEY, J, DEF_VAL )}:>String
 
     syntax Int ::= #getWord(JSONKey, JSON, Int) [function]
     rule #getWord( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in

@@ -28,7 +28,7 @@ module KONTROL-NODE
 
     rule <k> #start( IO_DIR )
         => #unlockAccounts()
-        ~> #loadLatestStateDump
+        ~> #loadLatestSnapshot
         ~> #loadRpcRequest
         ...
     </k>
@@ -45,16 +45,16 @@ Mnemonic: test test test test test test test test test test test junk
 
     rule <k> #unlockAccounts() => .K ... </k>
         <accountKeys> _ =>
-            #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266") |-> #parseWord("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-            #parseAddr("0x70997970C51812dc3A010C7d01b50e0d17dc79C8") |-> #parseWord("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d")
-            #parseAddr("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC") |-> #parseWord("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a")
-            #parseAddr("0x90F79bf6EB2c4f870365E785982E1f101E93b906") |-> #parseWord("0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6")
-            #parseAddr("0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65") |-> #parseWord("0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a")
-            #parseAddr("0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc") |-> #parseWord("0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba")
-            #parseAddr("0x976EA74026E726554dB657fA54763abd0C3a0aa9") |-> #parseWord("0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e")
-            #parseAddr("0x14dC79964da2C08b23698B3D3cc7Ca32193d9955") |-> #parseWord("0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356")
-            #parseAddr("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f") |-> #parseWord("0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97")
-            #parseAddr("0xa0Ee7A142d267C1f36714E4a8F75612F20a79720") |-> #parseWord("0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6")
+            #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266") |-> #padToWidth( 32, #parseByteStack("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"))
+            #parseAddr("0x70997970C51812dc3A010C7d01b50e0d17dc79C8") |-> #padToWidth( 32, #parseByteStack("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"))
+            #parseAddr("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC") |-> #padToWidth( 32, #parseByteStack("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"))
+            #parseAddr("0x90F79bf6EB2c4f870365E785982E1f101E93b906") |-> #padToWidth( 32, #parseByteStack("0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"))
+            #parseAddr("0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65") |-> #padToWidth( 32, #parseByteStack("0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"))
+            #parseAddr("0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc") |-> #padToWidth( 32, #parseByteStack("0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba"))
+            #parseAddr("0x976EA74026E726554dB657fA54763abd0C3a0aa9") |-> #padToWidth( 32, #parseByteStack("0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e"))
+            #parseAddr("0x14dC79964da2C08b23698B3D3cc7Ca32193d9955") |-> #padToWidth( 32, #parseByteStack("0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356"))
+            #parseAddr("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f") |-> #padToWidth( 32, #parseByteStack("0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97"))
+            #parseAddr("0xa0Ee7A142d267C1f36714E4a8F75612F20a79720") |-> #padToWidth( 32, #parseByteStack("0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6"))
         </accountKeys>
 ```
 ###############################################################################
@@ -171,7 +171,7 @@ Similarly, we save a state snapshot after the block was mined.
         </message>
 
     rule <k> #ethSendTransactionResponse
-        => RPCResponse( intToHex( TX_HASH ) )
+        => RPCResponse( bytesToHex( TX_HASH ) )
         ... </k>
         <currentTxID>  TXID    </currentTxID>
         <txReceipt>
@@ -187,7 +187,7 @@ Similarly, we save a state snapshot after the block was mined.
     rule <k> RPCRequest( REQ_ID, EthGetTransactionReceipt( TX_HASH ) )
         => RPCResponse({
                 "type"              : "0x0",
-                "transactionHash"   : intToHex( TX_HASH ),
+                "transactionHash"   : bytesToHex( TX_HASH ),
                 "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
                 "blockHash"         : intToHex( BLOCK_HASH ),
                 "blockNumber"       : intToHex( BLOCK_NUMBER ),
@@ -305,10 +305,8 @@ Similarly, we save a state snapshot after the block was mined.
 ```k
     syntax KItem ::= "#ethGetBlockByNumberResponse"
 
-    rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER) )
-            => #setBlockData( #getBlockData( BLOCK_NUMBER ) )
+    rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER, _HYDRATED_TXS ) ) // TODO: hydrated txs
             ~> #ethGetBlockByNumberResponse
-            ~> #setBlockData( #getBlockData( ORIGINAL_BLOCK_NUMBER ) )
             ...
             </k>
             <rpcRequestID> _ => REQ_ID </rpcRequestID>
@@ -341,21 +339,21 @@ Similarly, we save a state snapshot after the block was mined.
             })
             ... </k>
             <block>
-            <previousHash>     PREV_HASH        </previousHash>
-            <ommersHash>       OMMERS_HASH      </ommersHash>
-            <coinbase>         MINER            </coinbase>
-            <stateRoot>        STATE_ROOT       </stateRoot>
-            <transactionsRoot> TRANSACTIONS_ROOT </transactionsRoot>
-            <receiptsRoot>     RECEIPTS_ROOT    </receiptsRoot>
-            <difficulty>       BLOCK_DIFFICULTY </difficulty>
-            <number>           BLOCK_NUMBER     </number>
-            <gasLimit>         GAS_LIMIT        </gasLimit>
-            <gasUsed>          GAS_USED         </gasUsed>
-            <timestamp>        BLOCK_TIMESTAMP  </timestamp>
-            <extraData>        EXTRA_DATA       </extraData>
-            <mixHash>          MIX_HASH         </mixHash>
-            <blockNonce>       NONCE            </blockNonce>
-            ...
+                <previousHash>     PREV_HASH        </previousHash>
+                <ommersHash>       OMMERS_HASH      </ommersHash>
+                <coinbase>         MINER            </coinbase>
+                <stateRoot>        STATE_ROOT       </stateRoot>
+                <transactionsRoot> TRANSACTIONS_ROOT </transactionsRoot>
+                <receiptsRoot>     RECEIPTS_ROOT    </receiptsRoot>
+                <difficulty>       BLOCK_DIFFICULTY </difficulty>
+                <number>           BLOCK_NUMBER     </number>
+                <gasLimit>         GAS_LIMIT        </gasLimit>
+                <gasUsed>          GAS_USED         </gasUsed>
+                <timestamp>        BLOCK_TIMESTAMP  </timestamp>
+                <extraData>        EXTRA_DATA       </extraData>
+                <mixHash>          MIX_HASH         </mixHash>
+                <blockNonce>       NONCE            </blockNonce>
+                ...
             </block>
 ```
 
@@ -364,7 +362,7 @@ Similarly, we save a state snapshot after the block was mined.
 
 ```k
 
-    rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( BLOCK_HASH) )
+    rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( BLOCK_HASH, _HYDRATED_TXS ) ) // TODO: hydrated txs
             => #setBlockData( #getBlockData( BLOCK_HASH ) )
             ~> #ethGetBlockByNumberResponse
             ~> #setBlockData( #getBlockData( ORIGINAL_BLOCK_NUMBER ) )
@@ -415,7 +413,7 @@ Similarly, we save a state snapshot after the block was mined.
 ```k
     // rule <k> RPCRequest( REQ_ID, AnvilStateDump() )
     //     => RPCResponse(
-    //             #let CONTENTS:IOString = #readFile( #stateDumpFile( BLOCK_NUMBER ) )
+    //             #let CONTENTS:IOString = #readFile( #snapshotFile( BLOCK_NUMBER ) )
     //             #in String2JSON( {CONTENTS}:>String )
     //        )
     //     ...
@@ -476,7 +474,7 @@ just build the response string directly.
     
     // Sign a transaction with an account managed by this node
     rule <k> #signTx(TXID, ACCTFROM:Int)
-          => #signTx(TXID, ECDSASign( Keccak256raw(#rlpEncodeTxData(#getTxData(TXID))), #padToWidth( 32, #asByteStack(KEY))))
+          => #signTx(TXID, ECDSASign( #hashTxData( #getTxData(TXID)), KEY) )
           ...
         </k>
         <accountKeys> ... ACCTFROM |-> KEY ... </accountKeys>
@@ -635,7 +633,7 @@ just build the response string directly.
          <txReceipts>
            ( .Bag =>
             <txReceipt>
-                <txHash>          #asInteger( #hashTxData( #getTxData(TXID ) ) ) </txHash>
+                <txHash>          txHash( TXID )                 </txHash>
                 <txCumulativeGas> CGAS                           </txCumulativeGas>
                 <logSet>          LOGS                           </logSet>
                 <bloomFilter>     #bloomFilter(LOGS)             </bloomFilter>
@@ -658,6 +656,22 @@ just build the response string directly.
          <origin>     ACCT </origin>
 
 
+    syntax Bytes ::= txHash( Int ) [function]
+
+    rule [[ txHash( TX_ID ) => Keccak256raw( #rlpEncode( [TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS] ) ) ]]
+        <message>
+            <msgID> TX_ID </msgID>
+            <txNonce>    TN </txNonce>
+            <txGasPrice> TP </txGasPrice>
+            <txGasLimit> TG </txGasLimit>
+            <to>         TT </to>
+            <value>      TV </value>
+            <data>       TD </data>
+            <sigV>       TW </sigV>
+            <sigR>       TR </sigR>
+            <sigS>       TS </sigS>
+            ...
+        </message>
 ```
 
 
@@ -697,32 +711,6 @@ The productions below are used to perform the mining of blocks, advancing the bl
           <blockStorage> M => M[ BN                                    <- #getBlockData( BN )]
                                [ #hashBlockData( #getBlockData( BN ) ) <- #getBlockData( BN )]
           </blockStorage>
-       
-
-    syntax BlockData ::= BlockData(
-        Int, // previousHash
-        Int, // ommersHash
-        Int, // coinbase
-        Int, // stateRoot
-        Int, // transactionsRoot
-        Int, // receiptsRoot
-        Bytes, // logsBloom
-        Int, // difficulty
-        Int, // number
-        Int, // gasLimit
-        Gas, // gasUsed
-        Int, // timestamp
-        Bytes, // extraData
-        Int, // mixHash
-        Int, // blockNonce
-        Int, // base fee
-        Int, // withdrawalsRoot
-        Int, // blobGasUsed
-        Int, // excessBlobGas
-        Int, // beaconRoot
-        Int, // requestsRoot
-        JSON // omnersBlockHeaders
-    )
 
     rule [[ #getBlockData( BN ) => BlockData(
         PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
@@ -915,16 +903,16 @@ This section defines an intermediate represention for JSON RPC requests.
                                     Int , // value
                                     Bytes // input
                                   )
-                                | EthGetTransactionReceipt( Int )    // tx hash
-                                | EthGetTransactionByHash( Int )     // tx hash
+                                | EthGetTransactionReceipt( Bytes )  // tx hash
+                                | EthGetTransactionByHash( Bytes )   // tx hash
                                 | EthGetCode( Int, Int )             // address, block number
                                 | EthGetBalance( Int, Int )          // address, block number
-                                | EthGetBlockByNumber( Int )         // block number
-                                | EthGetBlockByHash( Int )           // block hash
+                                | EthGetBlockByNumber( Int, Bool )   // block number, hydrated txs
+                                | EthGetBlockByHash( Int, Bool )     // block hash
                                 | EthGetTransactionCount( Int, Int ) // address, block number
                                 | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
                                 | AnvilStateDump()                   // TODO: add options
-                                | DebugTraceTransaction( Int )       // tx hash
+                                | DebugTraceTransaction( Bytes )     // tx hash
 ```
 
 ###############################################################################
@@ -971,10 +959,10 @@ intermediate representation.
             EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
 
     rule #rpcLoadParams( "eth_getTransactionReceipt", [ TX_HASH:String ] )
-        => EthGetTransactionReceipt( #parseWord( TX_HASH ) )
+        => EthGetTransactionReceipt( #parseByteStack( TX_HASH ) )
 
     rule #rpcLoadParams( "eth_getTransactionByHash", [ TX_HASH:String ] )
-        => EthGetTransactionByHash( #parseWord( TX_HASH ) )
+        => EthGetTransactionByHash( #parseByteStack( TX_HASH ) )
 
     rule #rpcLoadParams( "eth_getCode", [ ADDR:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
@@ -986,12 +974,12 @@ intermediate representation.
            #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in 
             EthGetBalance( ADDR_INT, 0 )
 
-    rule #rpcLoadParams( "eth_getBlockByNumber", [ BLOCK_NUM:String ] )
+    rule #rpcLoadParams( "eth_getBlockByNumber", [ BLOCK_NUM:String, HYDRATED_TXS:Bool ] )
         => #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
-            EthGetBlockByNumber( BLOCK_INT )
+            EthGetBlockByNumber( BLOCK_INT, HYDRATED_TXS )
 
-    rule #rpcLoadParams( "eth_getBlockByHash", [ BLOCK_HASH:String ] )
-        => EthGetBlockByHash( #parseWord( BLOCK_HASH ) )
+    rule #rpcLoadParams( "eth_getBlockByHash", [ BLOCK_HASH:String, HYDRATED_TXS:Bool ] )
+        => EthGetBlockByHash( #parseWord( BLOCK_HASH ), HYDRATED_TXS )
 
     rule #rpcLoadParams( "eth_getTransactionCount", [ ADDR:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
@@ -1008,7 +996,7 @@ intermediate representation.
         => AnvilStateDump()
 
     rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String ] )
-        => DebugTraceTransaction( #parseWord( TX_HASH ) )
+        => DebugTraceTransaction( #parseByteStack( TX_HASH ) )
 
     // Helpers
     syntax Int ::= "DEFAULTSENDER" [function]
@@ -1034,7 +1022,6 @@ K configuration.
 ```k
 
     syntax KItem ::= "#createStateDump"         // Internal use only, create a StateDump from the current configuration
-                   | #stLoad( JSON )            // Internal use only, populate a StateDump into the current configuration (reverse of #createStateDump)
                    | #StateDump( JSON )         // Internal use only, wrap a StateDump JSON object to disambiguate it from other KItems containing JSON data
 
     syntax JSON  ::= ( JSON )  [bracket]
@@ -1117,126 +1104,184 @@ StateDump format - not the ethereum/test format.
 
 ```k
 
-    syntax KItem ::= #stLoad( JSON )
-                   | #stLoadBlock( JSON )
-                   | #stLoadBlob( JSON )
-                   | #stLoadAccounts( JSON )
-                   | #stLoadAccount( Int, JSON )
-                   | #stLoadStorage( Int, Map )
+    syntax KItem ::= #loadSnapshot( Snapshot )
+                   | #loadBlocks( Blocks )
+                   | #loadBlock( BlockData )
+                   | #loadCurrentBlock( Int )
+                   | #loadAccounts( Accounts )
+                   | #loadAccount( AccountData )
 
-    // ------------
-    // StateDump root object
+    rule <k> #loadSnapshot( Snapshot(LATEST_BLOCK_NUMBER, ACCOUNTS, BLOCKS) )
+          => #loadAccounts( ACCOUNTS )
+          ~> #loadBlocks( BLOCKS )
+          ~> #loadCurrentBlock( LATEST_BLOCK_NUMBER ) ... </k>
+          <accounts>     _ => .Bag </accounts>
+          <blockStorage> _ => .Map </blockStorage>
 
-    // Finished decoding StateDump
-    rule <k> #stLoad( { .JSONs } ) => .K ... </k>
- 
-    // Break up the StateDump into it's compnents
-    rule <k> #stLoad( { KEY : VALUE , REST } ) => #stLoad( KEY : VALUE ) ~> #stLoad( { REST } )... </k>
+    rule <k> #loadBlocks( .Blocks ) => .K ... </k>
+    rule <k> #loadBlocks( BLOCK_DATA , REST )
+          => #loadBlock( BLOCK_DATA )
+          ~> #loadBlocks( REST ) ... </k>
 
-    // Handle components
-    rule <k> #stLoad( "best_block_number" : _        ) => .K ... </k> // TODO: Do we need this?
-    rule <k> #stLoad( "block"             : BLOCK    ) => #stLoadBlock( BLOCK ) ... </k>
-    rule <k> #stLoad( "accounts"          : ACCOUNTS ) => #stLoadAccounts( ACCOUNTS ) ... </k>
+    rule <k> #loadBlock( BLOCK_DATA ) => .K ... </k>
+        <blockStorage> BLOCK_STORAGE =>
+                       BLOCK_STORAGE[ #getBlockNumber( BLOCK_DATA ) <- BLOCK_DATA ]
+                                    [ #hashBlockData( BLOCK_DATA )  <- BLOCK_DATA ]
+        </blockStorage>
 
-    // Discard all other components
-    rule <k> #stLoad( _:String : _VAL ) => .K ...</k> [owise]
-
-    // ------------
-    // Block
-
-    // Finished block
-    rule <k> #stLoadBlock( { .JSONs } ) => .K ... </k>
-
-    // Break up a block into it's components
-    rule <k> #stLoadBlock( { KEY : VALUE, REST } ) => #stLoadBlock( KEY : VALUE ) ~> #stLoadBlock( { REST } ) ... </k>
-
-    // Handle components
-    // Notice, the snapshot contains mined blocks. The <block>-cell contains the block
-    // that is currently beeing built.
-    rule <k> #stLoadBlock( "number"      : VAL ) => .K ... </k> <number>     _ => #parseWord( VAL ) +Int 1 </number>
-    /* rule <k> #stLoadBlock( "beneficiary" : VAL ) => .K ... </k> <coinbase>   _ => #parseWord( VAL ) </coinbase> */
-    rule <k> #stLoadBlock( "timestamp"   : VAL ) => .K ... </k> <timestamp>  _ => #parseWord( VAL ) </timestamp>
-    rule <k> #stLoadBlock( "gas_limit"   : VAL ) => .K ... </k> <gasLimit>   _ => VAL </gasLimit>
-    /* rule <k> #stLoadBlock( "basefee"     : VAL ) => .K ... </k> <baseFee>    _ => VAL </baseFee> */
-    rule <k> #stLoadBlock( "difficulty"  : VAL ) => .K ... </k> <difficulty> _ => #parseWord( VAL ) </difficulty>
-    rule <k> #stLoadBlock( "blob_excess_gas_and_price": VAL ) => #stLoadBlob( VAL )... </k>
-
-    // Discard all other components
-    rule <k> #stLoadBlock( _:String : _VAL ) => .K ...</k> [owise] 
-
-    // ------------
-    // Blob
-
-    // Finished blob
-    rule <k> #stLoadBlob( { .JSONs } )=> .K ... </k>
-
-    // Break up a blob into it's components
-    rule <k> #stLoadBlob( { KEY : VALUE, REST } ) => #stLoadBlob( KEY : VALUE ) ~> #stLoadBlob( { REST } ) ... </k>
-
-    // Handle components
-    rule <k> #stLoadBlob( "excess_blob_gas" : VAL ) => .K ... </k> <excessBlobGas> _ => VAL </excessBlobGas>
-    /* rule <k> #stLoadBlob( "blob_gasprice"   : VAL ) => .K ... </k> <blobGasUsed>   _ => VAL </blobGasUsed> */ // TODO
-    
-    // Discard all other components
-    rule <k> #stLoadBlob( _:String : _VAL) => .K ...</k> [owise] 
-
-    // ------------
-    // Accounts
-
-    rule <k> #stLoadAccounts( { .JSONs } ) => .K ... </k>
-    rule <k> #stLoadAccounts( { KEY : VALUE, REST } ) => #stLoadAccounts( KEY : VALUE ) ~> #stLoadAccounts( { REST } ) ... </k>
-
-    rule <k> #stLoadAccounts( ACCT_ID : ACCT_DATA )
-          => #newAccount( #parseAddr( ACCT_ID ) )
-          ~> #stLoadAccount( #parseAddr( ACCT_ID ), ACCT_DATA ) ...
-         </k>
-
-    // ------------
-    // Account
-
-    // Finished account
-    rule <k> #stLoadAccount( _, { .JSONs } ) => .K ... </k>
-
-    // Break up an account into it's components
-    rule <k> #stLoadAccount( ACCT_ID, { KEY : VALUE, REST } )
-          => #stLoadAccount(ACCT_ID, KEY : VALUE)
-          ~> #stLoadAccount(ACCT_ID, { REST } )
-          ... </k>
-
-    // Handle components
-    rule <k> #stLoadAccount(ACCT_ID, "nonce" : VAL) => .K ... </k>
-         <account>
-            <acctID> ACCT_ID  </acctID>
-            <nonce>  _ => VAL </nonce>
+    rule <k> #loadCurrentBlock( BLOCK_NUMBER ) => .K ... </k>
+        <blockStorage> BLOCK_STORAGE </blockStorage>
+        <block>
+            <number> _ => BLOCK_NUMBER +Int 1 </number>
+            <previousHash> _ => #hashBlockData( {BLOCK_STORAGE[ BLOCK_NUMBER ]}:>BlockData  ) </previousHash>
             ...
-        </account>
-    rule <k> #stLoadAccount(ACCT_ID, "balance" : VAL) => .K ... </k>
-         <account>
-            <acctID>  ACCT_ID  </acctID>
-            <balance> _ => #parseWord( VAL ) </balance>
-            ...
-        </account>
-    rule <k> #stLoadAccount(ACCT_ID, "code" : VAL) => .K ... </k>
-         <account>
-            <acctID> ACCT_ID  </acctID>
-            <code>   _ => parseByteStack( VAL ) </code>
-            ... 
-         </account>
-    rule <k> #stLoadAccount( ACCT_ID, "storage" : VAL) => #stLoadStorage( ACCT_ID, #parseMap( VAL ) ) ... </k>
-    
-    // Discard all other components
-    rule <k> #stLoadAccount( _, _ : _VAL ) => .K ...</k> [owise]
+        </block>
 
-    // ------------
-    // Account Storage
+    rule <k> #loadAccounts( .Accounts ) => .K ... </k>
 
-    rule <k> #stLoadStorage( ACCT_ID, ST ) => .K ... </k>
-         <account>
-            <acctID> ACCT_ID </acctID>
-            <storage>     _ => ST </storage>
-            <origStorage> _ => ST </origStorage>
+    rule <k> #loadAccounts( ACCOUNT_DATA , REST )
+          => #loadAccount( ACCOUNT_DATA )
+          ~> #loadAccounts( REST ) ... </k>
+
+    rule <k> #loadAccount( AccountData(
+            ACCT_ID,
+            ACCT_BALANCE,
+            ACCT_STORAGE,
+            ACCT_CODE,
+            ACCT_NONCE
+         ))
+        => .K ... </k>
+        <accounts>
+            ( .Bag => <account>
+                    <acctID>  ACCT_ID      </acctID>
+                    <balance> ACCT_BALANCE </balance>
+                    <storage> ACCT_STORAGE </storage>
+                    <code>    ACCT_CODE    </code>
+                    <nonce>   ACCT_NONCE   </nonce>
+                    ...
+                </account>
+            )
             ...
-        </account>
+        </accounts>
+
+    // Intermediate representations
+
+    syntax Snapshot ::= Snapshot(
+            Int,
+            Accounts,
+            Blocks
+        )
+        | #parseSnapshot( JSON ) [function]
+
+    syntax AccountData ::= AccountData(
+            Int,   // acctID
+            Int,   // balance
+            Map,   // storage
+            Bytes, // code
+            Int    // nonce
+        )
+        | #parseAccount( JSON ) [function]
+
+     syntax BlockData ::= BlockData(
+            Int, // previousHash
+            Int, // ommersHash
+            Int, // coinbase
+            Int, // stateRoot
+            Int, // transactionsRoot
+            Int, // receiptsRoot
+            Bytes, // logsBloom
+            Int, // difficulty
+            Int, // number
+            Int, // gasLimit
+            Gas, // gasUsed
+            Int, // timestamp
+            Bytes, // extraData
+            Int, // mixHash
+            Int, // blockNonce
+            Int, // base fee
+            Int, // withdrawalsRoot
+            Int, // blobGasUsed
+            Int, // excessBlobGas
+            Int, // beaconRoot
+            Int, // requestsRoot
+            JSON // omnersBlockHeaders
+        ) | #parseBlock( JSON ) [function]
+
+    syntax Map ::= #parseStorage( JSON )         [function]
+                 | #parseStorageAux( JSON, Map ) [function]
+
+    syntax Accounts ::= List{AccountData, ","}
+                      | "[" Accounts "]" [bracket]
+                      | #parseAccounts( JSON ) [function]
+    syntax Blocks   ::= List{BlockData, ","}
+                      | "[" Blocks "]" [bracket]
+                      | #parseBlocks( JSON ) [function]
+
+    syntax Int ::= #getBlockNumber( BlockData ) [function]
+    rule #getBlockNumber( BlockData( _, _, _, _, _, _, _, _, BN, _, _, _, _, _, _, _, _, _, _, _, _, _) ) => BN
+
+    rule #parseSnapshot( SNAPSHOT_JSON )
+        => #let BEST_BLOCK_NUMBER = #getInt( "best_block_number", SNAPSHOT_JSON, 0 ) #in
+           #let ACCOUNTS_JSON     = #getJSON( "accounts", SNAPSHOT_JSON ) #in
+           #let BLOCKS_JSON       = #getJSON( "blocks",   SNAPSHOT_JSON ) #in
+           Snapshot(
+               BEST_BLOCK_NUMBER,
+               #parseAccounts( ACCOUNTS_JSON ),
+               #parseBlocks( BLOCKS_JSON )
+           )
+
+    rule #parseBlocks( [ .JSONs ] ) => .Blocks
+    rule #parseBlocks( [ FIRST, REST ] ) => #parseBlock( FIRST ) , #parseBlocks( [ REST ] )
+
+    rule #parseBlock( BLOCK_JSON ) =>
+        #let BLOCK_HEADER = #getJSON( "header", BLOCK_JSON ) #in
+        BlockData(
+            #getWord( "parentHash",       BLOCK_HEADER, 0 ),
+            #getWord( "sha3Uncles",       BLOCK_HEADER, 0 ),
+            #getWord( "miner",            BLOCK_HEADER, 0 ),
+            #getWord( "stateRoot",        BLOCK_HEADER, 0 ),
+            #getWord( "transactionsRoot", BLOCK_HEADER, 0 ),
+            #getWord( "receiptsRoot",     BLOCK_HEADER, 0 ),
+            #getBytes( "logsBloom",       BLOCK_HEADER, .Bytes ),
+            #getWord( "difficulty",       BLOCK_HEADER, 0 ),
+            #getWord( "number",           BLOCK_HEADER, 0 ),
+            #getWord( "gasLimit",         BLOCK_HEADER, pow24 ),
+            #getWord( "gasUsed",          BLOCK_HEADER, 0 ),
+            #getWord( "timestamp",        BLOCK_HEADER, 0 ),
+            #getBytes( "extraData",       BLOCK_HEADER, .Bytes ),
+            #getWord( "mixHash",          BLOCK_HEADER, 0 ),
+            #getWord( "nonce",            BLOCK_HEADER, 0 ),
+            #getWord( "baseFeePerGas",    BLOCK_HEADER, 0 ),
+            #getWord( "withdrawalsRoot",  BLOCK_HEADER, 0 ),
+            #getWord( "blobGasUsed",      BLOCK_HEADER, 0 ),
+            #getWord( "excessBlobGas",    BLOCK_HEADER, 0 ),
+            #getWord( "parentBeaconBlockRoot", BLOCK_HEADER, 0 ),
+            #getWord( "requestsHash",     BLOCK_HEADER, 0 ),
+            #getJSON( "omners",           BLOCK_JSON, [ .JSONs ] )
+        )
+
+    rule #parseAccounts( { .JSONs } ) => .Accounts
+    rule #parseAccounts( { FIRST, REST } ) => #parseAccount( FIRST ) , #parseAccounts( { REST } )
+
+    rule #parseAccount( ACCT_ID_RAW : ACCT_DATA )
+        => #let ACCT_ID       = #parseAddr( ACCT_ID_RAW ) #in
+           #let ACCT_BALANCE  = #getWord( "balance", ACCT_DATA, 0 ) #in
+           #let ACCT_CODE     = #getBytes( "code",   ACCT_DATA, .Bytes ) #in
+           #let ACCT_STORAGE  = #parseStorage( #getJSON( "storage", ACCT_DATA ) ) #in
+           #let ACCT_NONCE    = #getInt( "nonce",   ACCT_DATA, 0 ) #in
+           AccountData(
+               ACCT_ID,
+               ACCT_BALANCE,
+               ACCT_STORAGE,
+               ACCT_CODE,
+               ACCT_NONCE
+           )
+
+    rule #parseStorage( ST_JSON ) => #parseStorageAux( ST_JSON, .Map )
+
+    rule #parseStorageAux( { .JSONs }, ACCU ) => ACCU
+    rule #parseStorageAux( { KEY : VAL, REST }, ACCU ) => 
+         #parseStorageAux( { REST }, ACCU[ #parseWord( KEY ) <- #parseWord( VAL ) ] )
 
 ```
 ###############################################################################
@@ -1295,9 +1340,9 @@ This seciont defines rules to write a StateDump JSON object to disk.
     syntax KItem ::= "#writeStateDump"
                    | "#saveStateDump"
 
-    syntax String ::= #stateDumpFile( Int ) [function, total]
+    syntax String ::= #snapshotFile( Int ) [function, total]
 
-    rule [[ #stateDumpFile( BLOCK_NUMBER )
+    rule [[ #snapshotFile( BLOCK_NUMBER )
             => IO_DIR +String "/blocks/block_" +String Int2String( BLOCK_NUMBER ) +String ".json"
         ]]
         <ioDir> IO_DIR </ioDir>
@@ -1310,7 +1355,7 @@ This seciont defines rules to write a StateDump JSON object to disk.
 
     rule <k> #StateDump( SD )
           ~> #writeStateDump
-          => #writeFile( #stateDumpFile( BLOCK_NUMBER), JSON2String( SD ) )
+          => #writeFile( #snapshotFile( BLOCK_NUMBER), JSON2String( SD ) )
           ...
         </k>
         <number> BLOCK_NUMBER </number>
@@ -1322,17 +1367,18 @@ This secion defines rules to read a StateDump JSON object from disk.
 
 ```k
 
-    syntax KItem ::= #loadStateDump( Int )
-    rule <k> #loadStateDump( BLOCK_NUMBER )
-          => #let CONTENTS:IOString = #readFile( #stateDumpFile( BLOCK_NUMBER ) )
-              #in #stLoad( String2JSON( {CONTENTS}:>String ) )
+    syntax KItem ::= #loadSnapshotFile( Int )
+
+    rule <k> #loadSnapshotFile( BLOCK_NUMBER )
+          => #let CONTENTS:IOString = #readFile( #snapshotFile( BLOCK_NUMBER ) )
+              #in #loadSnapshot( #parseSnapshot( String2JSON( {CONTENTS}:>String ) ) )
               ...
          </k>
 
-    syntax KItem ::= "#loadLatestStateDump"
+    syntax KItem ::= "#loadLatestSnapshot"
 
-    rule <k> #loadLatestStateDump
-          => #loadStateDump( #getInt( "latest_block_number", #loadMetadata ) )
+    rule <k> #loadLatestSnapshot
+          => #loadSnapshotFile( #getInt( "latest_block_number", #loadMetadata, 0 ) )
           ...
          </k>
 

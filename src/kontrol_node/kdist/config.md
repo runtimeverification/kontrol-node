@@ -52,7 +52,7 @@ module KONTROL-NODE-CONFIG
             <stateTrie> .MerkleTree </stateTrie>
             <txReceipts>
                 <txReceipt multiplicity ="*" type="Map">
-                    <txHash>          0          </txHash>
+                    <txHash>          .Bytes     </txHash>
                     <txCumulativeGas> 0          </txCumulativeGas>
                     <logSet>          .List      </logSet>
                     <bloomFilter>     .Bytes     </bloomFilter>
