@@ -385,18 +385,18 @@ Similarly, we save a state snapshot after the block was mined.
 ```
 
 ###############################################################################
-## anvil_stateDump
+## anvil_dumpState
 
 ```k
-    // rule <k> RPCRequest( REQ_ID, AnvilStateDump() )
-    //     => RPCResponse(
-    //             #let CONTENTS:IOString = #readFile( #snapshotFile( BLOCK_NUMBER ) )
-    //             #in String2JSON( {CONTENTS}:>String )
-    //        )
-    //     ...
-    //     </k>
-    //     <rpcRequestID> _ => REQ_ID </rpcRequestID>
-    //     <number> BLOCK_NUMBER </number>
+    rule <k> RPCRequest( REQ_ID, AnvilDumpState() )
+        => RPCResponse(
+                #let CONTENTS:IOString = #readFile( #snapshotFile( BLOCK_NUMBER -Int 1 ) )
+                #in String2JSON( {CONTENTS}:>String )
+           )
+        ...
+        </k>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <number> BLOCK_NUMBER </number>
 
 ```
 
@@ -410,27 +410,26 @@ just build the response string directly.
 
 ```k
 
-    // rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
-    //     => RPCRawResponse(
-    //         "{ \"jsonrpc\": \"2.0\"" +String
-    //         ", \"id\": " +String intToHex( REQ_ID ) +String
-    //         ", \"result\": " +String
-    //             "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "true" #else "false" #fi +String
-    //             ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
-    //             ", \"return_value\": \"0x\"" +String // TODO
-    //             ", \"structLogs\": [" +String {#readFile( #traceFile( IO_DIR, TXID) )}:>String +String
-    //         "] } }"
-    //     ) ...
-    //     </k>
-    //     <ioDir>        IO_DIR      </ioDir>
-    //     <rpcRequestID> _ => REQ_ID </rpcRequestID>
-    //     <txReceipt>
-    //         <txHash> TX_HASH </txHash>
-    //         <txID>   TXID    </txID>
-    //         <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
-    //         <txStatus> TX_STATUS </txStatus>
-    //         ...
-    //     </txReceipt>
+    rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
+        => RPCRawResponse(
+            "{ \"jsonrpc\": \"2.0\"" +String
+            ", \"id\": " +String intToHex( REQ_ID ) +String
+            ", \"result\": " +String
+                "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "true" #else "false" #fi +String
+                ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
+                ", \"return_value\": \"0x\"" +String // TODO
+                ", \"structLogs\": [" +String {#readFile( #traceFile( TXID) )}:>String +String
+            "] } }"
+        ) ...
+        </k>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <txReceipt>
+            <txHash> TX_HASH </txHash>
+            <txID>   TXID    </txID>
+            <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
+            <txStatus> TX_STATUS </txStatus>
+            ...
+        </txReceipt>
 
 ```
 
@@ -893,7 +892,7 @@ This section defines an intermediate represention for JSON RPC requests.
                                 | EthGetBlockByHash( Int, Bool )     // block hash
                                 | EthGetTransactionCount( Int, Int ) // address, block number
                                 | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
-                                | AnvilStateDump()                   // TODO: add options
+                                | AnvilDumpState()                   // TODO: add options
                                 | DebugTraceTransaction( Bytes )     // tx hash
 ```
 
@@ -974,10 +973,10 @@ intermediate representation.
             #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
             EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
 
-    rule #rpcLoadParams( "anvil_stateDump", [ _ ] )
-        => AnvilStateDump()
+    rule #rpcLoadParams( "anvil_dumpState", [ _ ] )
+        => AnvilDumpState()
 
-    rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String ] )
+    rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String, _OPTIONS:JSON ] )
         => DebugTraceTransaction( #parseByteStack( TX_HASH ) )
 
     // Helpers
