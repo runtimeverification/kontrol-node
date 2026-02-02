@@ -953,7 +953,7 @@ intermediate representation.
     rule #rpcLoadParams( "eth_getBalance", [ ADDR:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
            #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in 
-            EthGetBalance( ADDR_INT, 0 )
+            EthGetBalance( ADDR_INT, BLOCK_INT )
 
     rule #rpcLoadParams( "eth_getBlockByNumber", [ BLOCK_NUM:String, HYDRATED_TXS:Bool ] )
         => #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
@@ -1012,10 +1012,13 @@ K configuration.
                    | storageToJSON(Map)                      [function, total, symbol(accStorageToJson)]
                    | blocksToJSON(Map)                       [function, total, symbol(blocksToJSON)]
                    | blockToJSON(BlockData)                  [function, total, symbol(blockToJSON)]
+                   | receiptsToJSON( TxReceiptsCell )        [function, total, symbol(receiptsToJSON)]
+                   | receiptToJSON( TxReceiptCell )          [function, total, symbol(receiptToJSON)]
 
     syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsToJSONs)]
                    | storageToJSONs( Map, JSONs )            [function, total, symbol(accStorageToJSONs)]
                    | blocksToJSONs( Map, JSONs )             [function, total, symbol(blocksToJSONs)]
+                   | receiptsToJSONs( TxReceiptsCell, JSONs ) [function, total, symbol(receiptsToJSONs)]
 
 
     // Duplicated in trace-json.md where this is called intMapToJson
@@ -1044,6 +1047,33 @@ K configuration.
             => accountsToJSONs( <accounts> ACCS </accounts>, (accountToJSON( <account> ACC </account> ) , ACCU) ) 
     rule accountsToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
 
+    rule receiptToJSON (
+        <txReceipt>
+            <txHash>          R_TXHASH          </txHash>
+            <txCumulativeGas> R_TXCUMULATIVEGAS </txCumulativeGas>
+            <logSet>          _R_LOGSET         </logSet>
+            <bloomFilter>     R_BLOOMFILTER     </bloomFilter>
+            <txStatus>        R_TXSTATUS        </txStatus>
+            <txID>            R_TXID            </txID>
+            <sender>          R_SENDER          </sender>
+            <txBlockNumber>   R_TXBLOCKNUMBER   </txBlockNumber>
+            ...
+        </txReceipt>
+    ) => bytesToHex( R_TXHASH ) : {
+        "txCumulativeGas":      intToHex( R_TXCUMULATIVEGAS ),
+        "logSet":               [ .JSONs ], // TODO
+        "bloomFilter":          bytesToHex( R_BLOOMFILTER ),
+        "txStatus":             intToHex( R_TXSTATUS ),
+        "txID":                 intToHex( R_TXID),
+        "sender":               intToHex( R_SENDER ),
+        "txBlockNumber":        intToHex( R_TXBLOCKNUMBER )
+    }
+
+    rule receiptsToJSON( TR ) => { receiptsToJSONs( TR, .JSONs ) }
+    rule receiptsToJSONs( <txReceipts> <txReceipt> R </txReceipt> TRS:Bag </txReceipts>, ACCU)
+            => receiptsToJSONs( <txReceipts> TRS </txReceipts>, (receiptToJSON( <txReceipt> R </txReceipt> ) , ACCU) ) 
+    rule receiptsToJSONs( <txReceipts> .Bag </txReceipts>, ACCU ) => ACCU [owise]
+
     rule <k> #createStateDump
         => #StateDump({
             "bestBlockNumber": BLOCK_NUMBER -Int 1,
@@ -1061,7 +1091,8 @@ K configuration.
                 }
             },
             "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> ),
-            "blocks": blocksToJSON( BLOCK_STORAGE )
+            "blocks": blocksToJSON( BLOCK_STORAGE ),
+            "receipts": receiptsToJSON( <txReceipts> RECEIPTS </txReceipts> )
         }) ...
     </k>
     <block>
@@ -1076,6 +1107,7 @@ K configuration.
     </block>
     <accounts> ACCOUNTS </accounts>
     <blockStorage> BLOCK_STORAGE </blockStorage>
+    <txReceipts> RECEIPTS </txReceipts>
 
     rule blocksToJSON( BS ) => [ blocksToJSONs( BS, .JSONs ) ] [priority(50)]
     rule blocksToJSONs( .Map, ACCU ) => ACCU
@@ -1130,10 +1162,13 @@ StateDump format - not the ethereum/test format.
                    | #loadCurrentBlock( Int )
                    | #loadAccounts( Accounts )
                    | #loadAccount( AccountData )
+                   | #loadReceipts( Receipts )
+                   | #loadReceipt( ReceiptData )
 
-    rule <k> #loadSnapshot( Snapshot(LATEST_BLOCK_NUMBER, ACCOUNTS, BLOCKS) )
+    rule <k> #loadSnapshot( Snapshot(LATEST_BLOCK_NUMBER, ACCOUNTS, BLOCKS, RECEIPTS) )
           => #loadAccounts( ACCOUNTS )
           ~> #loadBlocks( BLOCKS )
+          ~> #loadReceipts( RECEIPTS )
           ~> #loadCurrentBlock( LATEST_BLOCK_NUMBER ) ... </k>
           <accounts>     _ => .Bag </accounts>
           <blockStorage> _ => .Map </blockStorage>
@@ -1187,12 +1222,44 @@ StateDump format - not the ethereum/test format.
             ...
         </accounts>
 
+    rule <k> #loadReceipts( .Receipts ) => .K ... </k>
+    rule <k> #loadReceipts( RECEIPT_DATA , REST )
+          => #loadReceipt( RECEIPT_DATA )
+          ~> #loadReceipts( REST ) ... </k>
+
+    rule <k> #loadReceipt( ReceiptData(
+            TX_HASH,
+            CUMULATIVE_GAS,
+            LOG_SET,
+            BLOOM_FILTER,
+            TX_STATUS,
+            TX_ID,
+            SENDER,
+            TX_BLOCK_NUMBER
+         ))
+        => .K ... </k>
+        <txReceipts>
+            ( .Bag => <txReceipt>
+                    <txHash>          TX_HASH          </txHash>
+                    <txCumulativeGas> CUMULATIVE_GAS   </txCumulativeGas>
+                    <logSet>          LOG_SET          </logSet>
+                    <bloomFilter>     BLOOM_FILTER     </bloomFilter>
+                    <txStatus>        TX_STATUS        </txStatus>
+                    <txID>            TX_ID            </txID>
+                    <sender>          SENDER           </sender>
+                    <txBlockNumber>   TX_BLOCK_NUMBER  </txBlockNumber>
+                </txReceipt>
+            )
+            ...
+        </txReceipts>
+
     // Intermediate representations
 
     syntax Snapshot ::= Snapshot(
             Int,
             Accounts,
-            Blocks
+            Blocks,
+            Receipts
         )
         | #parseSnapshot( JSON ) [function]
 
@@ -1230,6 +1297,17 @@ StateDump format - not the ethereum/test format.
             JSON // ommersBlockHeaders
         ) | #parseBlock( JSON ) [function]
 
+    syntax ReceiptData ::= ReceiptData(
+        Bytes, // txHash
+        Int,   // cumulativeGas
+        List,  // logSet
+        Bytes, // bloomFilter
+        Int,   // txStatus
+        Int,   // txId
+        Int,   // sender
+        Int    // txBlockNumber
+    ) | #parseReceipt( JSON ) [function]
+
     syntax Map ::= #parseStorage( JSON )         [function]
                  | #parseStorageAux( JSON, Map ) [function]
 
@@ -1239,18 +1317,23 @@ StateDump format - not the ethereum/test format.
     syntax Blocks   ::= List{BlockData, ","}
                       | "[" Blocks "]" [bracket]
                       | #parseBlocks( JSON ) [function]
+    syntax Receipts ::= List{ReceiptData, ","}
+                      | "[" Receipts "]" [bracket]
+                      | #parseReceipts( JSON ) [function]
 
     syntax Int ::= #getBlockNumber( BlockData ) [function]
     rule #getBlockNumber( BlockData( _, _, _, _, _, _, _, _, BN, _, _, _, _, _, _, _, _, _, _, _, _, _) ) => BN
 
     rule #parseSnapshot( SNAPSHOT_JSON )
         => #let BEST_BLOCK_NUMBER = #getInt( "best_block_number", SNAPSHOT_JSON, 0 ) #in
-           #let ACCOUNTS_JSON     = #getJSON( "accounts", SNAPSHOT_JSON ) #in
-           #let BLOCKS_JSON       = #getJSON( "blocks",   SNAPSHOT_JSON ) #in
+           #let ACCOUNTS_JSON     = #getJSON( "accounts", SNAPSHOT_JSON, { .JSONs } ) #in
+           #let BLOCKS_JSON       = #getJSON( "blocks",   SNAPSHOT_JSON, [ .JSONs ] ) #in
+           #let RECEIPTS_JSON     = #getJSON( "receipts", SNAPSHOT_JSON, { .JSONs } ) #in
            Snapshot(
                BEST_BLOCK_NUMBER,
                #parseAccounts( ACCOUNTS_JSON ),
-               #parseBlocks( BLOCKS_JSON )
+               #parseBlocks( BLOCKS_JSON ),
+               #parseReceipts( RECEIPTS_JSON )
            )
 
     rule #parseBlocks( [ .JSONs ] ) => .Blocks
@@ -1305,6 +1388,29 @@ StateDump format - not the ethereum/test format.
     rule #parseStorageAux( { .JSONs }, ACCU ) => ACCU
     rule #parseStorageAux( { KEY : VAL, REST }, ACCU ) => 
          #parseStorageAux( { REST }, ACCU[ #parseWord( KEY ) <- #parseWord( VAL ) ] )
+
+    rule #parseReceipts( { .JSONs } ) => .Receipts
+    rule #parseReceipts( { FIRST, REST } ) => #parseReceipt( FIRST ) , #parseReceipts( { REST } )
+
+    rule #parseReceipt( TX_HASH_KEY : RECEIPT_JSON )
+        => #let TX_HASH         = #parseByteStack( {TX_HASH_KEY}:>String ) #in
+           #let CUMULATIVE_GAS  = #getWord( "txCumulativeGas", RECEIPT_JSON, 0 )      #in
+           #let LOG_SET         = .List /* TODO */ #in
+           #let BLOOM_FILTER    = #getBytes( "bloomFilter",  RECEIPT_JSON, .Bytes ) #in
+           #let TX_STATUS       = #getWord( "txStatus",      RECEIPT_JSON, 0 )      #in
+           #let TX_ID           = #getWord( "txID",          RECEIPT_JSON, 0 )      #in
+           #let TX_SENDER       = #getWord( "sender",        RECEIPT_JSON, 0 )      #in
+           #let TX_BLOCK_NUMBER = #getWord( "txBlockNumber", RECEIPT_JSON, 0 )      #in
+           ReceiptData(
+               TX_HASH,
+               CUMULATIVE_GAS,
+               LOG_SET,
+               BLOOM_FILTER,
+               TX_STATUS,
+               TX_ID,
+               TX_SENDER,
+               TX_BLOCK_NUMBER
+           )
 
 ```
 ###############################################################################
