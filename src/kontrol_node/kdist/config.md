@@ -31,20 +31,20 @@ module KONTROL-NODE-CONFIG
             <injectedTracesCallStack> false </injectedTracesCallStack>
             <recordedMkCallCreate>    false </recordedMkCallCreate>
             <contextSwitch>           true  </contextSwitch>
-            <traceCallData>           false </traceCallData>
-            <traceReturnData>         false </traceReturnData>
+            <traceCallData>           true  </traceCallData>
+            <traceReturnData>         true  </traceReturnData>
             <tracesCallStack>         .List </tracesCallStack>
             <tracesCallState>
                 <isInitCode>          false </isInitCode>
             </tracesCallState>
 
-            <traceCurrentProgram>          false </traceCurrentProgram>
+            <traceCurrentProgram>          true  </traceCurrentProgram>
             <programChanged>               true  </programChanged>
 
-            <traceDeployedCode>            false </traceDeployedCode>
+            <traceDeployedCode>            true  </traceDeployedCode>
             <currentDeployedCodeMutations> .Map  </currentDeployedCodeMutations>
 
-            <traceInitCode>                false </traceInitCode>
+            <traceInitCode>                true  </traceInitCode>
             <currentInitCodeMutations>     .Map  </currentInitCodeMutations>
             <recordedCreate>               false </recordedCreate>
 

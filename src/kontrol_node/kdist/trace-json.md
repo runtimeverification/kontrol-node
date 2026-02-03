@@ -22,7 +22,6 @@ module TRACE-JSON
                   | opcodeToJson(OpCode)                 [function, total, symbol(opcodeToJson)]
                   | wordstackToJson(WordStack)           [function, total, symbol(wordstackToJson)]
                   | memoryToJson(DataChange)             [function, total, symbol(memoryToJson)]
-                  | bytesToJson(Bytes)                   [function, total, symbol(bytesToJson)]
                   | intMapToJson(Map)                    [function, total, symbol(intMapToJson)]
                   | bytesMapToJson(Map)                  [function, total, symbol(bytesMapToJson)]
                   | storageMapToJson(Map)                [function, total, symbol(storageMapToJson)]
@@ -200,7 +199,7 @@ module TRACE-JSON
     
     rule bytesMapToJson( M:Map ) => { bytesMapToJsons( M ) }
     rule bytesMapToJsons( .Map) => .JSONs
-    rule bytesMapToJsons( (ACC:Int |-> VAL:Bytes) REST:Map ) => intToHex( ACC) : bytesToJson( VAL ), bytesMapToJsons( REST )
+    rule bytesMapToJsons( (ACC:Int |-> VAL:Bytes) REST:Map ) => intToHex( ACC) : bytesToHex( VAL ), bytesMapToJsons( REST )
 
     rule storageMapToJson( M:Map ) => { storageMapToJsons(M ) }
     rule storageMapToJsons( .Map ) => .JSONs
@@ -252,7 +251,7 @@ module TRACE-JSON
     rule statusToJson( STATUS ) => StatusCode2String( STATUS )
 
     rule dataChangeToJson( .DataChange ) => null
-    rule dataChangeToJson( BYTES ) => bytesToJson( BYTES) [owise]
+    rule dataChangeToJson( BYTES ) => bytesToHex( BYTES) [owise]
 
     rule traceItemToJson (
       { VAR_PC
@@ -321,13 +320,13 @@ module TRACE-JSON
     rule <k> (.K => #storeTraceItem { PCOUNT
                                     | OPC
                                     | WS
-                                    | MEM
+                                    | #if MEMCH #then MEM #else .DataChange #fi
                                     | STORCH
                                     | NONCECH
                                     | BALCH
-                                    | CADA
-                                    | REDA
-                                    | #if PROGCHANGED ==K true #then PROG #else .DataChange #fi
+                                    | #if CONTEXTSWITCH #then CADA #else .DataChange #fi
+                                    | #if CONTEXTSWITCH #then REDA #else .DataChange #fi
+                                    | #if PROGCHANGED  #then PROG #else .DataChange #fi
                                     | DEPLCODECH
                                     | INITCODECH
                                     | CD
@@ -351,9 +350,9 @@ module TRACE-JSON
          <recordedTrace>                false       => true    </recordedTrace>
          <recordedMkCallCreate>         _           => false   </recordedMkCallCreate>
          <recordedCreate>               _           => false   </recordedCreate>
-         <localMemoryChanged>           _           => false   </localMemoryChanged>
+         <localMemoryChanged>           MEMCH       => false   </localMemoryChanged>
          <currentNonceMutations>        NONCECH     => .Map    </currentNonceMutations>          
-         <contextSwitch>                _           => false   </contextSwitch>
+         <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
          <currentBalanceMutations>      BALCH       => .Map    </currentBalanceMutations>          
          <currentStorageMutations>      STORCH      => .Map    </currentStorageMutations>
          <programChanged>               PROGCHANGED => false   </programChanged>

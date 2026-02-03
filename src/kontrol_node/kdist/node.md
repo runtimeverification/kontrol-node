@@ -56,6 +56,9 @@ Mnemonic: test test test test test test test test test test test junk
             #parseAddr("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f") |-> #padToWidth( 32, #parseByteStack("0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97"))
             #parseAddr("0xa0Ee7A142d267C1f36714E4a8F75612F20a79720") |-> #padToWidth( 32, #parseByteStack("0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6"))
         </accountKeys>
+
+    syntax Int ::= "DEFAULTSENDER" [function]
+    rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
 ```
 ###############################################################################
 # Requests
@@ -297,6 +300,12 @@ Similarly, we save a state snapshot after the block was mined.
             <balance> ACCT_BALANCE </balance>
             ...
         </account>
+
+    rule <k> RPCRequest( REQ_ID, EthGetBalance( _ADDR, _BLOCK_NUM ) )
+        => RPCResponse( intToHex( 0 ) )
+        ...
+        </k>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID> [owise]
 ```
 
 ###############################################################################
@@ -401,6 +410,41 @@ Similarly, we save a state snapshot after the block was mined.
 ```
 
 ###############################################################################
+## anvil_setBalance
+
+```k
+    rule <k> RPCRequest( REQ_ID, AnvilSetBalance(ADDR, NEW_BALANCE))
+        => #saveStateDump
+        ~> RPCResponse( null )
+        ...
+        </k>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <account>
+            <acctID> ADDR </acctID>
+            <balance> _ => NEW_BALANCE </balance>
+            ...
+        </account>
+
+    rule <k> RPCRequest( REQ_ID, AnvilSetBalance(ADDR, NEW_BALANCE))
+        => #saveStateDump
+        ~> RPCResponse( null )
+        ...
+        </k>
+        <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        <accounts>
+            ( .Bag => 
+                <account>
+                    <acctID> ADDR </acctID>
+                    <balance> NEW_BALANCE </balance>
+                    ...
+                </account>
+            )
+            ...
+        </accounts> [owise]
+
+```
+
+###############################################################################
 ## debug_traceTransaction
 
 At the point the debug_traceTransaction method is called, the transaction has already been
@@ -411,16 +455,19 @@ just build the response string directly.
 ```k
 
     rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
-        => RPCRawResponse(
-            "{ \"jsonrpc\": \"2.0\"" +String
-            ", \"id\": " +String intToHex( REQ_ID ) +String
-            ", \"result\": " +String
-                "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "true" #else "false" #fi +String
-                ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
-                ", \"return_value\": \"0x\"" +String // TODO
-                ", \"structLogs\": [" +String {#readFile( #traceFile( TXID) )}:>String +String
-            "] } }"
-        ) ...
+        => #let STRUCT_LOGS = #readFile( #traceFile( TXID) ) #in
+           #let LENGTH = lengthString( {STRUCT_LOGS}:>String ) #in
+           #let WITHOUT_TRAILING_COMMA = substrString( {STRUCT_LOGS}:>String, 0, LENGTH -Int 2 ) #in
+            RPCRawResponse(
+                "{ \"jsonrpc\": \"2.0\"" +String
+                ", \"id\": " +String Int2String(REQ_ID) +String
+                ", \"result\": " +String
+                    "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "false" #else "true" #fi +String
+                    ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
+                    ", \"returnValue\": \"\"" +String // TODO
+                    ", \"structLogs\": [" +String WITHOUT_TRAILING_COMMA +String
+                "] } }"
+            ) ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <txReceipt>
@@ -448,18 +495,26 @@ just build the response string directly.
                    | "#signTxSuccess"
                    | "#signTxError"
     
-    // Sign a transaction with an account managed by this node
+    // Sign a transaction with an account managed by this node   
     rule <k> #signTx(TXID, ACCTFROM:Int)
-          => #signTx(TXID, ECDSASign( #hashTxData( #getTxData(TXID)), KEY) )
-          ...
-        </k>
+          => #signTx(TXID, ECDSASign( 
+                Keccak256raw(#rlpEncodeTxData(LegacySignedTxData(TN, TP, TG, TT, TV, TD, B))),
+                KEY
+          )) ... </k>
         <accountKeys> ... ACCTFROM |-> KEY ... </accountKeys>
         <mode> NORMAL </mode>
+        <chainID> B </chainID>
          <message>
            <msgID> TXID </msgID>
+           <txNonce>    TN     </txNonce>
+           <txGasPrice> TP     </txGasPrice>
+           <txGasLimit> TG     </txGasLimit>
+           <to>         TT     </to>
+           <value>      TV     </value>
+           <data>       TD     </data>
            ...
          </message>
-    
+
     // Error signing a transaction with an unknown account
     rule <k> #signTx(TXID, ACCTFROM:Int) => #signTxError ... </k>
          <accountKeys> KEYMAP                      </accountKeys>
@@ -893,6 +948,7 @@ This section defines an intermediate represention for JSON RPC requests.
                                 | EthGetTransactionCount( Int, Int ) // address, block number
                                 | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
                                 | AnvilDumpState()                   // TODO: add options
+                                | AnvilSetBalance( Int, Int )        // address, balance
                                 | DebugTraceTransaction( Bytes )     // tx hash
 ```
 
@@ -933,8 +989,8 @@ intermediate representation.
     rule #rpcLoadParams( "eth_sendTransaction", [ J ])
         => #let FROM       = #getAccount( "from", J, DEFAULTSENDER ) #in
             #let TO        = #getAccount( "to"  , J, .Account ) #in
-            #let GAS_LIMIT = #getWord( "gas" , J, pow24 ) #in
-            #let GAS_PRICE = #getWord( "gas_price", J, 1 ) #in
+            #let GAS_LIMIT = #getWord( "gas" , J, 90000 ) #in
+            #let GAS_PRICE = #getWord( "gasPrice", J, 0 ) #in
             #let VALUE     = #getWord( "value", J, 0 ) #in
             #let DATA      = #getBytes( "data", J, .Bytes ) #in
             EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
@@ -965,23 +1021,26 @@ intermediate representation.
     rule #rpcLoadParams( "eth_getTransactionCount", [ ADDR:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
            #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
-            EthGetTransactionCount( ADDR_INT, BLOCK_INT )
+           EthGetTransactionCount( ADDR_INT, BLOCK_INT )
 
     rule #rpcLoadParams( "eth_getStorageAt", [ ADDR:String, SLOT:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
-            #let SLOT_INT = #parseWord( SLOT ) #in
-            #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
-            EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
+           #let SLOT_INT = #parseWord( SLOT ) #in
+           #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
+           EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
 
     rule #rpcLoadParams( "anvil_dumpState", [ _ ] )
         => AnvilDumpState()
+
+    rule #rpcLoadParams( "anvil_setBalance", [ ADDR:String, NEW_BALANCE:String ] )
+        => #let ADDR_INT = #parseAddr( ADDR ) #in
+           #let BALANCE_INT = #parseWord( NEW_BALANCE ) #in
+           AnvilSetBalance( ADDR_INT, BALANCE_INT )
 
     rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String, _OPTIONS:JSON ] )
         => DebugTraceTransaction( #parseByteStack( TX_HASH ) )
 
     // Helpers
-    syntax Int ::= "DEFAULTSENDER" [function]
-    rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
 
     syntax Int ::= #parseBlockNumber( String ) [function]
     rule [[ #parseBlockNumber( "latest" ) => CURRENT_BLOCK_NUMBER -Int 1 ]]
@@ -1076,7 +1135,7 @@ K configuration.
 
     rule <k> #createStateDump
         => #StateDump({
-            "bestBlockNumber": BLOCK_NUMBER -Int 1,
+            "best_block_number": BLOCK_NUMBER -Int 1,
             "block": {
                 "number": intToHex( BLOCK_NUMBER -Int 1 ),
                 "beneficiary": intToHex( BLOCK_COINBASE ),

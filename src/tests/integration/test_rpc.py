@@ -43,20 +43,40 @@ def test_rpc_file(
             for request in payload:
                 request_result = execute_json_rpc(server.port(), request)
                 request_result = json.loads(request_result)
-
-                # method `anvil_dumpState` compresses `result` with gzip, whose output is flaky
-                # therefore decompress the result prior to comparing with saved output, whose result was also decompressed
-                # also, json.dumps is unstable for dictionary entries
-                # therefore sort the encoded json text dict entries
                 if request['method'] == 'anvil_dumpState':
-                    result = request_result['result'][2:]
-                    result = bytes.fromhex(result)
-                    decompressed_data = gzip.decompress(result)
-                    # Parse the decompressed JSON and dump with sorted keys
-                    json_data = json.loads(decompressed_data.decode('utf-8'))
-                    sorted_json = json.dumps(json_data, sort_keys=True)
-                    request_result['result'] = '0x' + sorted_json.encode('utf-8').hex()
+                    snapshot = decode_snapshot(request_result['result'], compressed=True)
+                    uncompressed = encode_snapshot(snapshot, compressed=False)
+                    request_result['result'] = uncompressed
 
                 response_list.append(request_result)
             result = json.dumps(response_list, indent=2, sort_keys=True)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
+
+def normalize_snapshot(hex_data: str) -> str:
+    """
+    Normalize the snashot data for comparison.
+    1. The RPC method `anvil_dumpState` compresses `result` with gzip, whose
+    output is flaky therefore decompress the result prior to comparing with
+    saved output, whose result was also decompressed.
+    2. Additionally, json.dumps is unstable for dictionary entries therefore
+    sort the encoded json text dict entries
+    """
+    snapshot_data = decode_snapshot(hex_data, compressed=True)
+    normalized_hex = encode_snapshot(snapshot_data, compressed=True)
+    return normalized_hex
+
+def decode_snapshot(hex_data: str, compressed: bool = True) -> dict:
+    """Decode the hex-encoded gzip-compressed snapshot data."""
+    if hex_data.startswith('0x'):
+        hex_data = hex_data[2:]
+    compressed_data = bytes.fromhex(hex_data)
+    decompressed_data = gzip.decompress(compressed_data) if compressed else compressed_data
+    snapshot_data = json.loads(decompressed_data.decode('utf-8'))
+    return snapshot_data
+
+def encode_snapshot(snapshot_data: dict, compressed: bool = True) -> str:
+    """Encode the snapshot data as hex-encoded gzip-compressed data."""
+    json_data = json.dumps(snapshot_data, sort_keys=True).encode('utf-8')
+    compressed_data = gzip.compress(json_data) if compressed else json_data
+    hex_data = '0x' + compressed_data.hex()
+    return hex_data
