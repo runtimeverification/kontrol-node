@@ -33,6 +33,12 @@ module KONTROL-NODE
         ...
     </k>
     <ioDir> _ => IO_DIR </ioDir>
+    <block>
+        <timestamp> _ => 1438269973 </timestamp>
+        <baseFee>   _  => 1000000000 </baseFee>
+        <gasLimit>  _  => 30000000   </gasLimit>
+        ...
+    </block>
 
 ```
 
@@ -59,6 +65,18 @@ Mnemonic: test test test test test test test test test test test junk
 
     syntax Int ::= "DEFAULTSENDER" [function]
     rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+
+    syntax Int ::= "#getLatestBlockNumber" [function]
+    rule [[ #getLatestBlockNumber => BLOCK_NUMBER -Int 1 ]]
+        <number> BLOCK_NUMBER </number>
+        requires BLOCK_NUMBER >Int 0
+    rule #getLatestBlockNumber => 0 [owise]
+
+    syntax Int ::= "#getLatestTxID" [function]
+    rule #getLatestTxID => #getLatestBlockNumber // We're auto mining one block per tx
+
+    syntax Int ::= "#getNextTxID" [function]
+    rule #getNextTxID => #getLatestTxID +Int 1
 ```
 ###############################################################################
 # Requests
@@ -86,12 +104,12 @@ Similarly, we save a state snapshot after the block was mined.
     syntax KItem ::= "#ethSendTransactionResponse"
 
     rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
-            => #signTx(!TX_ID, FROM)
+            => #signTx(#getNextTxID, FROM)
             ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <origin>       _ => FROM   </origin>
-        <currentTxID>  _ => !TX_ID </currentTxID>
+        <currentTxID>  _ => #getNextTxID </currentTxID>
         <schedule>     SCHED       </schedule>
         <callState>
             <callGas> _ => G0(SCHED, DATA, (TO ==K .Account) ) </callGas>
@@ -109,12 +127,12 @@ Similarly, we save a state snapshot after the block was mined.
                 <nonce>  TXNONCE  </nonce>
                 ...
             </account>
-            <txOrder>   ... (.List => ListItem(!TX_ID )) </txOrder>
-            <txPending> ... (.List => ListItem(!TX_ID )) </txPending>
+            <txOrder>   ... (.List => ListItem(#getNextTxID )) </txOrder>
+            <txPending> ... (.List => ListItem(#getNextTxID )) </txPending>
             <messages>
                 ( .Bag => 
                     <message>
-                        <msgID>      !TX_ID    </msgID>
+                        <msgID>      #getNextTxID    </msgID>
                         <txChainID>  CHAIN_ID  </txChainID>
                         <txNonce>    TXNONCE   </txNonce>
                         <txType>     Legacy    </txType>
@@ -194,13 +212,13 @@ Similarly, we save a state snapshot after the block was mined.
                 "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
                 "blockHash"         : intToHex( BLOCK_HASH ),
                 "blockNumber"       : intToHex( BLOCK_NUMBER ),
-                "from"              : intToHex( FROM ),
-                "to"                : intToHex( TO ),
+                "from"              : addrToHex( FROM ),
+                "to"                : addrToHex( TO ),
                 "cumulativeGasUsed" : intToHex( CGAS ), // TODO: What is the difference between cumulativeGasUsed and gasUsed
                 "gasUsed"           : intToHex( CGAS ), 
-                "contractAddress"   : #if TO ==K .Account #then intToHex( #newAddr(FROM, TX_NONCE) ) #else null #fi,
+                "contractAddress"   : #if TO ==K .Account #then addrToHex( #newAddr(FROM, TX_NONCE) ) #else null #fi,
                 "logs"              : [ .JSONs ], // TODO
-                "logsBloom"         : "", // TODO
+                "logsBloom"         : bytesToHex( .Bytes , 256), // TODO: compute actual bloom filter'
                 "status"            : #if TX_STATUS ==K EVMC_SUCCESS #then "1" #else "0" #fi,
                 "effectiveGasPrice" : "0" // TODO
             })
@@ -238,7 +256,7 @@ Similarly, we save a state snapshot after the block was mined.
         => RPCResponse({
                 "type"             : "0x0",
                 "nonce"            : intToHex( TX_NONCE ),
-                "to"               : intToHex( TO ), // TODO: null for contract creation
+                "to"               : addrToHex( TO ), // TODO: null for contract creation
                 "gas"              : intToHex( GAS_LIMIT ),
                 "value"            : intToHex( VALUE ),
                 "input"            : bytesToHex( DATA ),
@@ -329,7 +347,7 @@ Similarly, we save a state snapshot after the block was mined.
                 )),
                 "parentHash"       : intToHex( PH ),
                 "sha3Uncles"       : intToHex( HO ),
-                "miner"            : intToHex( HC ),
+                "miner"            : addrToHex( HC ),
                 "stateRoot"        : intToHex( HR ),
                 "transactionsRoot" : intToHex( HT ),
                 "receiptsRoot"     : intToHex( HE ),
@@ -340,7 +358,7 @@ Similarly, we save a state snapshot after the block was mined.
                 "gasUsed"          : intToHex( HG ),
                 "timestamp"        : intToHex( HS ),
                 "extraData"        : bytesToHex( HX ),
-                "mixHash"          : intToHex( HM ),
+                "prevrandao"       : intToHex( HM ),
                 "nonce"            : intToHex( HN ),
                 "size"             : "0x1",
                 "transactions"     : [ .JSONs ], // TODO
@@ -399,13 +417,12 @@ Similarly, we save a state snapshot after the block was mined.
 ```k
     rule <k> RPCRequest( REQ_ID, AnvilDumpState() )
         => RPCResponse(
-                #let CONTENTS:IOString = #readFile( #snapshotFile( BLOCK_NUMBER -Int 1 ) )
+                #let CONTENTS:IOString = #readFile( #snapshotFile( #getLatestBlockNumber ) )
                 #in String2JSON( {CONTENTS}:>String )
            )
         ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
-        <number> BLOCK_NUMBER </number>
 
 ```
 
@@ -1043,8 +1060,7 @@ intermediate representation.
     // Helpers
 
     syntax Int ::= #parseBlockNumber( String ) [function]
-    rule [[ #parseBlockNumber( "latest" ) => CURRENT_BLOCK_NUMBER -Int 1 ]]
-        <number> CURRENT_BLOCK_NUMBER </number>
+    rule #parseBlockNumber( "latest" ) => #getLatestBlockNumber
     rule #parseBlockNumber( BN ) => #parseWord( BN ) [owise]
 
     syntax Account ::= #getAccount(JSONKey, JSON, Account) [function]
@@ -1094,7 +1110,7 @@ K configuration.
             <nonce>             ACC_NONCE         </nonce>
             ...
         </account>
-    ) => intToHex(ACC_ID) : {
+    ) => addrToHex(ACC_ID) : {
         "balance": intToHex( ACC_BALANCE ),
         "code": bytesToHex( ACC_CODE ),
         "storage": storageToJSON( ACC_STORAGE ),
@@ -1124,7 +1140,7 @@ K configuration.
         "bloomFilter":          bytesToHex( R_BLOOMFILTER ),
         "txStatus":             intToHex( R_TXSTATUS ),
         "txID":                 intToHex( R_TXID),
-        "sender":               intToHex( R_SENDER ),
+        "sender":               addrToHex( R_SENDER ),
         "txBlockNumber":        intToHex( R_TXBLOCKNUMBER )
     }
 
@@ -1135,18 +1151,18 @@ K configuration.
 
     rule <k> #createStateDump
         => #StateDump({
-            "best_block_number": BLOCK_NUMBER -Int 1,
+            "best_block_number": #getLatestBlockNumber,
             "block": {
-                "number": intToHex( BLOCK_NUMBER -Int 1 ),
-                "beneficiary": intToHex( BLOCK_COINBASE ),
+                "number": intToHex( #getLatestBlockNumber ),
+                "beneficiary": addrToHex( BLOCK_COINBASE ),
                 "timestamp": intToHex( BLOCK_TIMESTAMP ),
                 "gas_limit": BLOCK_GAS_LIMIT,
                 "basefee": BLOCK_BASE_FEE,
                 "difficulty": intToHex( BLOCK_DIFFICULTY ),
-                "prevrandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "prevrandao": uint256ToHex( BLOCK_MIX_HASH ),
                 "blob_excess_gas_and_price": {
                     "excess_blob_gas": BLOCK_EXCESS_BLOB_GAS,
-                    "blob_gasprice": 1
+                    "blob_gasprice": BLOCK_BLOB_GAS_USED
                 }
             },
             "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> ),
@@ -1162,6 +1178,8 @@ K configuration.
         <baseFee>       BLOCK_BASE_FEE        </baseFee>
         <difficulty>    BLOCK_DIFFICULTY      </difficulty>
         <excessBlobGas> BLOCK_EXCESS_BLOB_GAS </excessBlobGas>
+        <blobGasUsed>   BLOCK_BLOB_GAS_USED   </blobGasUsed>
+        <mixHash>       BLOCK_MIX_HASH        </mixHash>
         ...
     </block>
     <accounts> ACCOUNTS </accounts>
@@ -1176,27 +1194,27 @@ K configuration.
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
          ))
         => { "header": {
-                "parentHash":       intToHex( PH ),
-                "sha3Uncles":       intToHex( HO ),
-                "miner":            intToHex( HC ),
-                "stateRoot":        intToHex( HR ),
-                "transactionsRoot": intToHex( HT ),
-                "receiptsRoot":     intToHex( HE ),
-                "logsBloom":        bytesToHex( HB ),
+                "parentHash":       uint256ToHex( PH ),
+                "sha3Uncles":       uint256ToHex( HO ),
+                "miner":            addrToHex( HC ),
+                "stateRoot":        uint256ToHex( HR ),
+                "transactionsRoot": uint256ToHex( HT ),
+                "receiptsRoot":     uint256ToHex( HE ),
+                "logsBloom":        bytesToHex( HB , 256),
                 "difficulty":       intToHex( HD ),
                 "number":           intToHex( BN ),
                 "gasLimit":         intToHex( HL ),
                 "gasUsed":          #if isInt(HG) #then intToHex( HG ) #else "0x0" #fi,
                 "timestamp":        intToHex( HS ),
                 "extraData":        bytesToHex( HX ),
-                "mixHash":          intToHex( HM ),
-                "nonce":            intToHex( HN ),
+                "prevrandao":       intToHex( HM ),
+                "nonce":            intToHex( HN, 8 ),
                 "baseFeePerGas":    intToHex( BF ),
-                "withdrawalsRoot":  intToHex( WR ),
+                "withdrawalsRoot":  uint256ToHex( WR ),
                 "blobGasUsed":      intToHex( BG ),
                 "excessBlobGas":    intToHex( EG ),
-                "parentBeaconBlockRoot": intToHex( BR ),
-                "requestsHash":     intToHex( RR )
+                "parentBeaconBlockRoot": uint256ToHex( BR ),
+                "requestsHash":     uint256ToHex( RR )
             },
             "transactions": [ .JSONs ],
             "ommers": OBH
@@ -1414,7 +1432,7 @@ StateDump format - not the ethereum/test format.
             #getWord( "gasUsed",          BLOCK_HEADER, 0 ),
             #getWord( "timestamp",        BLOCK_HEADER, 0 ),
             #getBytes( "extraData",       BLOCK_HEADER, .Bytes ),
-            #getWord( "mixHash",          BLOCK_HEADER, 0 ),
+            #getWord( "prevrandao",       BLOCK_HEADER, 0 ),
             #getWord( "nonce",            BLOCK_HEADER, 0 ),
             #getWord( "baseFeePerGas",    BLOCK_HEADER, 0 ),
             #getWord( "withdrawalsRoot",  BLOCK_HEADER, 0 ),
@@ -1543,10 +1561,9 @@ This seciont defines rules to write a StateDump JSON object to disk.
 
     rule <k> #StateDump( SD )
           ~> #writeStateDump
-          => #writeFile( #snapshotFile( BLOCK_NUMBER -Int 1), JSON2String( SD ) )
+          => #writeFile( #snapshotFile( #getLatestBlockNumber ), JSON2String( SD ) )
           ...
         </k>
-        <number> BLOCK_NUMBER </number>
 
 ```
 ## Loading StateDump from Disk
@@ -1585,11 +1602,9 @@ This secion defines rules to read a StateDump JSON object from disk.
     rule <k> #saveMetadata
           => #writeFile(
                 #metadataFile,
-                JSON2String( { "latest_block_number": maxInt(0, CURRENT_BLOCK_NUMBER -Int 1) } )
+                JSON2String( { "latest_block_number": #getLatestBlockNumber } )
             )
           ... </k>
-        <number> CURRENT_BLOCK_NUMBER </number>
-
 
 endmodule
 ```

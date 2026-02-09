@@ -44,13 +44,27 @@ module JSON-UTILS
 
     // From K to JSON
 
-    syntax String ::= intToHex(Int)     [function, total]
-                    | bytesToHex(Bytes) [function, total]
+    syntax String ::= intToHex(Int)                  [function, total]
+                    | intToHex(Int, length: Int)     [function, total]
+                    | bytesToHex(Bytes)              [function, total]
+                    | bytesToHex(Bytes, length: Int) [function, total]
+                    | addrToHex(Int)                 [function]
+                    | uint256ToHex(Int)              [function]
 
     rule bytesToHex( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
+
+    rule bytesToHex( BYTES, LEN ) => "0x" +String Bytes2Hex( padLeftBytes(BYTES, LEN, 0) )
+
     rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
         requires A >=Int 0
     rule intToHex( A:Int ) => "-0x" +String Base2String( absInt(A), 16) [owise]
+
+    rule intToHex( A:Int, LEN:Int ) => "0x" +String Bytes2Hex( Int2Bytes( LEN, A, BE) )
+        requires A >=Int 0
+    rule intToHex( A:Int, LEN:Int ) => "-0x" +String Bytes2Hex( Int2Bytes( LEN, absInt(A), BE) ) [owise]
+
+    rule addrToHex( A:Int ) => intToHex( A, 20 )
+    rule uint256ToHex( A:Int ) => intToHex( A, 32 )
 
 endmodule
 ```
