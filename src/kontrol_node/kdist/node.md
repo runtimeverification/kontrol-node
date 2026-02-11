@@ -268,7 +268,7 @@ Similarly, we save a state snapshot after the block was mined.
         => RPCResponse({
                 "type"             : "0x0",
                 "nonce"            : intToHex( TX_NONCE ),
-                "to"               : addrToHex( TO ), // TODO: null for contract creation
+                "to"               : accountToHex( TO ),
                 "gas"              : intToHex( GAS_LIMIT ),
                 "value"            : intToHex( VALUE ),
                 "input"            : bytesToHex( DATA ),
@@ -1358,9 +1358,9 @@ StateDump format - not the ethereum/test format.
                 TX_NONCE,
                 TX_OUT,
                 TX_TO,
-                _TX_TRACES,
+                [ TraceRoot( TraceData( MSG_DATA ) ) ],
                 TX_HASH,
-                _TX_INDEX                
+                _TX_INDEX
             ),
             ReceiptJSON(
                 R_CUMULATIVE_GAS_USED,
@@ -1375,11 +1375,11 @@ StateDump format - not the ethereum/test format.
                     <msgID>   BLOCK_NUMBER </msgID>
                     <txNonce> TX_NONCE     </txNonce>
                     <to>      TX_TO        </to>
-                    <txType>  R_TX_TYPE </txType>
-                    <data>    .Bytes   </data> // TODO
-                    <sigV>    0        </sigV> // TODO
-                    <sigR>    .Bytes   </sigR> // TODO
-                    <sigS>    .Bytes   </sigS> // TODO
+                    <txType>  R_TX_TYPE    </txType>
+                    <data>    MSG_DATA     </data>
+                    <sigV>    0            </sigV> // TODO
+                    <sigR>    .Bytes       </sigR> // TODO
+                    <sigS>    .Bytes       </sigS> // TODO
                     ...
                 </message>
             ) ...
@@ -1457,21 +1457,21 @@ StateDump format - not the ethereum/test format.
         Int,    // nonce
         Bytes,  // out
         Int,    // to
-        JSON,   // traces
+        TraceRoots, // traces
         Int,    // transaction hash
         Int     // transaction index
     ) | #parseTransactionInfo( JSON ) [function]
 
-    syntax ReceiptData ::= ReceiptData(
-        Int,   // txHash
-        Int,   // cumulativeGas
-        List,  // txLogs
-        Bytes, // txLogsBloom
-        Int,   // txStatus
-        Int,   // txId
-        Int,   // sender
-        Int    // txBlockNumber
-    )
+    // syntax ReceiptData ::= ReceiptData(
+    //     Int,   // txHash
+    //     Int,   // cumulativeGas
+    //     List,  // txLogs
+    //     Bytes, // txLogsBloom
+    //     Int,   // txStatus
+    //     Int,   // txId
+    //     Int,   // sender
+    //     Int    // txBlockNumber
+    // )
 
     syntax ReceiptJSON ::= ReceiptJSON(
         Int,   // cumulativeGasUsed
@@ -1480,6 +1480,12 @@ StateDump format - not the ethereum/test format.
         Int,   // status
         TxType
     ) | #parseReceipt( JSON ) [function]
+
+    syntax TraceRoot ::= TraceRoot( TraceData )
+                       | #parseTraceRoot( JSON ) [function]
+
+    syntax TraceData ::= TraceData( Bytes )
+                       | #parseTraceData( JSON ) [function]
 
     syntax Map ::= #parseStorage( JSON )         [function]
                  | #parseStorageAux( JSON, Map ) [function]
@@ -1493,6 +1499,10 @@ StateDump format - not the ethereum/test format.
     syntax Transactions ::= List{TransactionData, ","}
                       | "[" Transactions "]" [bracket]
                       | #parseTransactions( JSON ) [function]
+    syntax TraceRoots ::= List{TraceRoot, ","}
+                      | "[" TraceRoots "]" [bracket]
+                      | "(" TraceRoots ")" [bracket]
+                      | #parseTraceRoots( JSON ) [function]
 
     syntax Int ::= #getBlockNumber( BlockData ) [function]
     rule #getBlockNumber( BlockData( _, _, _, _, _, _, _, _, BN, _, _, _, _, _, _, _, _, _, _, _, _, _) ) => BN
@@ -1585,7 +1595,7 @@ StateDump format - not the ethereum/test format.
            #let TX_NONCE         = #getInt( "nonce", INFO_JSON, 0 ) #in
            #let TX_OUT           = #getBytes( "out", INFO_JSON, .Bytes ) #in
            #let TX_TO            = #getAddr( "to", INFO_JSON, 0 ) #in
-           #let TX_TRACES        = #getJSON( "traces", INFO_JSON, [ .JSONs ] ) #in
+           #let TX_TRACES        = #parseTraceRoots( #getJSON( "traces", INFO_JSON, [ .JSONs ] ) ) #in
            #let TX_HASH          = #getWord( "transactionHash", INFO_JSON, 0 ) #in
            #let TX_INDEX         = #getInt( "transactionIndex", INFO_JSON, 0 ) #in
            TransactionInfo(
@@ -1600,6 +1610,17 @@ StateDump format - not the ethereum/test format.
                TX_HASH,
                TX_INDEX
            )
+
+    rule #parseTraceRoots( [ .JSONs ] ) => .TraceRoots
+    rule #parseTraceRoots( [ FIRST, REST ] ) => #parseTraceRoot( FIRST ) , #parseTraceRoots( [ REST ] )
+
+    rule #parseTraceRoot( TRACE_JSON )
+        => #let DATA = #parseTraceData( #getJSON( "trace", TRACE_JSON ) ) #in
+           TraceRoot( DATA )
+
+    rule #parseTraceData( TRACE_JSON )
+        => #let DATA_BYTES = #getBytes( "data", TRACE_JSON, .Bytes ) #in
+           TraceData( DATA_BYTES )
 
     rule #parseReceipt( RECEIPT_JSON )
         => #let CUMULATIVE_GAS  = #getWord( "cumulativeGasUsed", RECEIPT_JSON, 0 ) #in
