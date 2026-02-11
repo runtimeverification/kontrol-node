@@ -38,6 +38,10 @@ module JSON-UTILS
     rule #getAddr( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
                                         #if RAW ==K null #then DEF_VAL #else #parseAddr( {RAW}:>String ) #fi
 
+    syntax Account ::= #getAccount(JSONKey, JSON, Account) [function]
+    rule #getAccount( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
+                                        #if RAW ==K null #then DEF_VAL #else #parseAddr( {RAW}:>String ) #fi
+
     syntax Bytes ::= #getBytes(JSONKey, JSON, Bytes) [function]
     rule #getBytes( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
                                         #if RAW ==K null #then DEF_VAL #else #parseByteStack( {RAW}:>String ) #fi
@@ -50,6 +54,8 @@ module JSON-UTILS
                     | bytesToHex(Bytes, length: Int) [function, total]
                     | addrToHex(Int)                 [function]
                     | uint256ToHex(Int)              [function]
+
+    syntax JSON ::= accountToHex(Account)            [function]
 
     rule bytesToHex( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
 
@@ -65,6 +71,9 @@ module JSON-UTILS
 
     rule addrToHex( A:Int ) => intToHex( A, 20 )
     rule uint256ToHex( A:Int ) => intToHex( A, 32 )
+
+    rule accountToHex( .Account ) => null
+    rule accountToHex( ADDR:Int ) => addrToHex( ADDR )
 
 endmodule
 ```

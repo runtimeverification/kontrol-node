@@ -52,14 +52,13 @@ module KONTROL-NODE-CONFIG
             <stateTrie> .MerkleTree </stateTrie>
             <txReceipts>
                 <txReceipt multiplicity ="*" type="Map">
-                    <txHash>          .Bytes     </txHash>
-                    <txCumulativeGas> 0          </txCumulativeGas>
-                    <logSet>          .List      </logSet>
-                    <bloomFilter>     .Bytes     </bloomFilter>
-                    <txStatus>        0          </txStatus>
-                    <txID>            0          </txID>
-                    <sender>          .Account   </sender>
+                    <txMsg>           0          </txMsg>
                     <txBlockNumber>   0          </txBlockNumber>
+                    <txHash>          0          </txHash>
+                    <txCumulativeGas> 0          </txCumulativeGas>
+                    <txLogs>          .List      </txLogs>
+                    <txLogsBloom>     .Bytes     </txLogsBloom>
+                    <txStatus>        0          </txStatus>
                 </txReceipt>
             </txReceipts>
             <blockStorage> .Map </blockStorage>

@@ -67,16 +67,33 @@ Mnemonic: test test test test test test test test test test test junk
     rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
 
     syntax Int ::= "#getLatestBlockNumber" [function]
+                 | "#getNextBlockNumber"   [function]
+
     rule [[ #getLatestBlockNumber => BLOCK_NUMBER -Int 1 ]]
         <number> BLOCK_NUMBER </number>
         requires BLOCK_NUMBER >Int 0
     rule #getLatestBlockNumber => 0 [owise]
+
+    rule #getNextBlockNumber => #getLatestBlockNumber +Int 1
 
     syntax Int ::= "#getLatestTxID" [function]
     rule #getLatestTxID => #getLatestBlockNumber // We're auto mining one block per tx
 
     syntax Int ::= "#getNextTxID" [function]
     rule #getNextTxID => #getLatestTxID +Int 1
+
+    syntax Account ::= #sender( msgId: Int ) [function]
+
+    rule [[ #sender( MSG_ID ) => #sender( #getTxData( MSG_ID ), MSG_SIGV, MSG_SIGR, MSG_SIGS, CHAIN_ID ) ]]
+        <chainID> CHAIN_ID </chainID>
+        <message>
+            <msgID> MSG_ID </msgID>
+            <sigV>  MSG_SIGV </sigV>
+            <sigR>  MSG_SIGR </sigR>
+            <sigS>  MSG_SIGS </sigS>
+            ...
+        </message>
+
 ```
 ###############################################################################
 # Requests
@@ -192,12 +209,12 @@ Similarly, we save a state snapshot after the block was mined.
         </message>
 
     rule <k> #ethSendTransactionResponse
-        => RPCResponse( bytesToHex( TX_HASH ) )
+        => RPCResponse( uint256ToHex( TX_HASH ) )
         ... </k>
-        <currentTxID>  TXID    </currentTxID>
+        <currentTxID> TXID    </currentTxID>
         <txReceipt>
-            <txHash> TX_HASH </txHash>
-            <txID>   TXID    </txID>
+            <txMsg>   TXID    </txMsg>
+            <txHash>  TX_HASH </txHash>
             ...
         </txReceipt>
 ```
@@ -208,15 +225,15 @@ Similarly, we save a state snapshot after the block was mined.
     rule <k> RPCRequest( REQ_ID, EthGetTransactionReceipt( TX_HASH ) )
         => RPCResponse({
                 "type"              : "0x0",
-                "transactionHash"   : bytesToHex( TX_HASH ),
+                "transactionHash"   : uint256ToHex( TX_HASH ),
                 "transactionIndex"  : "0x0", // kontrol-node always includes exactly one tx per block
-                "blockHash"         : intToHex( BLOCK_HASH ),
+                "blockHash"         : uint256ToHex( #hashBlockNumber( BLOCK_NUMBER ) ),
                 "blockNumber"       : intToHex( BLOCK_NUMBER ),
-                "from"              : addrToHex( FROM ),
+                "from"              : accountToHex( #sender( TXID ) ),
                 "to"                : addrToHex( TO ),
                 "cumulativeGasUsed" : intToHex( CGAS ), // TODO: What is the difference between cumulativeGasUsed and gasUsed
                 "gasUsed"           : intToHex( CGAS ), 
-                "contractAddress"   : #if TO ==K .Account #then addrToHex( #newAddr(FROM, TX_NONCE) ) #else null #fi,
+                "contractAddress"   : #if TO ==K .Account #then addrToHex( #newAddr({#sender( TXID )}:>Int, TX_NONCE) ) #else null #fi,
                 "logs"              : [ .JSONs ], // TODO
                 "logsBloom"         : bytesToHex( .Bytes , 256), // TODO: compute actual bloom filter'
                 "status"            : #if TX_STATUS ==K EVMC_SUCCESS #then "1" #else "0" #fi,
@@ -227,14 +244,13 @@ Similarly, we save a state snapshot after the block was mined.
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <currentTxID>         TXID                           </currentTxID>
         <txReceipt>
+            <txMsg>           TXID                           </txMsg>
+            <txBlockNumber>   BLOCK_NUMBER                   </txBlockNumber>
             <txHash>          TX_HASH                        </txHash>
             <txCumulativeGas> CGAS                           </txCumulativeGas>
-            <logSet>          _                              </logSet>
-            <bloomFilter>     _                              </bloomFilter>
+            <txLogs>          _                              </txLogs>
+            <txLogsBloom>     _                              </txLogsBloom>
             <txStatus>        TX_STATUS                      </txStatus>
-            <txID>            TXID                           </txID>
-            <sender>          FROM                           </sender>
-            <txBlockNumber>   BLOCK_NUMBER                   </txBlockNumber>
         </txReceipt>
         <message>
             <msgID>        TXID                           </msgID>
@@ -242,10 +258,6 @@ Similarly, we save a state snapshot after the block was mined.
             <to>           TO                             </to>
             ...
         </message>
-        <block>
-            <previousHash> BLOCK_HASH                     </previousHash>
-            ...
-        </block>
 ```
 
 ###############################################################################
@@ -270,8 +282,8 @@ Similarly, we save a state snapshot after the block was mined.
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <txReceipt>
+            <txMsg>  TXID    </txMsg>
             <txHash> TX_HASH </txHash>
-            <txID>   TXID    </txID>
             ...
         </txReceipt>
         <message>
@@ -488,8 +500,8 @@ just build the response string directly.
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <txReceipt>
+            <txMsg>  TXID    </txMsg>
             <txHash> TX_HASH </txHash>
-            <txID>   TXID    </txID>
             <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
             <txStatus> TX_STATUS </txStatus>
             ...
@@ -681,14 +693,13 @@ just build the response string directly.
          <txReceipts>
            ( .Bag =>
             <txReceipt>
+                <txMsg>           TXID                           </txMsg>
+                <txBlockNumber>   BN                             </txBlockNumber>
                 <txHash>          txHash( TXID )                 </txHash>
                 <txCumulativeGas> CGAS                           </txCumulativeGas>
-                <logSet>          LOGS                           </logSet>
-                <bloomFilter>     #bloomFilter(LOGS)             </bloomFilter>
+                <txLogs>          LOGS                           </txLogs>
+                <txLogsBloom>     .Bytes /* TODO */              </txLogsBloom>
                 <txStatus>        bool2Word(SC ==K EVMC_SUCCESS) </txStatus>
-                <txID>            TXID                           </txID>
-                <sender>          ACCT                           </sender>
-                <txBlockNumber>   BN                             </txBlockNumber>
             </txReceipt>
            )
            ...
@@ -704,9 +715,13 @@ just build the response string directly.
          <origin>     ACCT </origin>
 
 
-    syntax Bytes ::= txHash( Int ) [function]
+    syntax Int ::= txHash( Int ) [function]
 
-    rule [[ txHash( TX_ID ) => Keccak256raw( #rlpEncode( [TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS] ) ) ]]
+    rule [[ txHash( TX_ID ) => Bytes2Int(
+            Keccak256raw( #rlpEncode( [TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS] ) ),
+            BE,
+            Unsigned
+        )]]
         <message>
             <msgID> TX_ID </msgID>
             <txNonce>    TN </txNonce>
@@ -736,6 +751,7 @@ The productions below are used to perform the mining of blocks, advancing the bl
     syntax BlockData ::= #getBlockData( Int )        [function]
                        | #getBlockDataByHash( Int )  [function]
     syntax Int       ::= #hashBlockData( BlockData ) [function]
+                       | #hashBlockNumber( Int )     [function]
 
     rule <k> #mineBlock => #startBlock ... </k>
           <stateTrie>  TREE       </stateTrie> // TODO: We never set the initial trie
@@ -832,6 +848,8 @@ The productions below are used to perform the mining of blocks, advancing the bl
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, _BF, _WR, _BG, _EG, _BR, _RR, _OBH
          ))
         => #blockHeaderHash(PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, gas2Int( HG ), HS, HX, HM, HN)
+
+    rule #hashBlockNumber( BN ) => #hashBlockData( #getBlockData( BN ) )
 ```
 
 ###############################################################################
@@ -919,15 +937,15 @@ The productions below are used to perform the mining of blocks, advancing the bl
         ( TREE           => MerkleUpdate(
             TREE,
             #rlpEncodeWord(I),
-            #unparseDataBytes( #rlpEncodeReceipt(TS, TG, TB, TL) ) )
+            #unparseDataBytes( #rlpEncodeReceipt(TX_STATUS, TX_CUMULATIVE_GAS, TX_LOGS_BLOOM, TX_LOGS) ) )
         ),
         ( I              => I +Int 1 ),
         <txReceipts>
             ( <txReceipt>
-                <txStatus>        TS   </txStatus>
-                <txCumulativeGas> TG   </txCumulativeGas>
-                <bloomFilter>     TB   </bloomFilter>
-                <logSet>          TL   </logSet>
+                <txStatus>        TX_STATUS         </txStatus>
+                <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
+                <txLogs>          TX_LOGS           </txLogs>
+                <txLogsBloom>     TX_LOGS_BLOOM     </txLogsBloom>
                 ...
             </txReceipt> => .Bag )
             ...
@@ -956,8 +974,8 @@ This section defines an intermediate represention for JSON RPC requests.
                                     Int , // value
                                     Bytes // input
                                   )
-                                | EthGetTransactionReceipt( Bytes )  // tx hash
-                                | EthGetTransactionByHash( Bytes )   // tx hash
+                                | EthGetTransactionReceipt( Int )    // tx hash
+                                | EthGetTransactionByHash( Int )     // tx hash
                                 | EthGetCode( Int, Int )             // address, block number
                                 | EthGetBalance( Int, Int )          // address, block number
                                 | EthGetBlockByNumber( Int, Bool )   // block number, hydrated txs
@@ -966,7 +984,7 @@ This section defines an intermediate represention for JSON RPC requests.
                                 | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
                                 | AnvilDumpState()                   // TODO: add options
                                 | AnvilSetBalance( Int, Int )        // address, balance
-                                | DebugTraceTransaction( Bytes )     // tx hash
+                                | DebugTraceTransaction( Int )        // tx hash
 ```
 
 ###############################################################################
@@ -1013,10 +1031,10 @@ intermediate representation.
             EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA )
 
     rule #rpcLoadParams( "eth_getTransactionReceipt", [ TX_HASH:String ] )
-        => EthGetTransactionReceipt( #parseByteStack( TX_HASH ) )
+        => EthGetTransactionReceipt( #parseWord( TX_HASH ) )
 
     rule #rpcLoadParams( "eth_getTransactionByHash", [ TX_HASH:String ] )
-        => EthGetTransactionByHash( #parseByteStack( TX_HASH ) )
+        => EthGetTransactionByHash( #parseWord( TX_HASH ) )
 
     rule #rpcLoadParams( "eth_getCode", [ ADDR:String, BLOCK_NUM:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
@@ -1055,7 +1073,7 @@ intermediate representation.
            AnvilSetBalance( ADDR_INT, BALANCE_INT )
 
     rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String, _OPTIONS:JSON ] )
-        => DebugTraceTransaction( #parseByteStack( TX_HASH ) )
+        => DebugTraceTransaction( #parseWord( TX_HASH ) )
 
     // Helpers
 
@@ -1063,9 +1081,6 @@ intermediate representation.
     rule #parseBlockNumber( "latest" ) => #getLatestBlockNumber
     rule #parseBlockNumber( BN ) => #parseWord( BN ) [owise]
 
-    syntax Account ::= #getAccount(JSONKey, JSON, Account) [function]
-    rule #getAccount( KEY, J, DEF_VAL ) => #let RAW = #getJSON( KEY, J ) #in
-                                        #if RAW ==K null #then DEF_VAL #else #parseAddr( {RAW}:>String ) #fi
 ```
 ###############################################################################
 # State Snapshots
@@ -1122,29 +1137,57 @@ K configuration.
             => accountsToJSONs( <accounts> ACCS </accounts>, (accountToJSON( <account> ACC </account> ) , ACCU) ) 
     rule accountsToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
 
-    rule receiptToJSON (
-        <txReceipt>
-            <txHash>          R_TXHASH          </txHash>
-            <txCumulativeGas> R_TXCUMULATIVEGAS </txCumulativeGas>
-            <logSet>          _R_LOGSET         </logSet>
-            <bloomFilter>     R_BLOOMFILTER     </bloomFilter>
-            <txStatus>        R_TXSTATUS        </txStatus>
-            <txID>            R_TXID            </txID>
-            <sender>          R_SENDER          </sender>
-            <txBlockNumber>   R_TXBLOCKNUMBER   </txBlockNumber>
+    rule [[ receiptToJSON (
+            <txReceipt>
+                <txMsg>           MSG_ID            </txMsg>
+                <txBlockNumber>   BLOCK_NUMBER      </txBlockNumber>
+                <txHash>          TX_HASH           </txHash>
+                <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
+                <txLogs>          _TX_LOGS          </txLogs>
+                <txLogsBloom>     TX_BLOOMFILTER    </txLogsBloom>
+                <txStatus>        TX_STATUS         </txStatus>
+                ...
+            </txReceipt>
+        ) => {
+            "blockHash":         uint256ToHex( #hashBlockNumber( BLOCK_NUMBER ) ),
+            "blockNumber":       intToHex( BLOCK_NUMBER ),
+            "info": {
+                "contract_address":  null, // TODO
+                "exit":              "":String, // TODO
+                "from":              accountToHex( #sender( MSG_ID ) ),
+                "gas_used":          0, // TODO
+                "nonce":             MSG_NONCE,
+                "out":               bytesToHex( .Bytes ), // TODO
+                "to":                accountToHex( MSG_TO ),
+                "traces":            [{
+                    "idx": 0,
+                    "trace": {
+                        "data": bytesToHex( MSG_DATA )
+                        // TODO: We're currently using debug_traceTransaction for tracing
+                        // We may consider switching to this new format in the future
+                    }
+                }],
+                "transaction_hash":  uint256ToHex( TX_HASH ),
+                "transaction_index": 0 // We currently mine a block for each tx
+            },
+            "receipt": {
+                "cumulativeGasUsed":  intToHex( TX_CUMULATIVE_GAS ),
+                "logs":               [ .JSONs ], // TODO
+                "logsBloom":          bytesToHex( TX_BLOOMFILTER, 256 ),
+                "status":             intToHex( TX_STATUS ),
+                "type":               intToHex( #dasmTxPrefix( MSG_TYPE ) )
+            }
+        } ]]
+        <message>
+            <msgID>           MSG_ID            </msgID>
+            <txNonce>         MSG_NONCE         </txNonce>
+            <to>              MSG_TO            </to>
+            <txType>          MSG_TYPE          </txType>
+            <data>            MSG_DATA          </data>
             ...
-        </txReceipt>
-    ) => bytesToHex( R_TXHASH ) : {
-        "txCumulativeGas":      intToHex( R_TXCUMULATIVEGAS ),
-        "logSet":               [ .JSONs ], // TODO
-        "bloomFilter":          bytesToHex( R_BLOOMFILTER ),
-        "txStatus":             intToHex( R_TXSTATUS ),
-        "txID":                 intToHex( R_TXID),
-        "sender":               addrToHex( R_SENDER ),
-        "txBlockNumber":        intToHex( R_TXBLOCKNUMBER )
-    }
+        </message>
 
-    rule receiptsToJSON( TR ) => { receiptsToJSONs( TR, .JSONs ) }
+    rule receiptsToJSON( TR ) => [ receiptsToJSONs( TR, .JSONs ) ] [priority(50)]
     rule receiptsToJSONs( <txReceipts> <txReceipt> R </txReceipt> TRS:Bag </txReceipts>, ACCU)
             => receiptsToJSONs( <txReceipts> TRS </txReceipts>, (receiptToJSON( <txReceipt> R </txReceipt> ) , ACCU) ) 
     rule receiptsToJSONs( <txReceipts> .Bag </txReceipts>, ACCU ) => ACCU [owise]
@@ -1167,7 +1210,7 @@ K configuration.
             },
             "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> ),
             "blocks": blocksToJSON( BLOCK_STORAGE ),
-            "receipts": receiptsToJSON( <txReceipts> RECEIPTS </txReceipts> )
+            "transactions": receiptsToJSON( <txReceipts> RECEIPTS </txReceipts> )
         }) ...
     </k>
     <block>
@@ -1239,13 +1282,13 @@ StateDump format - not the ethereum/test format.
                    | #loadCurrentBlock( Int )
                    | #loadAccounts( Accounts )
                    | #loadAccount( AccountData )
-                   | #loadReceipts( Receipts )
-                   | #loadReceipt( ReceiptData )
+                   | #loadTransactions( Transactions )
+                   | #loadTransaction( TransactionData )
 
-    rule <k> #loadSnapshot( Snapshot(LATEST_BLOCK_NUMBER, ACCOUNTS, BLOCKS, RECEIPTS) )
+    rule <k> #loadSnapshot( Snapshot(LATEST_BLOCK_NUMBER, ACCOUNTS, BLOCKS, TRANSACTIONS) )
           => #loadAccounts( ACCOUNTS )
           ~> #loadBlocks( BLOCKS )
-          ~> #loadReceipts( RECEIPTS )
+          ~> #loadTransactions( TRANSACTIONS )
           ~> #loadCurrentBlock( LATEST_BLOCK_NUMBER ) ... </k>
           <accounts>     _ => .Bag </accounts>
           <blockStorage> _ => .Map </blockStorage>
@@ -1299,35 +1342,60 @@ StateDump format - not the ethereum/test format.
             ...
         </accounts>
 
-    rule <k> #loadReceipts( .Receipts ) => .K ... </k>
-    rule <k> #loadReceipts( RECEIPT_DATA , REST )
-          => #loadReceipt( RECEIPT_DATA )
-          ~> #loadReceipts( REST ) ... </k>
+    rule <k> #loadTransactions( .Transactions ) => .K ... </k>
+    rule <k> #loadTransactions( TRANSACTION_DATA , REST )
+          => #loadTransaction( TRANSACTION_DATA )
+          ~> #loadTransactions( REST ) ... </k>
 
-    rule <k> #loadReceipt( ReceiptData(
-            TX_HASH,
-            CUMULATIVE_GAS,
-            LOG_SET,
-            BLOOM_FILTER,
-            TX_STATUS,
-            TX_ID,
-            SENDER,
-            TX_BLOCK_NUMBER
-         ))
-        => .K ... </k>
+    rule <k> #loadTransaction( TransactionData(
+            BLOCK_HASH,
+            BLOCK_NUMBER,
+            TransactionInfo(
+                _TX_CONTRACT_ADDR,
+                _TX_EXIT,
+                TX_FROM,
+                TX_GAS_USED,
+                TX_NONCE,
+                TX_OUT,
+                TX_TO,
+                _TX_TRACES,
+                TX_HASH,
+                _TX_INDEX                
+            ),
+            ReceiptJSON(
+                R_CUMULATIVE_GAS_USED,
+                R_LOGS,
+                R_LOGS_BLOOM,
+                R_STATUS,
+                R_TX_TYPE
+            ) ) )
+         => .K ... </k>
+        <messages>
+            ( .Bag => <message>
+                    <msgID>   BLOCK_NUMBER </msgID>
+                    <txNonce> TX_NONCE     </txNonce>
+                    <to>      TX_TO        </to>
+                    <txType>  R_TX_TYPE </txType>
+                    <data>    .Bytes   </data> // TODO
+                    <sigV>    0        </sigV> // TODO
+                    <sigR>    .Bytes   </sigR> // TODO
+                    <sigS>    .Bytes   </sigS> // TODO
+                    ...
+                </message>
+            ) ...
+        </messages>
+        <number> _ => BLOCK_NUMBER +Int 1 </number>
         <txReceipts>
             ( .Bag => <txReceipt>
+                    <txMsg>           BLOCK_NUMBER     </txMsg>
+                    <txBlockNumber>   BLOCK_NUMBER     </txBlockNumber>
                     <txHash>          TX_HASH          </txHash>
-                    <txCumulativeGas> CUMULATIVE_GAS   </txCumulativeGas>
-                    <logSet>          LOG_SET          </logSet>
-                    <bloomFilter>     BLOOM_FILTER     </bloomFilter>
-                    <txStatus>        TX_STATUS        </txStatus>
-                    <txID>            TX_ID            </txID>
-                    <sender>          SENDER           </sender>
-                    <txBlockNumber>   TX_BLOCK_NUMBER  </txBlockNumber>
+                    <txCumulativeGas> R_CUMULATIVE_GAS_USED </txCumulativeGas>
+                    <txLogs>          R_LOGS           </txLogs>
+                    <txLogsBloom>     R_LOGS_BLOOM     </txLogsBloom>
+                    <txStatus>        R_STATUS         </txStatus>
                 </txReceipt>
-            )
-            ...
+            ) ...
         </txReceipts>
 
     // Intermediate representations
@@ -1336,7 +1404,7 @@ StateDump format - not the ethereum/test format.
             Int,
             Accounts,
             Blocks,
-            Receipts
+            Transactions
         )
         | #parseSnapshot( JSON ) [function]
 
@@ -1374,15 +1442,43 @@ StateDump format - not the ethereum/test format.
             JSON // ommersBlockHeaders
         ) | #parseBlock( JSON ) [function]
 
+    syntax TransactionData ::= TransactionData(
+        Int, // block_hash
+        Int, // block_number
+        TransactionInfo, // info
+        ReceiptJSON // receipt
+    ) | #parseTransaction( JSON ) [function]
+
+    syntax TransactionInfo ::= TransactionInfo(
+        Account, // contract_address
+        String, // exit
+        Int,    // from
+        Int,    // gas_used
+        Int,    // nonce
+        Bytes,  // out
+        Int,    // to
+        JSON,   // traces
+        Int,    // transaction hash
+        Int     // transaction index
+    ) | #parseTransactionInfo( JSON ) [function]
+
     syntax ReceiptData ::= ReceiptData(
-        Bytes, // txHash
+        Int,   // txHash
         Int,   // cumulativeGas
-        List,  // logSet
-        Bytes, // bloomFilter
+        List,  // txLogs
+        Bytes, // txLogsBloom
         Int,   // txStatus
         Int,   // txId
         Int,   // sender
         Int    // txBlockNumber
+    )
+
+    syntax ReceiptJSON ::= ReceiptJSON(
+        Int,   // cumulativeGasUsed
+        List,  // logs
+        Bytes, // logsBloom
+        Int,   // status
+        TxType
     ) | #parseReceipt( JSON ) [function]
 
     syntax Map ::= #parseStorage( JSON )         [function]
@@ -1394,9 +1490,9 @@ StateDump format - not the ethereum/test format.
     syntax Blocks   ::= List{BlockData, ","}
                       | "[" Blocks "]" [bracket]
                       | #parseBlocks( JSON ) [function]
-    syntax Receipts ::= List{ReceiptData, ","}
-                      | "[" Receipts "]" [bracket]
-                      | #parseReceipts( JSON ) [function]
+    syntax Transactions ::= List{TransactionData, ","}
+                      | "[" Transactions "]" [bracket]
+                      | #parseTransactions( JSON ) [function]
 
     syntax Int ::= #getBlockNumber( BlockData ) [function]
     rule #getBlockNumber( BlockData( _, _, _, _, _, _, _, _, BN, _, _, _, _, _, _, _, _, _, _, _, _, _) ) => BN
@@ -1405,12 +1501,12 @@ StateDump format - not the ethereum/test format.
         => #let BEST_BLOCK_NUMBER = #getInt( "best_block_number", SNAPSHOT_JSON, 0 ) #in
            #let ACCOUNTS_JSON     = #getJSON( "accounts", SNAPSHOT_JSON, { .JSONs } ) #in
            #let BLOCKS_JSON       = #getJSON( "blocks",   SNAPSHOT_JSON, [ .JSONs ] ) #in
-           #let RECEIPTS_JSON     = #getJSON( "receipts", SNAPSHOT_JSON, { .JSONs } ) #in
+           #let TRANSACTIONS_JSON = #getJSON( "transactions", SNAPSHOT_JSON, { .JSONs } ) #in
            Snapshot(
                BEST_BLOCK_NUMBER,
                #parseAccounts( ACCOUNTS_JSON ),
                #parseBlocks( BLOCKS_JSON ),
-               #parseReceipts( RECEIPTS_JSON )
+               #parseTransactions( TRANSACTIONS_JSON )
            )
 
     rule #parseBlocks( [ .JSONs ] ) => .Blocks
@@ -1466,27 +1562,57 @@ StateDump format - not the ethereum/test format.
     rule #parseStorageAux( { KEY : VAL, REST }, ACCU ) => 
          #parseStorageAux( { REST }, ACCU[ #parseWord( KEY ) <- #parseWord( VAL ) ] )
 
-    rule #parseReceipts( { .JSONs } ) => .Receipts
-    rule #parseReceipts( { FIRST, REST } ) => #parseReceipt( FIRST ) , #parseReceipts( { REST } )
+    rule #parseTransactions( [ .JSONs ] ) => .Transactions
+    rule #parseTransactions( [ FIRST, REST ] ) => #parseTransaction( FIRST ) , #parseTransactions( [ REST ] )
 
-    rule #parseReceipt( TX_HASH_KEY : RECEIPT_JSON )
-        => #let TX_HASH         = #parseByteStack( {TX_HASH_KEY}:>String ) #in
-           #let CUMULATIVE_GAS  = #getWord( "txCumulativeGas", RECEIPT_JSON, 0 )      #in
-           #let LOG_SET         = .List /* TODO */ #in
-           #let BLOOM_FILTER    = #getBytes( "bloomFilter",  RECEIPT_JSON, .Bytes ) #in
-           #let TX_STATUS       = #getWord( "txStatus",      RECEIPT_JSON, 0 )      #in
-           #let TX_ID           = #getWord( "txID",          RECEIPT_JSON, 0 )      #in
-           #let TX_SENDER       = #getWord( "sender",        RECEIPT_JSON, 0 )      #in
-           #let TX_BLOCK_NUMBER = #getWord( "txBlockNumber", RECEIPT_JSON, 0 )      #in
-           ReceiptData(
+    rule #parseTransaction( TX_JSON )
+        => #let BLOCK_HASH    = #getWord( "blockHash", TX_JSON, 0 ) #in
+           #let BLOCK_NUMBER  = #getWord( "blockNumber", TX_JSON, 0 ) #in
+           #let INFO          = #parseTransactionInfo( #getJSON( "info", TX_JSON ) ) #in
+           #let RECEIPT       = #parseReceipt( #getJSON( "receipt", TX_JSON ) ) #in
+           TransactionData(
+               BLOCK_HASH,
+               BLOCK_NUMBER,
+               INFO,
+               RECEIPT
+           )
+
+    rule #parseTransactionInfo( INFO_JSON )
+        => #let TX_CONTRACT_ADDR = #getAccount( "contract_address", INFO_JSON, .Account ) #in
+           #let TX_EXIT          = #getString( "exit", INFO_JSON, "" ) #in
+           #let TX_FROM          = #getAddr( "from", INFO_JSON, 0 ) #in
+           #let TX_GAS_USED      = #getInt( "gas_used", INFO_JSON, 0 ) #in
+           #let TX_NONCE         = #getInt( "nonce", INFO_JSON, 0 ) #in
+           #let TX_OUT           = #getBytes( "out", INFO_JSON, .Bytes ) #in
+           #let TX_TO            = #getAddr( "to", INFO_JSON, 0 ) #in
+           #let TX_TRACES        = #getJSON( "traces", INFO_JSON, [ .JSONs ] ) #in
+           #let TX_HASH          = #getWord( "transactionHash", INFO_JSON, 0 ) #in
+           #let TX_INDEX         = #getInt( "transactionIndex", INFO_JSON, 0 ) #in
+           TransactionInfo(
+               TX_CONTRACT_ADDR,
+               TX_EXIT,
+               TX_FROM,
+               TX_GAS_USED,
+               TX_NONCE,
+               TX_OUT,
+               TX_TO,
+               TX_TRACES,
                TX_HASH,
+               TX_INDEX
+           )
+
+    rule #parseReceipt( RECEIPT_JSON )
+        => #let CUMULATIVE_GAS  = #getWord( "cumulativeGasUsed", RECEIPT_JSON, 0 ) #in
+           #let LOG_SET         = .List /* TODO */ #in
+           #let BLOOM_FILTER    = #getBytes( "logsBloom",  RECEIPT_JSON, .Bytes )  #in
+           #let TX_STATUS       = #getWord( "status",      RECEIPT_JSON, 0 )       #in
+           #let TX_TYPE         = #asmTxPrefix( #getWord( "type",        RECEIPT_JSON, 0 ) ) #in
+           ReceiptJSON(
                CUMULATIVE_GAS,
                LOG_SET,
                BLOOM_FILTER,
                TX_STATUS,
-               TX_ID,
-               TX_SENDER,
-               TX_BLOCK_NUMBER
+               TX_TYPE
            )
 
 ```
