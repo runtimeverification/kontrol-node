@@ -9,14 +9,14 @@ if TYPE_CHECKING:
 
 
 class VMOptions(LoggingOptions):
-    host: str
+    addr: str
     port: int
     steps_tracing: bool
 
     @staticmethod
     def default() -> dict[str, Any]:
         return {
-            'host': '127.0.0.1',
+            'addr': '127.0.0.1',
             'port': 8081,
             'steps_tracing': False,
         }
