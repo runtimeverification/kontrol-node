@@ -82,6 +82,27 @@ Mnemonic: test test test test test test test test test test test junk
     syntax Int ::= "#getNextTxID" [function]
     rule #getNextTxID => #getLatestTxID +Int 1
 
+
+    syntax Int   ::= #txHash( Int )      [function]
+    syntax Bytes ::= #txHashBytes( Int ) [function]
+
+    rule [[ #txHashBytes( TX_ID ) => Keccak256raw( #rlpEncode( [TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS] ) ) ]]
+        <message>
+            <msgID> TX_ID </msgID>
+            <txNonce>    TN </txNonce>
+            <txGasPrice> TP </txGasPrice>
+            <txGasLimit> TG </txGasLimit>
+            <to>         TT </to>
+            <value>      TV </value>
+            <data>       TD </data>
+            <sigV>       TW </sigV>
+            <sigR>       TR </sigR>
+            <sigS>       TS </sigS>
+            ...
+        </message>
+
+    rule #txHash( TX_ID ) => Bytes2Int( #txHashBytes( TX_ID ), BE, Unsigned )
+
     syntax Account ::= #sender( msgId: Int ) [function]
 
     rule [[ #sender( MSG_ID ) => #sender( #getTxData( MSG_ID ), MSG_SIGV, MSG_SIGR, MSG_SIGS, CHAIN_ID ) ]]
@@ -120,8 +141,16 @@ Similarly, we save a state snapshot after the block was mined.
 ```k
     syntax KItem ::= "#ethSendTransactionResponse"
 
+    syntax KItem ::= #ensureAccountExists( Int )
+
+    rule <k> #ensureAccountExists( ACCT:Int ) => .K ... </k>
+         <account> <acctID> ACCT </acctID> ... </account>
+
+    rule <k> #ensureAccountExists( ACCT:Int ) => #newAccount( ACCT ) ... </k> [owise]
+
     rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
-            => #signTx(#getNextTxID, FROM)
+            => #ensureAccountExists( FROM )
+            ~> #signTx(#getNextTxID, FROM)
             ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
@@ -140,7 +169,7 @@ Similarly, we save a state snapshot after the block was mined.
         <network>
             <chainID>  CHAIN_ID </chainID>
             <account>
-                <acctID> FROM     </acctID> // TODO: What if FROM account does not exist yet?
+                <acctID> FROM     </acctID>
                 <nonce>  TXNONCE  </nonce>
                 ...
             </account>
@@ -230,7 +259,7 @@ Similarly, we save a state snapshot after the block was mined.
                 "blockHash"         : uint256ToHex( #hashBlockNumber( BLOCK_NUMBER ) ),
                 "blockNumber"       : intToHex( BLOCK_NUMBER ),
                 "from"              : accountToHex( #sender( TXID ) ),
-                "to"                : addrToHex( TO ),
+                "to"                : accountToHex( TO ),
                 "cumulativeGasUsed" : intToHex( CGAS ), // TODO: What is the difference between cumulativeGasUsed and gasUsed
                 "gasUsed"           : intToHex( CGAS ), 
                 "contractAddress"   : #if TO ==K .Account #then addrToHex( #newAddr({#sender( TXID )}:>Int, TX_NONCE) ) #else null #fi,
@@ -695,7 +724,7 @@ just build the response string directly.
             <txReceipt>
                 <txMsg>           TXID                           </txMsg>
                 <txBlockNumber>   BN                             </txBlockNumber>
-                <txHash>          txHash( TXID )                 </txHash>
+                <txHash>          #txHash( TXID )                 </txHash>
                 <txCumulativeGas> CGAS                           </txCumulativeGas>
                 <txLogs>          LOGS                           </txLogs>
                 <txLogsBloom>     .Bytes /* TODO */              </txLogsBloom>
@@ -714,27 +743,6 @@ just build the response string directly.
          <number>     BN   </number>
          <origin>     ACCT </origin>
 
-
-    syntax Int ::= txHash( Int ) [function]
-
-    rule [[ txHash( TX_ID ) => Bytes2Int(
-            Keccak256raw( #rlpEncode( [TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS] ) ),
-            BE,
-            Unsigned
-        )]]
-        <message>
-            <msgID> TX_ID </msgID>
-            <txNonce>    TN </txNonce>
-            <txGasPrice> TP </txGasPrice>
-            <txGasLimit> TG </txGasLimit>
-            <to>         TT </to>
-            <value>      TV </value>
-            <data>       TD </data>
-            <sigV>       TW </sigV>
-            <sigR>       TR </sigR>
-            <sigS>       TS </sigS>
-            ...
-        </message>
 ```
 
 
@@ -1152,7 +1160,9 @@ K configuration.
             "blockHash":         uint256ToHex( #hashBlockNumber( BLOCK_NUMBER ) ),
             "blockNumber":       intToHex( BLOCK_NUMBER ),
             "info": {
-                "contract_address":  null, // TODO
+                "contract_address":  #if MSG_TO ==K .Account
+                                     #then addrToHex( #newAddr({#sender( MSG_ID )}:>Int, MSG_NONCE) )
+                                     #else null #fi,
                 "exit":              "":String, // TODO
                 "from":              accountToHex( #sender( MSG_ID ) ),
                 "gas_used":          0, // TODO
@@ -1162,13 +1172,19 @@ K configuration.
                 "traces":            [{
                     "idx": 0,
                     "trace": {
-                        "data": bytesToHex( MSG_DATA )
+                        "data": bytesToHex( MSG_DATA ),
+                        "value": intToHex( MSG_VALUE ),
+                        "gas_limit": MSG_GAS_LIMIT,
+                        "gas_price": MSG_GAS_PRICE
                         // TODO: We're currently using debug_traceTransaction for tracing
                         // We may consider switching to this new format in the future
                     }
                 }],
                 "transaction_hash":  uint256ToHex( TX_HASH ),
-                "transaction_index": 0 // We currently mine a block for each tx
+                "transaction_index": 0, // We currently mine a block for each tx
+                "sigV":              intToHex( MSG_SIGV ),
+                "sigR":              bytesToHex( MSG_SIGR ),
+                "sigS":              bytesToHex( MSG_SIGS )
             },
             "receipt": {
                 "cumulativeGasUsed":  intToHex( TX_CUMULATIVE_GAS ),
@@ -1182,8 +1198,14 @@ K configuration.
             <msgID>           MSG_ID            </msgID>
             <txNonce>         MSG_NONCE         </txNonce>
             <to>              MSG_TO            </to>
+            <value>           MSG_VALUE         </value>
             <txType>          MSG_TYPE          </txType>
+            <txGasLimit>      MSG_GAS_LIMIT     </txGasLimit>
+            <txGasPrice>      MSG_GAS_PRICE     </txGasPrice>
             <data>            MSG_DATA          </data>
+            <sigV>            MSG_SIGV          </sigV>
+            <sigR>            MSG_SIGR          </sigR>
+            <sigS>            MSG_SIGS          </sigS>
             ...
         </message>
 
@@ -1358,11 +1380,14 @@ StateDump format - not the ethereum/test format.
                 TX_NONCE,
                 TX_OUT,
                 TX_TO,
-                [ TraceRoot( TraceData( MSG_DATA ) ) ],
+                [ TraceRoot( TraceData( MSG_DATA, TX_VALUE, TX_GAS_LIMIT, TX_GAS_PRICE ) ) ],
                 TX_HASH,
-                _TX_INDEX
+                _TX_INDEX,
+                TX_SIG_V,
+                TX_SIG_R,
+                TX_SIG_S
             ),
-            ReceiptJSON(
+            ReceiptData(
                 R_CUMULATIVE_GAS_USED,
                 R_LOGS,
                 R_LOGS_BLOOM,
@@ -1370,16 +1395,21 @@ StateDump format - not the ethereum/test format.
                 R_TX_TYPE
             ) ) )
          => .K ... </k>
+        <chainID> CHAIN_ID </chainID>
         <messages>
             ( .Bag => <message>
                     <msgID>   BLOCK_NUMBER </msgID>
                     <txNonce> TX_NONCE     </txNonce>
+                    <txGasPrice> TX_GAS_PRICE </txGasPrice>
+                    <txGasLimit> TX_GAS_LIMIT </txGasLimit>
                     <to>      TX_TO        </to>
                     <txType>  R_TX_TYPE    </txType>
+                    <value>   TX_VALUE     </value>
                     <data>    MSG_DATA     </data>
-                    <sigV>    0            </sigV> // TODO
-                    <sigR>    .Bytes       </sigR> // TODO
-                    <sigS>    .Bytes       </sigS> // TODO
+                    <sigV>    TX_SIG_V     </sigV>
+                    <sigR>    TX_SIG_R     </sigR>
+                    <sigS>    TX_SIG_S     </sigS>
+                    <txChainID> CHAIN_ID     </txChainID>
                     ...
                 </message>
             ) ...
@@ -1446,34 +1476,26 @@ StateDump format - not the ethereum/test format.
         Int, // block_hash
         Int, // block_number
         TransactionInfo, // info
-        ReceiptJSON // receipt
+        ReceiptData // receipt
     ) | #parseTransaction( JSON ) [function]
 
     syntax TransactionInfo ::= TransactionInfo(
-        Account, // contract_address
-        String, // exit
-        Int,    // from
-        Int,    // gas_used
-        Int,    // nonce
-        Bytes,  // out
-        Int,    // to
+        Account,    // contract_address
+        String,     // exit
+        Int,        // from
+        Int,        // gas_used
+        Int,        // nonce
+        Bytes,      // out
+        Account,    // to
         TraceRoots, // traces
-        Int,    // transaction hash
-        Int     // transaction index
+        Int,        // transaction hash
+        Int,        // transaction index
+        Int,        // sigV
+        Bytes,      // sigR
+        Bytes       // sigS
     ) | #parseTransactionInfo( JSON ) [function]
 
-    // syntax ReceiptData ::= ReceiptData(
-    //     Int,   // txHash
-    //     Int,   // cumulativeGas
-    //     List,  // txLogs
-    //     Bytes, // txLogsBloom
-    //     Int,   // txStatus
-    //     Int,   // txId
-    //     Int,   // sender
-    //     Int    // txBlockNumber
-    // )
-
-    syntax ReceiptJSON ::= ReceiptJSON(
+    syntax ReceiptData ::= ReceiptData(
         Int,   // cumulativeGasUsed
         List,  // logs
         Bytes, // logsBloom
@@ -1484,8 +1506,12 @@ StateDump format - not the ethereum/test format.
     syntax TraceRoot ::= TraceRoot( TraceData )
                        | #parseTraceRoot( JSON ) [function]
 
-    syntax TraceData ::= TraceData( Bytes )
-                       | #parseTraceData( JSON ) [function]
+    syntax TraceData ::= TraceData(
+        data: Bytes,
+        value: Int,
+        gasLimit: Int,
+        gasPrice: Int
+    ) | #parseTraceData( JSON ) [function]
 
     syntax Map ::= #parseStorage( JSON )         [function]
                  | #parseStorageAux( JSON, Map ) [function]
@@ -1594,10 +1620,13 @@ StateDump format - not the ethereum/test format.
            #let TX_GAS_USED      = #getInt( "gas_used", INFO_JSON, 0 ) #in
            #let TX_NONCE         = #getInt( "nonce", INFO_JSON, 0 ) #in
            #let TX_OUT           = #getBytes( "out", INFO_JSON, .Bytes ) #in
-           #let TX_TO            = #getAddr( "to", INFO_JSON, 0 ) #in
+           #let TX_TO            = #getAccount( "to", INFO_JSON, .Account ) #in
            #let TX_TRACES        = #parseTraceRoots( #getJSON( "traces", INFO_JSON, [ .JSONs ] ) ) #in
-           #let TX_HASH          = #getWord( "transactionHash", INFO_JSON, 0 ) #in
-           #let TX_INDEX         = #getInt( "transactionIndex", INFO_JSON, 0 ) #in
+           #let TX_HASH          = #getWord( "transaction_hash", INFO_JSON, 0 ) #in
+           #let TX_INDEX         = #getInt( "transaction_index", INFO_JSON, 0 ) #in
+           #let TX_SIGV          = #getWord( "sigV", INFO_JSON, 0 ) #in
+           #let TX_SIGR          = #getBytes( "sigR", INFO_JSON, .Bytes ) #in
+           #let TX_SIGS          = #getBytes( "sigS", INFO_JSON, .Bytes ) #in
            TransactionInfo(
                TX_CONTRACT_ADDR,
                TX_EXIT,
@@ -1608,7 +1637,10 @@ StateDump format - not the ethereum/test format.
                TX_TO,
                TX_TRACES,
                TX_HASH,
-               TX_INDEX
+               TX_INDEX,
+               TX_SIGV,
+               TX_SIGR,
+               TX_SIGS
            )
 
     rule #parseTraceRoots( [ .JSONs ] ) => .TraceRoots
@@ -1620,7 +1652,10 @@ StateDump format - not the ethereum/test format.
 
     rule #parseTraceData( TRACE_JSON )
         => #let DATA_BYTES = #getBytes( "data", TRACE_JSON, .Bytes ) #in
-           TraceData( DATA_BYTES )
+           #let TX_VALUE   = #getWord( "value", TRACE_JSON, 0 ) #in
+           #let GAS_LIMIT  = #getInt( "gas_limit", TRACE_JSON, 0 ) #in
+           #let GAS_PRICE  = #getInt( "gas_price", TRACE_JSON, 0 ) #in
+           TraceData( DATA_BYTES, TX_VALUE, GAS_LIMIT, GAS_PRICE )
 
     rule #parseReceipt( RECEIPT_JSON )
         => #let CUMULATIVE_GAS  = #getWord( "cumulativeGasUsed", RECEIPT_JSON, 0 ) #in
@@ -1628,7 +1663,7 @@ StateDump format - not the ethereum/test format.
            #let BLOOM_FILTER    = #getBytes( "logsBloom",  RECEIPT_JSON, .Bytes )  #in
            #let TX_STATUS       = #getWord( "status",      RECEIPT_JSON, 0 )       #in
            #let TX_TYPE         = #asmTxPrefix( #getWord( "type",        RECEIPT_JSON, 0 ) ) #in
-           ReceiptJSON(
+           ReceiptData(
                CUMULATIVE_GAS,
                LOG_SET,
                BLOOM_FILTER,
