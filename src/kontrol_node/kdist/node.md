@@ -260,7 +260,7 @@ Similarly, we save a state snapshot after the block was mined.
                 "blockNumber"       : intToHex( BLOCK_NUMBER ),
                 "from"              : accountToHex( #sender( TXID ) ),
                 "to"                : accountToHex( TO ),
-                "cumulativeGasUsed" : intToHex( CGAS ), // TODO: What is the difference between cumulativeGasUsed and gasUsed
+                "cumulativeGasUsed" : intToHex( CGAS ), // There is only one tx per block, so cumulative gas used is the same as gas used
                 "gasUsed"           : intToHex( CGAS ), 
                 "contractAddress"   : #if TO ==K .Account #then addrToHex( #newAddr({#sender( TXID )}:>Int, TX_NONCE) ) #else null #fi,
                 "logs"              : [ .JSONs ], // TODO
@@ -724,7 +724,7 @@ just build the response string directly.
             <txReceipt>
                 <txMsg>           TXID                           </txMsg>
                 <txBlockNumber>   BN                             </txBlockNumber>
-                <txHash>          #txHash( TXID )                 </txHash>
+                <txHash>          #txHash( TXID )                </txHash>
                 <txCumulativeGas> CGAS                           </txCumulativeGas>
                 <txLogs>          LOGS                           </txLogs>
                 <txLogsBloom>     .Bytes /* TODO */              </txLogsBloom>
@@ -1158,14 +1158,14 @@ K configuration.
             </txReceipt>
         ) => {
             "blockHash":         uint256ToHex( #hashBlockNumber( BLOCK_NUMBER ) ),
-            "blockNumber":       intToHex( BLOCK_NUMBER ),
+            "blockNumber":       BLOCK_NUMBER,
             "info": {
                 "contract_address":  #if MSG_TO ==K .Account
                                      #then addrToHex( #newAddr({#sender( MSG_ID )}:>Int, MSG_NONCE) )
                                      #else null #fi,
                 "exit":              "":String, // TODO
                 "from":              accountToHex( #sender( MSG_ID ) ),
-                "gas_used":          0, // TODO
+                "gas_used":          TX_CUMULATIVE_GAS,
                 "nonce":             MSG_NONCE,
                 "out":               bytesToHex( .Bytes ), // TODO
                 "to":                accountToHex( MSG_TO ),
@@ -1603,7 +1603,7 @@ StateDump format - not the ethereum/test format.
 
     rule #parseTransaction( TX_JSON )
         => #let BLOCK_HASH    = #getWord( "blockHash", TX_JSON, 0 ) #in
-           #let BLOCK_NUMBER  = #getWord( "blockNumber", TX_JSON, 0 ) #in
+           #let BLOCK_NUMBER  = #getInt( "blockNumber", TX_JSON, 0 ) #in
            #let INFO          = #parseTransactionInfo( #getJSON( "info", TX_JSON ) ) #in
            #let RECEIPT       = #parseReceipt( #getJSON( "receipt", TX_JSON ) ) #in
            TransactionData(
