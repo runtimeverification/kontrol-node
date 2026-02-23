@@ -374,10 +374,16 @@ Similarly, we save a state snapshot after the block was mined.
     syntax KItem ::= #ethGetBlockResponse( BlockData )
 
     rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER, _HYDRATED_TXS ) ) // TODO: hydrated txs
-            => #ethGetBlockResponse( #getBlockData( BLOCK_NUMBER ) )
-            ...
-            </k>
-            <rpcRequestID> _ => REQ_ID </rpcRequestID>
+          => #ethGetBlockResponse( #getBlockData( BLOCK_NUMBER ) ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+         <blockStorage> BLOCK_STORAGE:Map </blockStorage>
+        requires BLOCK_NUMBER in_keys(BLOCK_STORAGE)
+
+    rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( _BLOCK_NUMBER, _HYDRATED_TXS ) )
+           => RPCResponse( null ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID> [owise]
 
     rule <k> #ethGetBlockResponse( ( BlockData(
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
@@ -770,6 +776,7 @@ The productions below are used to perform the mining of blocks, advancing the bl
 
     syntax BlockData ::= #getBlockData( Int )        [function]
                        | #getBlockDataByHash( Int )  [function]
+                       | "#getCurrentBlockData"      [function]
     syntax Int       ::= #hashBlockData( BlockData ) [function]
                        | #hashBlockNumber( Int )     [function]
 
@@ -787,16 +794,16 @@ The productions below are used to perform the mining of blocks, advancing the bl
           </network>
           <block>
                 <number>           BN => BN +Int 1 </number>
-                <previousHash>     _  =>  #hashBlockData( #getBlockData( BN ) ) </previousHash>
+                <previousHash>     _  =>  #hashBlockData( #getCurrentBlockData ) </previousHash>
                 <stateRoot>        _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( TREE ) ) )</stateRoot>
                 <transactionsRoot> _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #transactionsRoot( TXLIST ) ) ) ) </transactionsRoot>
                 <receiptsRoot>     _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #receiptsRoot( <txReceipts> TXRECEIPTS </txReceipts> ) ) ) ) </receiptsRoot>
                 ...
           </block>
-          <blockStorage> M => M[ BN                                    <- #getBlockData( BN )] </blockStorage>
-          <blockHashes>  H => H[ #hashBlockData( #getBlockData( BN ) ) <- BN                 ] </blockHashes>
+          <blockStorage> M => M[ BN                                    <- #getCurrentBlockData ] </blockStorage>
+          <blockHashes>  H => H[ #hashBlockData( #getCurrentBlockData ) <- BN                  ] </blockHashes>
 
-    rule [[ #getBlockData( BN ) => BlockData(
+    rule [[ #getCurrentBlockData => BlockData(
         PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
     ) ]]
         <block>
