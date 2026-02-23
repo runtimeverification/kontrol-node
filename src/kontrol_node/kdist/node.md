@@ -251,6 +251,12 @@ Similarly, we save a state snapshot after the block was mined.
 ## eth_getTransactionReceipt
 
 ```k
+    rule <k> RPCRequest( REQ_ID, EthGetTransactionReceipt( _TX_HASH ) )
+          => RPCResponse( null ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        [owise]
+
     rule <k> RPCRequest( REQ_ID, EthGetTransactionReceipt( TX_HASH ) )
         => RPCResponse({
                 "type"              : "0x0",
@@ -265,13 +271,12 @@ Similarly, we save a state snapshot after the block was mined.
                 "contractAddress"   : #if TO ==K .Account #then addrToHex( #newAddr({#sender( TXID )}:>Int, TX_NONCE) ) #else null #fi,
                 "logs"              : [ .JSONs ], // TODO
                 "logsBloom"         : bytesToHex( .Bytes , 256), // TODO: compute actual bloom filter'
-                "status"            : #if TX_STATUS ==K EVMC_SUCCESS #then "1" #else "0" #fi,
-                "effectiveGasPrice" : "0" // TODO
+                "status"            : intToHex( TX_STATUS ),
+                "effectiveGasPrice" : intToHex( GAS_PRICE )
             })
             ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
-        <currentTxID>         TXID                           </currentTxID>
         <txReceipt>
             <txMsg>           TXID                           </txMsg>
             <txBlockNumber>   BLOCK_NUMBER                   </txBlockNumber>
@@ -285,6 +290,7 @@ Similarly, we save a state snapshot after the block was mined.
             <msgID>        TXID                           </msgID>
             <txNonce>      TX_NONCE                       </txNonce>
             <to>           TO                             </to>
+            <txGasPrice>   GAS_PRICE                      </txGasPrice>
             ...
         </message>
 ```
