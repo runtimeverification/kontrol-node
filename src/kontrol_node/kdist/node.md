@@ -383,25 +383,29 @@ Similarly, we save a state snapshot after the block was mined.
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
          )) )
             => RPCResponse({
-                "hash"             : #hashBlockData( BlockData(
+                "hash"             : uint256ToHex(#hashBlockData( BlockData(
                     PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
-                )),
-                "parentHash"       : intToHex( PH ),
-                "sha3Uncles"       : intToHex( HO ),
+                ))),
+                "parentHash"       : uint256ToHex( PH ),
+                "sha3Uncles"       : uint256ToHex( HO ),
                 "miner"            : addrToHex( HC ),
-                "stateRoot"        : intToHex( HR ),
-                "transactionsRoot" : intToHex( HT ),
-                "receiptsRoot"     : intToHex( HE ),
+                "stateRoot"        : uint256ToHex( HR ),
+                "transactionsRoot" : uint256ToHex( HT ),
+                "receiptsRoot"     : uint256ToHex( HE ),
                 "logsBloom"        : bytesToHex( HB ),
                 "difficulty"       : intToHex( HD ),
+                "totalDifficulty"  : intToHex( HD ),
                 "number"           : intToHex( BN ),
                 "gasLimit"         : intToHex( HL ),
                 "gasUsed"          : intToHex( HG ),
                 "timestamp"        : intToHex( HS ),
                 "extraData"        : bytesToHex( HX ),
-                "prevrandao"       : intToHex( HM ),
+                "mixHash"          : uint256ToHex( HM ),
                 "nonce"            : intToHex( HN ),
-                "size"             : "0x1",
+                "size"             : "0x0", // TODO: Is this number of txs, bytes of rlp encoding, something else?
+                "baseFeePerGas"    : intToHex( BF ),
+                "blobGasUsed"      : intToHex( BG ),
+                "excessBlobGas"    : intToHex( EG ),
                 "transactions"     : [ .JSONs ], // TODO
                 "uncles"           : [ .JSONs ]  // TODO
             })
@@ -413,11 +417,19 @@ Similarly, we save a state snapshot after the block was mined.
 
 ```k
 
-    rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( BLOCK_HASH, _HYDRATED_TXS ) ) // TODO: hydrated txs
-            => #ethGetBlockResponse( #getBlockDataByHash( BLOCK_HASH ) )
-            ...
-            </k>
-            <rpcRequestID> _ => REQ_ID </rpcRequestID>
+    rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( BLOCK_HASH, _HYDRATED_TXS ) )
+          => #ethGetBlockResponse( #getBlockDataByHash( BLOCK_HASH ) ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+         <blockStorage> BLOCK_STORAGE:Map </blockStorage>
+         <blockHashes>  BLOCK_HASHES:Map </blockHashes>
+         requires BLOCK_HASH in_keys(BLOCK_HASHES)
+          andBool (BLOCK_HASHES[ BLOCK_HASH ] orDefault -1) in_keys(BLOCK_STORAGE)
+
+    rule <k> RPCRequest( REQ_ID, EthGetBlockByHash( _BLOCK_HASH, _HYDRATED_TXS ) )
+          => RPCResponse( null ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID> [owise]
 ```
 
 ###############################################################################
@@ -817,10 +829,11 @@ The productions below are used to perform the mining of blocks, advancing the bl
         <number> CURRENT_BN </number>
         requires BN =/=Int CURRENT_BN andBool BN in_keys(BLOCK_STORAGE)
 
-    rule [[ #getBlockDataByHash( BLOCK_HASH ) => {#getBlockData({BLOCK_STORAGE[ BLOCK_HASH ]}:>Int)}:>BlockData ]]
+    rule [[ #getBlockDataByHash( BLOCK_HASH ) => {#getBlockData({BLOCK_HASHES[ BLOCK_HASH ]}:>Int)}:>BlockData ]]
         <blockStorage> BLOCK_STORAGE:Map </blockStorage>
         <blockHashes>  BLOCK_HASHES:Map </blockHashes>
-        requires BLOCK_HASH in_keys(BLOCK_HASHES) andBool BLOCK_HASHES[ BLOCK_HASH ] in_keys(BLOCK_STORAGE)
+        requires BLOCK_HASH in_keys(BLOCK_HASHES)
+         andBool ( BLOCK_HASHES[ BLOCK_HASH ] orDefault -1 ) in_keys(BLOCK_STORAGE)
 
     rule <k> #setBlockData( BlockData(
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
