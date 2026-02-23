@@ -16,7 +16,6 @@ eth_getTransactionReceipt_0
 eth_getTransactionReceipt_1
 eth_sendTransaction_deploy_counter
 eth_sendTransaction_no_sender
-kontrol_addAccount_0
 debug_traceTransaction_1
 debug_traceTransaction_slow
 debug_traceTransaction_mocks
