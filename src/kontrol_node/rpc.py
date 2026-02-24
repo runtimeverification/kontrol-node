@@ -26,6 +26,7 @@ _LOGGER: Final = logging.getLogger(__name__)
 
 _PROFILING: Final[bool] = False
 
+_DEBUG_KORE: Final[bool] = False
 
 # Simbolik needs at minimum the following RPC methods
 # eth_sendTransaction
@@ -56,13 +57,16 @@ class KontrolNodeServer:
 
     def serve(self) -> None:
         _LOGGER.info(f'Starting JSON-RPC server at {self.options.host}:{self.options.port}')
-        self.http_server = HTTPServer((self.options.host, self.options.port), handler())
+        self.handler, self.interpreter = createHandler()
+        self.http_server = HTTPServer((self.options.host, self.options.port), self.handler)
         self.http_server.serve_forever()
         _LOGGER.info(f'JSON-RPC server at {self.options.host}:{self.options.port} shut down.')
 
     def shutdown(self) -> None:
         if self.http_server:
             self.http_server.shutdown()
+        if self.interpreter:
+            self.interpreter.shutdown()
 
     def port(self) -> int:
         return self.http_server.server_port
@@ -106,8 +110,9 @@ class InterpreterProcess:
             usegas=True,
         )
         # Write input.kore for debugging
-        with open('input.kore', 'w') as f:
-            f.write(initial_kore.text)
+        if _DEBUG_KORE:
+            with open('input.kore', 'w') as f:
+                f.write(initial_kore.text)
         result = llvm_interpret(definition_dir=kdist.get('kontrol-node.simbolik'), pattern=initial_kore, check=False)
         return result
 
@@ -132,9 +137,10 @@ class InterpreterProcess:
             f.write(payload)
         # run the interpreter
         output = self._run()
-        # write output.kore for debugging
-        with open('output.kore', 'w') as f:
-            f.write(output.text)
+        if _DEBUG_KORE:
+            # write output.kore for debugging
+            with open('output.kore', 'w') as f:
+                f.write(output.text)
         # read response from file
         with open(self._response_file(), 'rb') as f:
             response = f.read()
@@ -142,6 +148,9 @@ class InterpreterProcess:
         response = self._postprocess(request_data, response)
 
         return response
+
+    def shutdown(self) -> None:
+        shutil.rmtree(self.io_dir)
 
     def _request_file(self) -> Path:
         return self.io_dir / 'request.json'
@@ -161,7 +170,7 @@ class InterpreterProcess:
         return response_data
 
 
-def handler() -> type[BaseHTTPRequestHandler]:
+def createHandler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
 
     interpreter = InterpreterProcess()
 
@@ -191,7 +200,7 @@ def handler() -> type[BaseHTTPRequestHandler]:
                 filename = f'profiling/profiling-{transaction_hash}.prof'
                 profile.dump_stats(filename)
 
-    return KontrolNodeHandler
+    return (KontrolNodeHandler, interpreter)
 
 
 def _start_kore(io_dir: str) -> App:
