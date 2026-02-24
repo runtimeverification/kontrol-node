@@ -8,7 +8,7 @@
     "id": 1,
     "jsonrpc": "2.0",
     "result": {
-      "baseFeePerGas": "0x3b9aca00",
+      "baseFeePerGas": "0x0",
       "blobGasUsed": "0x0",
       "difficulty": "0x0",
       "excessBlobGas": "0x0",
