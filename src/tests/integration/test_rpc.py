@@ -17,7 +17,7 @@ RPC_TESTS_SKIPPED: Final = tuple((TEST_DATA_DIR / 'rpc-tests-skipped').read_text
 DEBUG_ACTUAL_OUTPUT: Final = False
 
 
-def execute_json_rpc(server_url, payload: dict) -> str:
+def execute_json_rpc(server_url: str, payload: dict) -> str:
     headers = {'Content-Type': 'application/json'}
     response = requests.post(server_url, data=json.dumps(payload), headers=headers)
     return json.dumps(response.json())
@@ -59,7 +59,7 @@ def test_rpc_file(
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
 
 
-@pytest.mark.skip(reason="Disabled")
+@pytest.mark.skip(reason='Disabled')
 @pytest.mark.parametrize('test_id', RPC_TESTS_ALL)
 def test_anvil_compatibility(
     test_id: str,

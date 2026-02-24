@@ -57,7 +57,7 @@ class KontrolNodeServer:
 
     def serve(self) -> None:
         _LOGGER.info(f'Starting JSON-RPC server at {self.options.host}:{self.options.port}')
-        self.handler, self.interpreter = createHandler()
+        self.handler, self.interpreter = create_handler()
         self.http_server = HTTPServer((self.options.host, self.options.port), self.handler)
         self.http_server.serve_forever()
         _LOGGER.info(f'JSON-RPC server at {self.options.host}:{self.options.port} shut down.')
@@ -124,7 +124,7 @@ class InterpreterProcess:
 
         try:
             request_data = json.loads(payload.decode('utf-8'))
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             return json.dumps(
                 {
                     'jsonrpc': '2.0',
@@ -173,7 +173,7 @@ class InterpreterProcess:
         return response_data
 
 
-def createHandler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
+def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
 
     interpreter = InterpreterProcess()
 
@@ -193,7 +193,7 @@ def createHandler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.send_header("Content-Length", str(len(result)))
+            self.send_header('Content-Length', str(len(result)))
             self.end_headers()
             self.wfile.write(result)
 

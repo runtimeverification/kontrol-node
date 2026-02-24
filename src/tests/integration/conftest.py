@@ -37,7 +37,7 @@ def server() -> Iterator[str]:
     server_thread.start()
 
     time.sleep(2)
-    yield f"http://{SERVER_HOST}:{server.port()}"
+    yield f'http://{SERVER_HOST}:{server.port()}'
     server.shutdown()
     server_thread.join()
 
@@ -64,7 +64,7 @@ def anvil() -> Iterator[str]:
             break
     else:
         process.terminate()
-        raise RuntimeError("Failed to start Anvil and retrieve host/port information.")
+        raise RuntimeError('Failed to start Anvil and retrieve host/port information.')
 
-    yield f"http://{host}:{port}"
+    yield f'http://{host}:{port}'
     process.terminate()
