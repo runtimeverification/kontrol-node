@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import cProfile
-import json
 import gzip
+import json
 import logging
 import os
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 import shutil
 import tempfile
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from pyk.kdist import kdist
@@ -94,7 +94,7 @@ class InterpreterProcess:
         genesis_src = Path(__file__).resolve().parent / 'genesis.json'
         genesis_dst = self.io_dir / 'blocks' / 'block_0.json'
         shutil.copyfile(genesis_src, genesis_dst)
-        metadata = { 'latest_block_number': 0 }
+        metadata = {'latest_block_number': 0}
         metadata_file = self.io_dir / 'metadata.json'
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f)
@@ -125,12 +125,15 @@ class InterpreterProcess:
         try:
             request_data = json.loads(payload.decode('utf-8'))
         except json.JSONDecodeError as e:
-            return json.dumps({
-                'jsonrpc': '2.0',
-                'error': {
-                    'code': -32700,
-                    'message': 'Parse error',
-                }}).encode('utf-8')
+            return json.dumps(
+                {
+                    'jsonrpc': '2.0',
+                    'error': {
+                        'code': -32700,
+                        'message': 'Parse error',
+                    },
+                }
+            ).encode('utf-8')
 
         # write request to file
         with open(self._request_file(), 'wb') as f:
@@ -157,7 +160,7 @@ class InterpreterProcess:
 
     def _response_file(self) -> Path:
         return self.io_dir / 'response.json'
-    
+
     def _postprocess(self, request_data: dict, response_data: bytes) -> bytes:
         if request_data.get('method') == 'anvil_dumpState':
             response_json = json.loads(response_data.decode('utf-8'))

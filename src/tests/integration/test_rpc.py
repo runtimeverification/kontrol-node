@@ -9,7 +9,6 @@ from typing import Final
 import pytest
 import requests
 
-
 TEST_DATA_DIR: Final = (Path(__file__).parent / 'test-data').resolve(strict=True)
 INPUT_FILES: Final = TEST_DATA_DIR / 'input'
 OUTPUT_FILES: Final = TEST_DATA_DIR / 'output'
@@ -17,12 +16,11 @@ RPC_TESTS_ALL: Final = tuple((TEST_DATA_DIR / 'rpc-tests-all').read_text().split
 RPC_TESTS_SKIPPED: Final = tuple((TEST_DATA_DIR / 'rpc-tests-skipped').read_text().splitlines())
 DEBUG_ACTUAL_OUTPUT: Final = False
 
+
 def execute_json_rpc(server_url, payload: dict) -> str:
     headers = {'Content-Type': 'application/json'}
     response = requests.post(server_url, data=json.dumps(payload), headers=headers)
     return json.dumps(response.json())
-
-
 
 
 @pytest.mark.parametrize('test_id', RPC_TESTS_ALL)
@@ -59,6 +57,7 @@ def test_rpc_file(
                 response_list.append(request_result)
             result = json.dumps(response_list, indent=2, sort_keys=True)
         assert_or_update_output(result, OUTPUT_FILES / f'{test_id}.expected.json', update=update_expected_output)
+
 
 @pytest.mark.skip(reason="Disabled")
 @pytest.mark.parametrize('test_id', RPC_TESTS_ALL)
@@ -97,7 +96,9 @@ def test_anvil_compatibility(
                     print(json.dumps(anvil_snapshot, indent=2, sort_keys=True))
                 assert kontrol_result == anvil_result
 
+
 ### Snapshot utilities
+
 
 def normalize_snapshot(hex_data: str) -> str:
     """
@@ -112,6 +113,7 @@ def normalize_snapshot(hex_data: str) -> str:
     normalized_hex = encode_snapshot(snapshot_data, compressed=True)
     return normalized_hex
 
+
 def decode_snapshot(hex_data: str, compressed: bool = True) -> dict:
     """Decode the hex-encoded gzip-compressed snapshot data."""
     if hex_data.startswith('0x'):
@@ -120,6 +122,7 @@ def decode_snapshot(hex_data: str, compressed: bool = True) -> dict:
     decompressed_data = gzip.decompress(compressed_data) if compressed else compressed_data
     snapshot_data = json.loads(decompressed_data.decode('utf-8'))
     return snapshot_data
+
 
 def encode_snapshot(snapshot_data: dict, compressed: bool = True) -> str:
     """Encode the snapshot data as hex-encoded gzip-compressed data."""

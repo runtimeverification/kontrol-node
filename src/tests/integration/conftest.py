@@ -41,6 +41,7 @@ def server() -> Iterator[str]:
     server.shutdown()
     server_thread.join()
 
+
 @pytest.fixture
 def anvil() -> Iterator[str]:
     """Fixture to start an Anvil instance on a dynamically assigned port.
@@ -64,6 +65,6 @@ def anvil() -> Iterator[str]:
     else:
         process.terminate()
         raise RuntimeError("Failed to start Anvil and retrieve host/port information.")
-    
+
     yield f"http://{host}:{port}"
     process.terminate()
