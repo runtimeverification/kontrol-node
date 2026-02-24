@@ -4,7 +4,7 @@
 		"beneficiary": "0x0000000000000000000000000000000000000000",
 		"timestamp": "0x1",
 		"gas_limit": 30000000,
-		"basefee": 1000000000,
+		"basefee": 0,
 		"difficulty": "0x0",
 		"prevrandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
 		"blob_excess_gas_and_price": {

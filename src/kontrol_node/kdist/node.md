@@ -35,7 +35,6 @@ module KONTROL-NODE
     <ioDir> _ => IO_DIR </ioDir>
     <block>
         <timestamp> _ => 1438269973 </timestamp>
-        <baseFee>   _  => 1000000000 </baseFee>
         <gasLimit>  _  => 30000000   </gasLimit>
         ...
     </block>
@@ -299,6 +298,12 @@ Similarly, we save a state snapshot after the block was mined.
 ## eth_getTransactionByHash
 
 ```k
+    rule <k> RPCRequest( REQ_ID, EthGetTransactionByHash( _TX_HASH ) )
+          => RPCResponse( null ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        [owise]
+
     rule <k> RPCRequest( REQ_ID, EthGetTransactionByHash( TX_HASH ) )
         => RPCResponse({
                 "type"             : "0x0",
@@ -340,6 +345,13 @@ Similarly, we save a state snapshot after the block was mined.
 ## eth_getCode
 
 ```k
+
+    rule <k> RPCRequest( REQ_ID, EthGetCode( _ADDR, _BLOCK_NUM ) )
+          => RPCResponse( "0x" ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        [owise]
+
     rule <k> RPCRequest( REQ_ID, EthGetCode( ADDR, _BLOCK_NUM ) ) // TODO: block number
         => RPCResponse( bytesToHex(CODE) )
         ...
@@ -448,6 +460,13 @@ Similarly, we save a state snapshot after the block was mined.
 ## eth_getTransactionCount
 
 ```k
+    rule <k> RPCRequest( REQ_ID, EthGetTransactionCount( _ADDR, _BLOCK_NUM ) )
+          => RPCResponse( intToHex( 0 ) )
+          ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        [owise]
+
     rule <k> RPCRequest( REQ_ID, EthGetTransactionCount( ADDR, _BLOCK_NUM ) ) // TODO: block number
           => RPCResponse( intToHex( NONCE ) )
           ...
@@ -474,6 +493,13 @@ Similarly, we save a state snapshot after the block was mined.
             <storage> STORAGE </storage>
             ...
         </account>
+
+    rule <k> RPCRequest( REQ_ID, EthGetStorageAt( _ADDR, _SLOT, _BLOCK_NUM ) )
+          => RPCResponse( intToHex( 0 ) ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        [owise]
+
 ```
 
 ###############################################################################
@@ -535,6 +561,12 @@ Since the trace can be large, we avoid loading it into memory as a JSON object, 
 just build the response string directly.
 
 ```k
+
+    rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( _TX_HASH ) )
+          => RPCResponse( null ) ...
+         </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+        [owise]
 
     rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
         => #let STRUCT_LOGS = #readFile( #traceFile( TXID) ) #in
@@ -648,7 +680,7 @@ just build the response string directly.
          <callGas> G0_INIT => GLIMIT -Int G0_INIT </callGas>
          <account>
            <acctID> ACCTFROM </acctID>
-           <balance> BAL </balance>
+           <balance> BAL => BAL -Int (GLIMIT *Int GPRICE)</balance>
            ...
          </account>
          <message>
@@ -657,6 +689,10 @@ just build the response string directly.
            <txGasLimit> GLIMIT </txGasLimit>
            ...
          </message>
+         <traceBalance> TRBAL </traceBalance>
+         <currentBalanceMutations>
+            CBM => #if TRBAL #then CBM[ ACCTFROM <- BAL -Int (GLIMIT *Int GPRICE) ] #else CBM #fi
+        </currentBalanceMutations>
       requires GLIMIT >=Int G0_INIT
        andBool BAL >=Int GLIMIT *Int GPRICE
 
@@ -669,9 +705,8 @@ just build the response string directly.
           ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE
          ...
          </k>
-         <traceBalance> TRBAL </traceBalance>
          <schedule> SCHED </schedule>
-         <gasPrice> _ => GPRICE </gasPrice>
+         <gasPrice> _ => #effectiveGasPrice(TXID) </gasPrice>
          <origin> ACCTFROM </origin>
          <callDepth> _ => -1 </callDepth>
          <txPending> ListItem(TXID:Int) ... </txPending>
@@ -687,11 +722,10 @@ just build the response string directly.
          </message>
          <account>
             <acctID> ACCTFROM </acctID>
-            <balance> BAL => BAL -Int (GLIMIT *Int GPRICE) </balance>
             <nonce> NONCE </nonce>
             ...
          </account>
-         <currentBalanceMutations> CBM => #if TRBAL #then CBM[ ACCTFROM <- BAL -Int (GLIMIT *Int GPRICE) ] #else CBM #fi </currentBalanceMutations>
+         
 
     // Exeucte a contract call transaction
     rule <k> #executeTx( TXID:Int )
@@ -700,11 +734,10 @@ just build the response string directly.
           ~> #call ACCTFROM ACCTTO ACCTTO VALUE VALUE DATA false
          ...
          </k>
-         <traceBalance> TRBAL </traceBalance>
          <traceNonce> TRNONCE </traceNonce>
          <schedule> SCHED </schedule>
          <origin> ACCTFROM </origin>
-         <gasPrice> _ => GPRICE </gasPrice>
+         <gasPrice> _ => #effectiveGasPrice(TXID) </gasPrice>
          <txPending> ListItem(TXID) ... </txPending>
          <callDepth> _ => -1 </callDepth>
          <message>
@@ -719,12 +752,10 @@ just build the response string directly.
          </message>
          <account>
             <acctID> ACCTFROM </acctID>
-            <balance> BAL => BAL -Int (GLIMIT *Int GPRICE) </balance>
             <nonce> NONCE => NONCE +Int 1 </nonce>
             ...
          </account>
          <currentNonceMutations> CNM => #if TRNONCE #then CNM[ ACCTFROM <- NONCE +Int 1 ] #else CNM #fi </currentNonceMutations>
-         <currentBalanceMutations> CBM => #if TRBAL #then CBM[ ACCTFROM <- BAL -Int (GLIMIT *Int GPRICE) ] #else CBM #fi </currentBalanceMutations>
       requires ACCTTO =/=K .Account
 
 ```
@@ -1813,6 +1844,23 @@ This secion defines rules to read a StateDump JSON object from disk.
                 JSON2String( { "latest_block_number": #getLatestBlockNumber } )
             )
           ... </k>
+
+```
+
+```k
+
+    syntax String ::= #traceFile( Int ) [function, total]
+
+    rule [[ #traceFile( MSG_ID ) => IO_DIR +String "/transactions/trace_" +String Int2String( MSG_ID ) +String ".json" ]]
+      <ioDir> IO_DIR </ioDir>
+
+    rule <k> #storeTraceItem TRITEM
+          => #appendFile(
+                #traceFile( #getNextTxID ),
+                JSON2String( traceItemToJson( TRITEM ) ) +String ",\n"
+             ) ...
+         </k>
+         <ioDir> IO_DIR </ioDir>
 
 endmodule
 ```

@@ -380,18 +380,5 @@ module TRACE-JSON
          <statusCode>                   STATUS                 </statusCode>
       [priority(24)]
 
-    syntax String ::= #traceFile( Int ) [function, total]
-
-    rule [[ #traceFile( MSG_ID ) => IO_DIR +String "/transactions/trace_" +String Int2String( MSG_ID ) +String ".json" ]]
-      <ioDir> IO_DIR </ioDir>
-
-    rule <k> #storeTraceItem TRITEM
-          => #appendFile(
-                #traceFile( MSG_ID ),
-                JSON2String( traceItemToJson( TRITEM ) ) +String ",\n"
-             ) ...
-         </k>
-         <msgID> MSG_ID </msgID>
-
 endmodule
 ```
