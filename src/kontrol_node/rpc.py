@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import cProfile
 import gzip
 import json
@@ -26,7 +27,7 @@ _LOGGER: Final = logging.getLogger(__name__)
 
 _PROFILING: Final[bool] = False
 
-_DEBUG_KORE: Final[bool] = False
+_DEBUG_KORE: Final[bool] = True
 
 # Simbolik needs at minimum the following RPC methods
 # eth_sendTransaction
@@ -86,6 +87,7 @@ class InterpreterProcess:
 
     def __init__(self) -> None:
         self._setup_io_dir()
+        atexit.register(self.shutdown)
 
     def _setup_io_dir(self) -> None:
         self.io_dir = Path(tempfile.mkdtemp(prefix='io_dir', dir=os.getcwd()))
@@ -123,7 +125,7 @@ class InterpreterProcess:
             response_file.unlink()
 
         try:
-            request_data = json.loads(payload.decode('utf-8'))
+            json.loads(payload.decode('utf-8'))
         except json.JSONDecodeError:
             return json.dumps(
                 {
@@ -148,12 +150,12 @@ class InterpreterProcess:
         with open(self._response_file(), 'rb') as f:
             response = f.read()
 
-        response = self._postprocess(request_data, response)
+        # response = self._postprocess(request_data, response)
 
         return response
 
     def shutdown(self) -> None:
-        shutil.rmtree(self.io_dir)
+        shutil.rmtree(self.io_dir, ignore_errors=True)
 
     def _request_file(self) -> Path:
         return self.io_dir / 'request.json'

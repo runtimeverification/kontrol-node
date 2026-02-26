@@ -11,6 +11,7 @@ module KONTROL-NODE-CONFIG
             <foundry/>
             <ioDir>                   "":String </ioDir>
             <rpcRequestID>            0         </rpcRequestID>
+            <rpcRequestBatchIndex>    -1        </rpcRequestBatchIndex>
             <accountKeys>             .Map      </accountKeys>
             <timeFreeze>              true      </timeFreeze>
             <currentTxID>             0         </currentTxID>
@@ -49,7 +50,6 @@ module KONTROL-NODE-CONFIG
             <recordedCreate>               false </recordedCreate>
 
             // Block-related
-            <stateTrie> .MerkleTree </stateTrie>
             <txReceipts>
                 <txReceipt multiplicity ="*" type="Map">
                     <txMsg>           0          </txMsg>

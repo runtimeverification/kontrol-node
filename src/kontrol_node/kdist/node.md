@@ -34,8 +34,7 @@ module KONTROL-NODE
     </k>
     <ioDir> _ => IO_DIR </ioDir>
     <block>
-        <timestamp> _ => 1438269973 </timestamp>
-        <gasLimit>  _  => 30000000   </gasLimit>
+        <gasLimit> _ => 30000000 </gasLimit>
         ...
     </block>
 
@@ -139,16 +138,36 @@ Similarly, we save a state snapshot after the block was mined.
 
 ```k
     syntax KItem ::= "#ethSendTransactionResponse"
-
-    syntax KItem ::= #ensureAccountExists( Int )
+                   | "#clearCallState"
+                   |  #ensureAccountExists( Int )
 
     rule <k> #ensureAccountExists( ACCT:Int ) => .K ... </k>
          <account> <acctID> ACCT </acctID> ... </account>
 
     rule <k> #ensureAccountExists( ACCT:Int ) => #newAccount( ACCT ) ... </k> [owise]
 
+    rule <k> #clearCallState => .K ... </k>
+         <callState>
+            <program>    _ => .Bytes     </program>
+            <jumpDests>  _ => .Bytes     </jumpDests>
+            <id>         _ => .Account   </id>
+            <caller>     _ => .Account   </caller>
+            <callData>   _ => .Bytes     </callData>
+            <callValue>  _ => 0          </callValue>
+            <wordStack>  _ => .WordStack </wordStack>
+            <localMem>   _ => .Bytes     </localMem>
+            <pc>         _ => 0          </pc>
+            <gas>        _ => 0:Gas      </gas>
+            <memoryUsed> _ => 0          </memoryUsed> 
+            <callGas>    _ => 0:Gas      </callGas>
+            <static>     _ => false      </static>
+            <callDepth>  _ => 0          </callDepth>
+            <codeAddr>   _ => .Account   </codeAddr>
+         </callState>
+
     rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
             => #ensureAccountExists( FROM )
+            ~> #clearCallState
             ~> #signTx(#getNextTxID, FROM)
             ...
         </k>
@@ -161,10 +180,6 @@ Similarly, we save a state snapshot after the block was mined.
             <caller>  _ => FROM </caller>
             ...
         </callState>
-        <block>
-            <timestamp> TS => TS +Int 1 </timestamp>
-            ...
-        </block>
         <network>
             <chainID>  CHAIN_ID </chainID>
             <account>
@@ -220,8 +235,8 @@ Similarly, we save a state snapshot after the block was mined.
         => #executeTx( TX_ID )
         ~> #finishTx
         ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
+        ~> #makeTxReceipt( TX_ID )
         ~> #finalizeBlock
-        ~> #makeTxReceipts
         ~> #mineBlock
         ~> #saveStateDump
         ~> #saveMetadata
@@ -764,16 +779,9 @@ just build the response string directly.
 # Transaction Receipts
 
 ```k
-    syntax KItem ::= "#makeTxReceipts"
-                   | "#makeTxReceiptsAux" List
-                   | "#makeTxReceipt" Int
+    syntax KItem ::= #makeTxReceipt( Int )
 
-    rule <k> #makeTxReceipts => #makeTxReceiptsAux TXLIST ... </k>
-         <txOrder> TXLIST </txOrder>
-    rule <k> #makeTxReceiptsAux .List => .K ... </k>
-    rule <k> #makeTxReceiptsAux (ListItem(TXID) TXLIST) => #makeTxReceipt TXID ~> #makeTxReceiptsAux TXLIST ... </k>
-
-    rule <k> #makeTxReceipt TXID => .K ... </k>
+    rule <k> #makeTxReceipt( TXID ) => .K ... </k>
          <txReceipts>
            ( .Bag =>
             <txReceipt>
@@ -808,8 +816,9 @@ just build the response string directly.
 The productions below are used to perform the mining of blocks, advancing the blockchain state.
 
 ```k
-    syntax KItem ::= "#mineBlock"  [symbol(mineBlock)]
-                   | #setBlockData( BlockData )
+    syntax KItem ::= "#mineBlock"      [symbol(mineBlock)]
+                   | "#computeRoots"   [symbol(computeRoots)]
+                   | "#storeBlockData" [symbol(storeBlockData)]
 
     syntax BlockData ::= #getBlockData( Int )        [function]
                        | #getBlockDataByHash( Int )  [function]
@@ -817,28 +826,34 @@ The productions below are used to perform the mining of blocks, advancing the bl
     syntax Int       ::= #hashBlockData( BlockData ) [function]
                        | #hashBlockNumber( Int )     [function]
 
-    rule <k> #mineBlock => #startBlock ... </k>
-          <stateTrie>  TREE       </stateTrie> // TODO: We never set the initial trie
-          <txReceipts> TXRECEIPTS </txReceipts> // TODO: Should these be cleared?
-          <callState>
-                <gas>              _  => 0         </gas>
+    rule <k> #mineBlock => #computeRoots ~> #storeBlockData ... </k>
+
+    rule <k> #computeRoots => .K ... </k>
+         <network>
+                <txOrder> TXLIST </txOrder>
                 ...
-          </callState>
+          </network>
+          <block>
+                <stateRoot>        _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #stateRoot ) ) ) </stateRoot>
+                <transactionsRoot> _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #transactionsRoot( TXLIST ) ) ) ) </transactionsRoot>
+                <receiptsRoot>     _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #receiptsRoot( TXLIST ) ) ) ) </receiptsRoot>
+                ...
+          </block>
+
+    rule <k> #storeBlockData => #startBlock ... </k>
           <network>
-                <txOrder>          TXLIST => .List </txOrder>
-                <txPending>        _      => .List </txPending>
+                <txOrder>    _ => .List </txOrder>
+                <txPending>  _ => .List </txPending>
                 ...
           </network>
           <block>
                 <number>           BN => BN +Int 1 </number>
-                <previousHash>     _  =>  #hashBlockData( #getCurrentBlockData ) </previousHash>
-                <stateRoot>        _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( TREE ) ) )</stateRoot>
-                <transactionsRoot> _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #transactionsRoot( TXLIST ) ) ) ) </transactionsRoot>
-                <receiptsRoot>     _  => #parseHexWord( Keccak256( #rlpEncodeMerkleTree( #receiptsRoot( <txReceipts> TXRECEIPTS </txReceipts> ) ) ) ) </receiptsRoot>
+                <timestamp>        TS => TS +Int 1 </timestamp>
+                <previousHash>     _  => #hashBlockData( #getCurrentBlockData ) </previousHash>
                 ...
           </block>
-          <blockStorage> M => M[ BN                                    <- #getCurrentBlockData ] </blockStorage>
-          <blockHashes>  H => H[ #hashBlockData( #getCurrentBlockData ) <- BN                  ] </blockHashes>
+          <blockStorage> M => M[ BN                                     <- #getCurrentBlockData ] </blockStorage>
+          <blockHashes>  H => H[ #hashBlockData( #getCurrentBlockData ) <- BN                   ] </blockHashes>
 
     rule [[ #getCurrentBlockData => BlockData(
         PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
@@ -879,36 +894,6 @@ The productions below are used to perform the mining of blocks, advancing the bl
         requires BLOCK_HASH in_keys(BLOCK_HASHES)
          andBool ( BLOCK_HASHES[ BLOCK_HASH ] orDefault -1 ) in_keys(BLOCK_STORAGE)
 
-    rule <k> #setBlockData( BlockData(
-            PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
-         ))
-        => .K ... </k>
-        <block>
-            <previousHash>     _ => PH </previousHash>
-            <ommersHash>       _ => HO </ommersHash>
-            <coinbase>         _ => HC </coinbase>
-            <stateRoot>        _ => HR </stateRoot>
-            <transactionsRoot> _ => HT </transactionsRoot>
-            <receiptsRoot>     _ => HE </receiptsRoot>
-            <logsBloom>        _ => HB </logsBloom>
-            <difficulty>       _ => HD </difficulty>
-            <number>           _ => BN </number>
-            <gasLimit>         _ => HL </gasLimit>
-            <gasUsed>          _ => HG </gasUsed>
-            <timestamp>        _ => HS </timestamp>
-            <extraData>        _ => HX </extraData>
-            <mixHash>          _ => HM </mixHash>
-            <blockNonce>       _ => HN </blockNonce>
-            <baseFee>          _ => BF </baseFee>
-            <withdrawalsRoot>  _ => WR </withdrawalsRoot>
-            <blobGasUsed>      _ => BG </blobGasUsed>
-            <excessBlobGas>    _ => EG </excessBlobGas>
-            <beaconRoot>       _ => BR </beaconRoot>
-            <requestsRoot>     _ => RR </requestsRoot>
-            <ommerBlockHeaders> _ => OBH </ommerBlockHeaders>
-        </block>
-
-
     rule #hashBlockData(BlockData(
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, _BF, _WR, _BG, _EG, _BR, _RR, _OBH
          ))
@@ -922,41 +907,44 @@ The productions below are used to perform the mining of blocks, advancing the bl
 ----------
 
 ```k
-    syntax MerkleTree ::= #stateRoot ( NetworkCell, Schedule ) [function]
+    syntax MerkleTree ::= "#stateRoot"                                   [function]
                         | #putAccountsInTrie( MerkleTree, AccountsCell ) [function]
 
-    rule #stateRoot(
-            <network>
-            <accounts> ACCTSCELL </accounts>
-            ...
-            </network>,
-            SCHED
-        )
-        => #putAccountsInTrie(
-            MerkleUpdateMap(
-                .MerkleTree,
-                #precompiledAccountsMap(#precompiledAccountsSet(SCHED))
-            ),
-            <accounts> ACCTSCELL </accounts>
+
+    rule [[ #stateRoot
+         => #putAccountsInTrie(
+                MerkleUpdateMap(
+                    .MerkleTree,
+                    #unparseMap( #precompiledAccountsMap(#precompiledAccountsSet(SCHED)) )
+                ),
+                <accounts> ACCTSCELL </accounts>
             )
+        ]]
+        <accounts> ACCTSCELL </accounts>
+        <schedule> SCHED </schedule>
+
+    // Convert a * -> bytes map to * -> string map
+    syntax Map ::= #unparseMap( Map ) [function]
+    rule #unparseMap( .Map ) => .Map
+    rule #unparseMap( (KEY |-> VAL) REST ) => (KEY |-> #unparseDataBytes({VAL}:>Bytes)) #unparseMap( REST )
 
     rule #putAccountsInTrie( TREE, <accounts> .Bag </accounts> ) => TREE
     rule #putAccountsInTrie(
             (TREE => MerkleUpdate(
                 TREE,
-                #parseByteStack( #unparseData(ACCT,20) ),
+                #rlpEncodeAddress( ACCT ),
                 #unparseDataBytes( #rlpEncodeFullAccount(NONCE, BAL, STORAGE, CODE) )
             )),
             <accounts>
-            (<account>
-                <acctID>  ACCT    </acctID>
-                <nonce>   NONCE   </nonce>
-                <balance> BAL     </balance>
-                <storage> STORAGE </storage>
-                <code>    CODE    </code>
+                ( <account>
+                    <acctID>  ACCT    </acctID>
+                    <nonce>   NONCE   </nonce>
+                    <balance> BAL     </balance>
+                    <storage> STORAGE </storage>
+                    <code>    CODE    </code>
+                    ...
+                </account> => .Bag )
                 ...
-            </account> => .Bag)
-            ...
             </accounts>
         )
 
@@ -990,32 +978,30 @@ The productions below are used to perform the mining of blocks, advancing the bl
 ## Receipts Root
 
 ```k
-    syntax MerkleTree ::= #receiptsRoot( TxReceiptsCell )                     [function]
-                        | #receiptsRootAux( MerkleTree, Int, TxReceiptsCell ) [function]
+    syntax MerkleTree ::= #receiptsRoot( List )                     [function]
+                        | #receiptsRootAux( MerkleTree, Int, List ) [function]
 
 
-    rule #receiptsRoot( TXRECEIPTS )
-    => #receiptsRootAux( .MerkleTree, 0, TXRECEIPTS )
+    rule #receiptsRoot( TXLIST ) => #receiptsRootAux( .MerkleTree, 0, TXLIST )
 
-    rule #receiptsRootAux( TREE, _, _ ) => TREE
-    rule #receiptsRootAux(
-        ( TREE           => MerkleUpdate(
-            TREE,
-            #rlpEncodeWord(I),
-            #unparseDataBytes( #rlpEncodeReceipt(TX_STATUS, TX_CUMULATIVE_GAS, TX_LOGS_BLOOM, TX_LOGS) ) )
-        ),
-        ( I              => I +Int 1 ),
-        <txReceipts>
-            ( <txReceipt>
-                <txStatus>        TX_STATUS         </txStatus>
-                <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
-                <txLogs>          TX_LOGS           </txLogs>
-                <txLogsBloom>     TX_LOGS_BLOOM     </txLogsBloom>
-                ...
-            </txReceipt> => .Bag )
+    rule #receiptsRootAux( TREE, _, .List ) => TREE
+    rule [[ #receiptsRootAux(
+            ( TREE => MerkleUpdate(
+                TREE,
+                #rlpEncodeWord(I),
+                #unparseDataBytes( #rlpEncodeReceipt(TX_STATUS, TX_CUMULATIVE_GAS, TX_LOGS_BLOOM, TX_LOGS) ) )
+            ),
+            ( I              => I +Int 1 ),
+            ( ListItem(TXID) => .List ) _
+        ) ]]
+        <txReceipt>
+            <txMsg>           TXID              </txMsg>
+            <txStatus>        TX_STATUS         </txStatus>
+            <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
+            <txLogs>          TX_LOGS           </txLogs>
+            <txLogsBloom>     TX_LOGS_BLOOM     </txLogsBloom>
             ...
-        </txReceipts>
-        )
+        </txReceipt>
 ```
 
 ###############################################################################
@@ -1060,21 +1046,33 @@ intermediate representation.
 
 ```k
     syntax KItem ::= #rpcLoad( JSON )
+                   | #rpcLoadSingle( JSON )
+                   | #rpcLoadBatch( JSON )
 
     syntax RPCRequest       ::= #rpcLoadRequest( JSON )         [function]
     syntax RPCRequestParams ::= #rpcLoadParams( String, JSON )  [function]
 
-    // RPC requests can be batched, in this case we iterate over the list
-    rule <k> #rpcLoad( [ .JSONs ] ) => .K ... </k>
-    rule <k> #rpcLoad( [ FIRST, REST ] )
-        => #rpcLoadRequest( FIRST )
-        ~> #rpcLoad( [ REST ] ) ... </k>
-    // If the request is not batched, we just load a single request
-    rule <k> #rpcLoad( { FIRST } ) 
-        => #rpcLoadRequest( { FIRST } ) ... </k>
+    rule <k> #rpcLoad( [ J ] )
+          => #batchPrefix
+          ~> #rpcLoadBatch( [ J ] )
+          ~> #batchSuffix
+          ... </k>
+    rule <k> #rpcLoad( { J } )
+          => #clearResponseFile
+          ~> #rpcLoadSingle( { J }) ... </k>
     // If the request is malformed, we ignore it
     // TODO: add error handling
     rule <k> #rpcLoad( _ ) => .K ... </k> [owise]
+
+    // RPC requests can be batched, in this case we iterate over the list
+    rule <k> #rpcLoadBatch( [ .JSONs ] ) => .K ... </k>
+    rule <k> #rpcLoadBatch( [ FIRST, REST ] )
+        => #rpcLoadRequest( FIRST )
+        ~> #rpcLoadBatch( [ REST ] ) ... </k>
+        <rpcRequestBatchIndex> BATCH_ID => BATCH_ID +Int 1 </rpcRequestBatchIndex>
+    // If the request is not batched, we just load a single request
+    rule <k> #rpcLoadSingle( { FIRST } ) 
+        => #rpcLoadRequest( { FIRST } ) ... </k>
 
     rule #rpcLoadRequest( J )
             => #let REQ_ID  = #getInt(    "id",     J) #in
@@ -1385,6 +1383,7 @@ StateDump format - not the ethereum/test format.
         <blockHashes>  BLOCK_HASHES  =>
                        BLOCK_HASHES[ #hashBlockData( BLOCK_DATA ) <- #getBlockNumber( BLOCK_DATA ) ]
         </blockHashes>
+        <timestamp> TS => maxInt( TS, #getBlockTimestamp( BLOCK_DATA ) +Int 1) </timestamp>
 
     rule <k> #loadCurrentBlock( BLOCK_NUMBER ) => .K ... </k>
         <blockStorage> BLOCK_STORAGE </blockStorage>
@@ -1590,6 +1589,9 @@ StateDump format - not the ethereum/test format.
     syntax Int ::= #getBlockNumber( BlockData ) [function]
     rule #getBlockNumber( BlockData( _, _, _, _, _, _, _, _, BN, _, _, _, _, _, _, _, _, _, _, _, _, _) ) => BN
 
+    syntax Int ::= #getBlockTimestamp( BlockData ) [function]
+    rule #getBlockTimestamp( BlockData( _, _, _, _, _, _, _, _, _, _, _, TS, _, _, _, _, _, _, _, _, _, _) ) => TS
+
     rule #parseSnapshot( SNAPSHOT_JSON )
         => #let BEST_BLOCK_NUMBER = #getInt( "best_block_number", SNAPSHOT_JSON, 0 ) #in
            #let ACCOUNTS_JSON     = #getJSON( "accounts", SNAPSHOT_JSON, { .JSONs } ) #in
@@ -1743,7 +1745,7 @@ This section defines rules to write RPCResponses to a file.
         <ioDir> IO_DIR </ioDir>
 
       rule <k> RPCResponse( JSON_RESPONSE )
-            => #writeFile(#responseFile, JSON2String({
+            => #appendFile(#responseFile, #batchSep +String JSON2String({
                   "jsonrpc" : "2.0",
                   "id"      : REQ_ID,
                   "result"  : JSON_RESPONSE
@@ -1752,9 +1754,26 @@ This section defines rules to write RPCResponses to a file.
             <rpcRequestID> REQ_ID </rpcRequestID>
             
       rule <k> RPCRawResponse( RESPONSE:String )
-            => #writeFile(#responseFile, RESPONSE)
+            => #appendFile(#responseFile, #batchSep +String RESPONSE)
             ...
            </k>
+
+    syntax KItem ::= "#batchPrefix"
+                   | "#batchSuffix"
+                   | "#clearResponseFile"
+
+    rule <k> #clearResponseFile => #writeFile(#responseFile, "") ... </k>
+
+    rule <k> #batchPrefix => #writeFile(#responseFile, "[\n") ... </k>
+
+    rule <k> #batchSuffix => #appendFile(#responseFile, "\n]") ... </k>
+
+    syntax String ::= "#batchSep" [function, total]
+    rule [[ #batchSep => ",\n" ]]
+        <rpcRequestBatchIndex> BATCH_INDEX </rpcRequestBatchIndex>
+        requires BATCH_INDEX >Int 0
+    
+    rule #batchSep => "" [owise]
 
 ```
 
