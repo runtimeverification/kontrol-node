@@ -14,7 +14,7 @@ INPUT_FILES: Final = TEST_DATA_DIR / 'input'
 OUTPUT_FILES: Final = TEST_DATA_DIR / 'output'
 RPC_TESTS_ALL: Final = tuple((TEST_DATA_DIR / 'rpc-tests-all').read_text().splitlines())
 RPC_TESTS_SKIPPED: Final = tuple((TEST_DATA_DIR / 'rpc-tests-skipped').read_text().splitlines())
-DEBUG_ACTUAL_OUTPUT: Final = True
+DEBUG_ACTUAL_OUTPUT: Final = False
 
 
 def execute_json_rpc(server_url: str, payload: dict | list) -> str:

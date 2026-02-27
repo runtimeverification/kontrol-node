@@ -138,7 +138,7 @@ Similarly, we save a state snapshot after the block was mined.
 
 ```k
     syntax KItem ::= "#ethSendTransactionResponse"
-                   | "#clearCallState"
+                   | "#resetCallState"
                    |  #ensureAccountExists( Int )
 
     rule <k> #ensureAccountExists( ACCT:Int ) => .K ... </k>
@@ -146,7 +146,24 @@ Similarly, we save a state snapshot after the block was mined.
 
     rule <k> #ensureAccountExists( ACCT:Int ) => #newAccount( ACCT ) ... </k> [owise]
 
-    rule <k> #clearCallState => .K ... </k>
+    rule <k> #resetCallState => .K ... </k>
+         <statusCode> _ => .StatusCode </statusCode>
+         <origin>     _ => .Account    </origin>
+         <recordedTrace> _ => false    </recordedTrace>
+         <injectedTracesCallStack> _ => false </injectedTracesCallStack>
+         <recordedMkCallCreate>    _ => false </recordedMkCallCreate>
+         <contextSwitch>           _ => true  </contextSwitch>
+         <currentNonceMutations>   _ => .Map  </currentNonceMutations>
+         <currentBalanceMutations> _ => .Map  </currentBalanceMutations>
+         <currentStorageMutations> _ => .Map  </currentStorageMutations>
+         <localMemoryChanged>      _ => true  </localMemoryChanged>
+         <programChanged>          _ => true  </programChanged>
+         <tracesCallStack>         _ => .List  </tracesCallStack>
+         <tracesCallState>
+            <isInitCode>          _ => false </isInitCode>
+         </tracesCallState>
+         <currentDeployedCodeMutations> _ => .Map </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     _ => .Map </currentInitCodeMutations>
          <callState>
             <program>    _ => .Bytes     </program>
             <jumpDests>  _ => .Bytes     </jumpDests>
@@ -164,10 +181,10 @@ Similarly, we save a state snapshot after the block was mined.
             <callDepth>  _ => 0          </callDepth>
             <codeAddr>   _ => .Account   </codeAddr>
          </callState>
+         
 
     rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
             => #ensureAccountExists( FROM )
-            ~> #clearCallState
             ~> #signTx(#getNextTxID, FROM)
             ...
         </k>
@@ -210,7 +227,8 @@ Similarly, we save a state snapshot after the block was mined.
         </network>
 
     rule <k> #signTxError
-        => RPCResponse({
+        => #resetCallState
+        ~> RPCResponse({
                 "code"    : -32000,
                 "message" : "Could not sign transaction: account not found"
             })
@@ -224,7 +242,8 @@ Similarly, we save a state snapshot after the block was mined.
         <currentTxID> TX_ID </currentTxID>
 
     rule <k> #intrinsicGasError( _ERR_CODE )
-        => RPCResponse({
+        => #resetCallState
+        ~> RPCResponse({
                 "code"    : -32000,
                 "message" : "Intrinsic gas error "
             })
@@ -240,6 +259,7 @@ Similarly, we save a state snapshot after the block was mined.
         ~> #mineBlock
         ~> #saveStateDump
         ~> #saveMetadata
+        ~> #resetCallState
         ~> #ethSendTransactionResponse
         ...
         </k>
@@ -850,6 +870,10 @@ The productions below are used to perform the mining of blocks, advancing the bl
                 <number>           BN => BN +Int 1 </number>
                 <timestamp>        TS => TS +Int 1 </timestamp>
                 <previousHash>     _  => #hashBlockData( #getCurrentBlockData ) </previousHash>
+                <stateRoot>        _ => 0 </stateRoot>
+                <transactionsRoot> _ => 0 </transactionsRoot>
+                <receiptsRoot>     _ => 0 </receiptsRoot>
+                <logsBloom>        _ => .Bytes </logsBloom>
                 ...
           </block>
           <blockStorage> M => M[ BN                                     <- #getCurrentBlockData ] </blockStorage>
@@ -1411,6 +1435,7 @@ StateDump format - not the ethereum/test format.
             ( .Bag => <account>
                     <acctID>  ACCT_ID      </acctID>
                     <balance> ACCT_BALANCE </balance>
+                    <origStorage> ACCT_STORAGE </origStorage>
                     <storage> ACCT_STORAGE </storage>
                     <code>    ACCT_CODE    </code>
                     <nonce>   ACCT_NONCE   </nonce>
