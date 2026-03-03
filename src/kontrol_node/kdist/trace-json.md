@@ -248,7 +248,8 @@ module TRACE-JSON
     rule accountToJson( .Account ) => null
     rule accountToJson( ACC ) => ACC [owise]
 
-    rule statusToJson( STATUS ) => StatusCode2String( STATUS )
+    rule statusToJson( .StatusCode ) => "empty"
+    rule statusToJson( STATUS ) => StatusCode2String( STATUS ) [owise]
 
     rule dataChangeToJson( .DataChange ) => null
     rule dataChangeToJson( BYTES ) => bytesToHex( BYTES) [owise]

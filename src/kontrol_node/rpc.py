@@ -59,7 +59,7 @@ class KontrolNodeServer:
     def serve(self) -> None:
         _LOGGER.info(f'Starting JSON-RPC server at {self.options.host}:{self.options.port}')
         self.handler, self.interpreter = create_handler()
-        self.http_server = HTTPServer((self.options.host, self.options.port), self.handler)
+        self.http_server = HTTPServer((self.options.host, int(self.options.port)), self.handler)
         self.http_server.serve_forever()
         _LOGGER.info(f'JSON-RPC server at {self.options.host}:{self.options.port} shut down.')
 
