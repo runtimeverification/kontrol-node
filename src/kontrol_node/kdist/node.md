@@ -25,6 +25,7 @@ module KONTROL-NODE
     syntax EthereumSimulation ::= Start
 
     syntax Start ::= #start( String ) [symbol(start)]
+    // ----------------------------------------------
 
     rule <k> #start( IO_DIR )
         => #unlockAccounts()
@@ -46,6 +47,7 @@ Mnemonic: test test test test test test test test test test test junk
 ```k
 
     syntax KItem ::= #unlockAccounts()
+    // -------------------------------
 
     rule <k> #unlockAccounts() => .K ... </k>
         <accountKeys> _ =>
@@ -61,28 +63,31 @@ Mnemonic: test test test test test test test test test test test junk
             #parseAddr("0xa0Ee7A142d267C1f36714E4a8F75612F20a79720") |-> #padToWidth( 32, #parseByteStack("0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6"))
         </accountKeys>
 
-    syntax Int ::= "DEFAULTSENDER" [function]
+    syntax Int ::= "DEFAULTSENDER" [function, symbol(DEFAULTSENDER)]
+    // -------------------------------------------------------------
     rule DEFAULTSENDER => #parseAddr("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
 
-    syntax Int ::= "#getLatestBlockNumber" [function]
-                 | "#getNextBlockNumber"   [function]
+    syntax Int ::= "#getLatestBlockNumber" [function, symbol(getLatestBlockNumber)]
+    // ----------------------------------------------------------------------------
 
     rule [[ #getLatestBlockNumber => BLOCK_NUMBER -Int 1 ]]
         <number> BLOCK_NUMBER </number>
         requires BLOCK_NUMBER >Int 0
     rule #getLatestBlockNumber => 0 [owise]
 
-    rule #getNextBlockNumber => #getLatestBlockNumber +Int 1
+    syntax Int ::= "#getLatestTxID" [function, symbol(getLatestTxID)]
+    // --------------------------------------------------------------
 
-    syntax Int ::= "#getLatestTxID" [function]
     rule #getLatestTxID => #getLatestBlockNumber // We're auto mining one block per tx
 
-    syntax Int ::= "#getNextTxID" [function]
+    syntax Int ::= "#getNextTxID" [function, symbol(getNextTxID)]
+    // ----------------------------------------------------------
+
     rule #getNextTxID => #getLatestTxID +Int 1
 
-
-    syntax Int   ::= #txHash( Int )      [function]
-    syntax Bytes ::= #txHashBytes( Int ) [function]
+    syntax Int   ::= #txHash( Int )      [function, symbol(txHash)]
+    syntax Bytes ::= #txHashBytes( Int ) [function, symbol(txHashBytes)]
+    // -----------------------------------------------------------------
 
     rule [[ #txHashBytes( TX_ID ) => Keccak256raw( #rlpEncode( [TN, TP, TG, #addrBytes(TT), TV, TD, TW, TR, TS] ) ) ]]
         <message>
@@ -101,7 +106,8 @@ Mnemonic: test test test test test test test test test test test junk
 
     rule #txHash( TX_ID ) => Bytes2Int( #txHashBytes( TX_ID ), BE, Unsigned )
 
-    syntax Account ::= #sender( msgId: Int ) [function]
+    syntax Account ::= #sender( msgId: Int ) [function, symbol(sender)]
+    // ----------------------------------------------------------------
 
     rule [[ #sender( MSG_ID ) => #sender( #getTxData( MSG_ID ), MSG_SIGV, MSG_SIGR, MSG_SIGS, CHAIN_ID ) ]]
         <chainID> CHAIN_ID </chainID>
@@ -120,26 +126,24 @@ Mnemonic: test test test test test test test test test test test junk
 ## eth_chainId
 
 ```k
-    rule <k> RPCRequest( REQ_ID, EthChainId() ) 
-        => RPCResponse( CHAIN_ID )
-        ...
-        </k>
-        <rpcRequestID> _ => REQ_ID </rpcRequestID>
-        <chainID> CHAIN_ID </chainID>
+    rule <k> RPCRequest( REQ_ID, EthChainId() )  => RPCResponse( CHAIN_ID ) ... </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+         <chainID> CHAIN_ID </chainID>
 ```
 
 ###############################################################################
 ## eth_sendTransaction
 
-When eth_sendTransaction is called, we sign it, apply the inrinsic gas costs,
+When eth_sendTransaction is called, we sign it, apply the intrinsic gas costs,
 execute it, mine a block including it, and return the transaction hash.
 Additionally, we eagerly compute the transaction trace and and save it to disk.
 Similarly, we save a state snapshot after the block was mined.
 
 ```k
-    syntax KItem ::= "#ethSendTransactionResponse"
-                   | "#resetCallState"
-                   |  #ensureAccountExists( Int )
+    syntax KItem ::= "#ethSendTransactionResponse"   [symbol(ethSendTransactionResponse)]
+                   | "#resetCallState"               [symbol(resetCallState)]
+                   |  #ensureAccountExists( Int )    [symbol(ensureAccountExists)]
+    // ---------------------------------------------------------------------------
 
     rule <k> #ensureAccountExists( ACCT:Int ) => .K ... </k>
          <account> <acctID> ACCT </acctID> ... </account>
@@ -424,7 +428,8 @@ Similarly, we save a state snapshot after the block was mined.
 ## eth_getBlockByNumber
 
 ```k
-    syntax KItem ::= #ethGetBlockResponse( BlockData )
+    syntax KItem ::= #ethGetBlockResponse( BlockData ) [symbol(ethGetBlockResponse)]
+    // -----------------------------------------------------------------------------
 
     rule <k> RPCRequest( REQ_ID, EthGetBlockByNumber( BLOCK_NUMBER, _HYDRATED_TXS ) ) // TODO: hydrated txs
           => #ethGetBlockResponse( #getBlockData( BLOCK_NUMBER ) ) ...
@@ -639,10 +644,11 @@ just build the response string directly.
     // previously of EIP155, v is computed as:  v = recid + 27
     // post of EIP155, v is computed as :       v = 2 * CHAIN_ID + recid + 35
 
-    syntax KItem ::= #signTx(Int, Int)
-                   | #signTx(Int, String)
-                   | "#signTxSuccess"
-                   | "#signTxError"
+    syntax KItem ::= #signTx(Int, Int)    [symbol(signTx)]
+                   | #signTx(Int, String) [symbol(signTxWithSig)]
+                   | "#signTxSuccess"     [symbol(signTxSuccess)]
+                   | "#signTxError"       [symbol(signTxError)]
+    // --------------------------------------------------------
     
     // Sign a transaction with an account managed by this node   
     rule <k> #signTx(TXID, ACCTFROM:Int)
@@ -683,9 +689,10 @@ just build the response string directly.
            ...
          </message>
 
-    syntax KItem ::= #applyIntrinsicGas( Int )
-                   | "#intrinsicGasSuccess"
-                   | #intrinsicGasError( ExceptionalStatusCode )
+    syntax KItem ::= #applyIntrinsicGas( Int )                   [symbol(applyIntrinsicGas)]
+                   | "#intrinsicGasSuccess"                      [symbol(intrinsicGasSuccess)]
+                   | #intrinsicGasError( ExceptionalStatusCode ) [symbol(intrinsicGasError)]
+    // -------------------------------------------------------------------------------------
 
     // Revert if insufficient gas
     rule <k> #applyIntrinsicGas( TXID )
@@ -731,7 +738,8 @@ just build the response string directly.
       requires GLIMIT >=Int G0_INIT
        andBool BAL >=Int GLIMIT *Int GPRICE
 
-    syntax KItem ::= #executeTx( Int )
+    syntax KItem ::= #executeTx( Int ) [symbol(executeTx)]
+    // ---------------------------------------------------
 
     // Execute a contract creation transaction
     rule <k> #executeTx( TXID:Int )
@@ -799,7 +807,8 @@ just build the response string directly.
 # Transaction Receipts
 
 ```k
-    syntax KItem ::= #makeTxReceipt( Int )
+    syntax KItem ::= #makeTxReceipt( Int ) [symbol(makeTxReceipt)]
+    // -----------------------------------------------------------
 
     rule <k> #makeTxReceipt( TXID ) => .K ... </k>
          <txReceipts>
@@ -839,12 +848,14 @@ The productions below are used to perform the mining of blocks, advancing the bl
     syntax KItem ::= "#mineBlock"      [symbol(mineBlock)]
                    | "#computeRoots"   [symbol(computeRoots)]
                    | "#storeBlockData" [symbol(storeBlockData)]
+    // --------------------------------------------------------
 
-    syntax BlockData ::= #getBlockData( Int )        [function]
-                       | #getBlockDataByHash( Int )  [function]
-                       | "#getCurrentBlockData"      [function]
-    syntax Int       ::= #hashBlockData( BlockData ) [function]
-                       | #hashBlockNumber( Int )     [function]
+    syntax BlockData ::= #getBlockData( Int )        [function, symbol(getBlockData)]
+                       | #getBlockDataByHash( Int )  [function, symbol(getBlockDataByHash)]
+                       | "#getCurrentBlockData"      [function, symbol(getCurrentBlockData)]
+    syntax Int       ::= #hashBlockData( BlockData ) [function, symbol(hashBlockData)]
+                       | #hashBlockNumber( Int )     [function, symbol(hashBlockNumber)]
+    // ---------------------------------------------------------------------------------
 
     rule <k> #mineBlock => #computeRoots ~> #storeBlockData ... </k>
 
@@ -931,9 +942,9 @@ The productions below are used to perform the mining of blocks, advancing the bl
 ----------
 
 ```k
-    syntax MerkleTree ::= "#stateRoot"                                   [function]
-                        | #putAccountsInTrie( MerkleTree, AccountsCell ) [function]
-
+    syntax MerkleTree ::= "#stateRoot"                                   [function, symbol(stateRoot)]
+                        | #putAccountsInTrie( MerkleTree, AccountsCell ) [function, symbol(putAccountsInTrie)]
+    // -------------------------------------------------------------------------------------------------------
 
     rule [[ #stateRoot
          => #putAccountsInTrie(
@@ -948,7 +959,9 @@ The productions below are used to perform the mining of blocks, advancing the bl
         <schedule> SCHED </schedule>
 
     // Convert a * -> bytes map to * -> string map
-    syntax Map ::= #unparseMap( Map ) [function]
+    syntax Map ::= #unparseMap( Map ) [function, symbol(unparseMap)]
+    // -------------------------------------------------------------
+
     rule #unparseMap( .Map ) => .Map
     rule #unparseMap( (KEY |-> VAL) REST ) => (KEY |-> #unparseDataBytes({VAL}:>Bytes)) #unparseMap( REST )
 
@@ -979,11 +992,11 @@ The productions below are used to perform the mining of blocks, advancing the bl
 
 
 ```k
-    syntax MerkleTree ::= #transactionsRoot( List )              [function]
-                        | #transactionsRootAux( MerkleTree, Int, List ) [function]
+    syntax MerkleTree ::= #transactionsRoot( List )                     [function, symbol(transactionsRoot)]
+                        | #transactionsRootAux( MerkleTree, Int, List ) [function, symbol(transactionsRootAux)]
+    // --------------------------------------------------------------------------------------------------------
 
-    rule #transactionsRoot( TXLIST )
-    => #transactionsRootAux( .MerkleTree, 0, TXLIST )
+    rule #transactionsRoot( TXLIST ) => #transactionsRootAux( .MerkleTree, 0, TXLIST )
     
     rule #transactionsRootAux( TREE, _, .List ) => TREE
     rule #transactionsRootAux(
@@ -1002,9 +1015,9 @@ The productions below are used to perform the mining of blocks, advancing the bl
 ## Receipts Root
 
 ```k
-    syntax MerkleTree ::= #receiptsRoot( List )                     [function]
-                        | #receiptsRootAux( MerkleTree, Int, List ) [function]
-
+    syntax MerkleTree ::= #receiptsRoot( List )                     [function, symbol(receiptsRoot)]
+                        | #receiptsRootAux( MerkleTree, Int, List ) [function, symbol(receiptsRootAux)]
+    // ------------------------------------------------------------------------------------------------
 
     rule #receiptsRoot( TXLIST ) => #receiptsRootAux( .MerkleTree, 0, TXLIST )
 
@@ -1034,32 +1047,38 @@ The productions below are used to perform the mining of blocks, advancing the bl
 This section defines an intermediate represention for JSON RPC requests.
 
 ```k
-      syntax KItem ::= RPCResponse | RPCRequest
+    syntax KItem ::= RPCResponse
+                   | RPCRequest
+    // ------------------------
 
-      syntax RPCResponse ::= RPCResponse( JSON )
-                           | RPCRawResponse( String )
-      syntax RPCRequest  ::= RPCRequest( Int, RPCRequestParams)
+    syntax RPCResponse ::= RPCResponse( JSON )      [symbol(RPCStructuredResponse)]
+                         | RPCRawResponse( String ) [symbol(RPCRawResponse)]
+    // ---------------------------------------------------------------------
 
-      syntax RPCRequestParams ::= EthChainId()
-                                | EthSendTransaction(
-                                    Account , // from
-                                    Account , // to
-                                    Int , // gas
-                                    Int , // gas price
-                                    Int , // value
-                                    Bytes // input
+    syntax RPCRequest  ::= RPCRequest( Int, RPCRequestParams) [symbol(RPCRequestWithParams)]
+    // -------------------------------------------------------------------------------------
+
+    syntax RPCRequestParams ::= EthChainId()
+                              | EthSendTransaction(
+                                  Account , // from
+                                  Account , // to
+                                  Int , // gas
+                                  Int , // gas price
+                                  Int , // value
+                                  Bytes // input
                                   )
-                                | EthGetTransactionReceipt( Int )    // tx hash
-                                | EthGetTransactionByHash( Int )     // tx hash
-                                | EthGetCode( Int, Int )             // address, block number
-                                | EthGetBalance( Int, Int )          // address, block number
-                                | EthGetBlockByNumber( Int, Bool )   // block number, hydrated txs
-                                | EthGetBlockByHash( Int, Bool )     // block hash
-                                | EthGetTransactionCount( Int, Int ) // address, block number
-                                | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
-                                | AnvilDumpState()                   // TODO: add options
-                                | AnvilSetBalance( Int, Int )        // address, balance
-                                | DebugTraceTransaction( Int )        // tx hash
+                              | EthGetTransactionReceipt( Int )    // tx hash
+                              | EthGetTransactionByHash( Int )     // tx hash
+                              | EthGetCode( Int, Int )             // address, block number
+                              | EthGetBalance( Int, Int )          // address, block number
+                              | EthGetBlockByNumber( Int, Bool )   // block number, hydrated txs
+                              | EthGetBlockByHash( Int, Bool )     // block hash
+                              | EthGetTransactionCount( Int, Int ) // address, block number
+                              | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
+                              | AnvilDumpState()                   // TODO: add options
+                              | AnvilSetBalance( Int, Int )        // address, balance
+                              | DebugTraceTransaction( Int )        // tx hash
+    // -----------------------------------------------------
 ```
 
 ###############################################################################
@@ -1069,12 +1088,14 @@ This section defines rules to convert from the JSON representation to the
 intermediate representation.
 
 ```k
-    syntax KItem ::= #rpcLoad( JSON )
-                   | #rpcLoadSingle( JSON )
-                   | #rpcLoadBatch( JSON )
+    syntax KItem ::= #rpcLoad( JSON )        [symbol(rpcLoad)]
+                   | #rpcLoadSingle( JSON )  [symbol(rpcLoadSingle)]
+                   | #rpcLoadBatch( JSON )   [symbol(rpcLoadBatch)]
+    // ------------------------------------------------------------
 
-    syntax RPCRequest       ::= #rpcLoadRequest( JSON )         [function]
-    syntax RPCRequestParams ::= #rpcLoadParams( String, JSON )  [function]
+    syntax RPCRequest       ::= #rpcLoadRequest( JSON )         [function, symbol(rpcLoadRequest)]
+    syntax RPCRequestParams ::= #rpcLoadParams( String, JSON )  [function, symbol(rpcLoadParams)]
+    // ------------------------------------------------------------------------------------------
 
     rule <k> #rpcLoad( [ J ] )
           => #batchPrefix
@@ -1164,7 +1185,9 @@ intermediate representation.
 
     // Helpers
 
-    syntax Int ::= #parseBlockNumber( String ) [function]
+    syntax Int ::= #parseBlockNumber( String ) [function, symbol(parseBlockNumber)]
+    // ----------------------------------------------------------------------------
+
     rule #parseBlockNumber( "latest" ) => #getLatestBlockNumber
     rule #parseBlockNumber( BN ) => #parseWord( BN ) [owise]
 
@@ -1177,13 +1200,21 @@ intermediate representation.
 This section defines rule to create a StateDump JSON object from the current
 K configuration.
 
+`#createStateDump` creaes a StateDump JSON object from the current configuration and places it on the K cell.
+`#StateDump( JSON )` is a wrapper around the StateDump JSON object to disambiguate it from other KItems containing JSON data.
+
 ```k
 
-    syntax KItem ::= "#createStateDump"         // Internal use only, create a StateDump from the current configuration
-                   | #StateDump( JSON )         // Internal use only, wrap a StateDump JSON object to disambiguate it from other KItems containing JSON data
+    syntax KItem ::= "#createStateDump" [symbol(createStateDump)]
+                   | #StateDump( JSON ) [symbol(StateDump)]
+    // ----------------------------------------------------
 
     syntax JSON  ::= ( JSON )  [bracket]
+    // ---------------------------------
+
     syntax JSONs ::= ( JSONs ) [bracket]
+    // ---------------------------------
+
     syntax JSON  ::= accountsToJSON( AccountsCell )          [function, total, symbol(accountsToJSON)]
                    | accountToJSON( AccountCell )            [function, total, symbol(accountToJSON)]
                    | storageToJSON(Map)                      [function, total, symbol(accStorageToJson)]
@@ -1191,12 +1222,13 @@ K configuration.
                    | blockToJSON(BlockData)                  [function, total, symbol(blockToJSON)]
                    | receiptsToJSON( TxReceiptsCell )        [function, total, symbol(receiptsToJSON)]
                    | receiptToJSON( TxReceiptCell )          [function, total, symbol(receiptToJSON)]
+    // ----------------------------------------------------------------------------------------------
 
     syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsToJSONs)]
                    | storageToJSONs( Map, JSONs )            [function, total, symbol(accStorageToJSONs)]
                    | blocksToJSONs( Map, JSONs )             [function, total, symbol(blocksToJSONs)]
                    | receiptsToJSONs( TxReceiptsCell, JSONs ) [function, total, symbol(receiptsToJSONs)]
-
+    // -------------------------------------------------------------------------------------------------
 
     // Duplicated in trace-json.md where this is called intMapToJson
     rule storageToJSON( ST ) => { storageToJSONs( ST, .JSONs ) }
@@ -1377,14 +1409,15 @@ StateDump format - not the ethereum/test format.
 
 ```k
 
-    syntax KItem ::= #loadSnapshot( Snapshot )
-                   | #loadBlocks( Blocks )
-                   | #loadBlock( BlockData )
-                   | #loadCurrentBlock( Int )
-                   | #loadAccounts( Accounts )
-                   | #loadAccount( AccountData )
-                   | #loadTransactions( Transactions )
-                   | #loadTransaction( TransactionData )
+    syntax KItem ::= #loadSnapshot( Snapshot )           [symbol(loadSnapshot)]
+                   | #loadBlocks( Blocks )               [symbol(loadBlocks)]
+                   | #loadBlock( BlockData )             [symbol(loadBlock)]
+                   | #loadCurrentBlock( Int )            [symbol(loadCurrentBlock)]
+                   | #loadAccounts( Accounts )           [symbol(loadAccounts)]
+                   | #loadAccount( AccountData )         [symbol(loadAccount)]
+                   | #loadTransactions( Transactions )   [symbol(loadTransactions)]
+                   | #loadTransaction( TransactionData ) [symbol(loadTransaction)]
+    // ---------------------------------------------------------------------------
 
     rule <k> #loadSnapshot( Snapshot(LATEST_BLOCK_NUMBER, ACCOUNTS, BLOCKS, TRANSACTIONS) )
           => #loadAccounts( ACCOUNTS )
@@ -1516,8 +1549,9 @@ StateDump format - not the ethereum/test format.
             Accounts,
             Blocks,
             Transactions
-        )
-        | #parseSnapshot( JSON ) [function]
+        ) [symbol(Snapshot)]
+        | #parseSnapshot( JSON ) [function, symbol(parseSnapshot)]
+    // -----------------------------------------------------------
 
     syntax AccountData ::= AccountData(
             Int,   // acctID
@@ -1525,8 +1559,9 @@ StateDump format - not the ethereum/test format.
             Map,   // storage
             Bytes, // code
             Int    // nonce
-        )
-        | #parseAccount( JSON ) [function]
+        ) [symbol(AccountData)]
+        | #parseAccount( JSON ) [function, symbol(parseAccount)]
+    // ---------------------------------------------------------
 
      syntax BlockData ::= BlockData(
             Int, // previousHash
@@ -1551,70 +1586,93 @@ StateDump format - not the ethereum/test format.
             Int, // beaconRoot
             Int, // requestsRoot
             JSON // ommersBlockHeaders
-        ) | #parseBlock( JSON ) [function]
+        ) [symbol(BlockData)]
+        | #parseBlock( JSON ) [function, symbol(parseBlock)]
+    // -----------------------------------------------------
 
     syntax TransactionData ::= TransactionData(
-        Int, // block_hash
-        Int, // block_number
-        TransactionInfo, // info
-        ReceiptData // receipt
-    ) | #parseTransaction( JSON ) [function]
+            Int, // block_hash
+            Int, // block_number
+            TransactionInfo, // info
+            ReceiptData // receipt
+        ) [symbol(TransactionData)]
+        | #parseTransaction( JSON ) [function, symbol(parseTransaction)]
+    // -----------------------------------------------------------------
 
     syntax TransactionInfo ::= TransactionInfo(
-        Account,    // contract_address
-        String,     // exit
-        Int,        // from
-        Int,        // gas_used
-        Int,        // nonce
-        Bytes,      // out
-        Account,    // to
-        TraceRoots, // traces
-        Int,        // transaction hash
-        Int,        // transaction index
-        Int,        // sigV
-        Bytes,      // sigR
-        Bytes       // sigS
-    ) | #parseTransactionInfo( JSON ) [function]
+            Account,    // contract_address
+            String,     // exit
+            Int,        // from
+            Int,        // gas_used
+            Int,        // nonce
+            Bytes,      // out
+            Account,    // to
+            TraceRoots, // traces
+            Int,        // transaction hash
+            Int,        // transaction index
+            Int,        // sigV
+            Bytes,      // sigR
+            Bytes       // sigS
+        ) [symbol(TransactionInfo)]
+        | #parseTransactionInfo( JSON ) [function, symbol(parseTransactionInfo)]
+    // -------------------------------------------------------------------------
 
     syntax ReceiptData ::= ReceiptData(
-        Int,   // cumulativeGasUsed
-        List,  // logs
-        Bytes, // logsBloom
-        Int,   // status
-        TxType
-    ) | #parseReceipt( JSON ) [function]
+            Int,   // cumulativeGasUsed
+            List,  // logs
+            Bytes, // logsBloom
+            Int,   // status
+            TxType
+        ) [symbol(ReceiptData)]
+        | #parseReceipt( JSON ) [function, symbol(parseReceipt)]
+    // ---------------------------------------------------------
 
-    syntax TraceRoot ::= TraceRoot( TraceData )
-                       | #parseTraceRoot( JSON ) [function]
+    syntax TraceRoot ::= TraceRoot( TraceData )  [symbol(TraceRoot)]
+                       | #parseTraceRoot( JSON ) [function, symbol(parseTraceRoot)]
+    // ----------------------------------------------------------------------------
 
     syntax TraceData ::= TraceData(
-        data: Bytes,
-        value: Int,
-        gasLimit: Int,
-        gasPrice: Int
-    ) | #parseTraceData( JSON ) [function]
+            data: Bytes,
+            value: Int,
+            gasLimit: Int,
+            gasPrice: Int
+        ) [symbol(TraceData)]
+        | #parseTraceData( JSON ) [function, symbol(parseTraceData)]
+    // -------------------------------------------------------------
 
-    syntax Map ::= #parseStorage( JSON )         [function]
-                 | #parseStorageAux( JSON, Map ) [function]
+    syntax Map ::= #parseStorage( JSON )         [function, symbol(parseStorage)]
+                 | #parseStorageAux( JSON, Map ) [function, symbol(parseStorageAux)]
+    // -----------------------------------------------------------------------------
 
     syntax Accounts ::= List{AccountData, ","}
-                      | "[" Accounts "]" [bracket]
-                      | #parseAccounts( JSON ) [function]
-    syntax Blocks   ::= List{BlockData, ","}
-                      | "[" Blocks "]" [bracket]
-                      | #parseBlocks( JSON ) [function]
-    syntax Transactions ::= List{TransactionData, ","}
-                      | "[" Transactions "]" [bracket]
-                      | #parseTransactions( JSON ) [function]
-    syntax TraceRoots ::= List{TraceRoot, ","}
-                      | "[" TraceRoots "]" [bracket]
-                      | "(" TraceRoots ")" [bracket]
-                      | #parseTraceRoots( JSON ) [function]
+                      | "[" Accounts "]"       [bracket]
+                      | #parseAccounts( JSON ) [function, symbol(parseAccounts)]
+    // -------------------------------------------------------------------------
 
-    syntax Int ::= #getBlockNumber( BlockData ) [function]
+    syntax Blocks   ::= List{BlockData, ","}
+                      | "[" Blocks "]"       [bracket]
+                      | #parseBlocks( JSON ) [function, symbol(parseBlocks)]
+    // ---------------------------------------------------------------------
+
+    syntax Transactions ::= List{TransactionData, ","}
+                      | "[" Transactions "]"       [bracket]
+                      | #parseTransactions( JSON ) [function, symbol(parseTransactions)]
+    // ---------------------------------------------------------------------------------
+
+    syntax TraceRoots ::= List{TraceRoot, ","}
+                      | "[" TraceRoots "]"       [bracket]
+                      | "(" TraceRoots ")"       [bracket]
+                      | #parseTraceRoots( JSON ) [function, symbol(parseTraceRoots)]
+    // -----------------------------------------------------------------------------
+
+    syntax Int ::= #getBlockNumber( BlockData ) [function, symbol(getBlockNumber)]
+    // ---------------------------------------------------------------------------
+
     rule #getBlockNumber( BlockData( _, _, _, _, _, _, _, _, BN, _, _, _, _, _, _, _, _, _, _, _, _, _) ) => BN
 
-    syntax Int ::= #getBlockTimestamp( BlockData ) [function]
+    syntax Int ::= #getBlockTimestamp( BlockData ) [function, symbol(getBlockTimestamp)]
+    // ---------------------------------------------------------------------------------
+
     rule #getBlockTimestamp( BlockData( _, _, _, _, _, _, _, _, _, _, _, TS, _, _, _, _, _, _, _, _, _, _) ) => TS
 
     rule #parseSnapshot( SNAPSHOT_JSON )
@@ -1765,7 +1823,9 @@ This section defines rules to write RPCResponses to a file.
 
 ```k
 
-      syntax String ::= "#responseFile" [function, total]
+      syntax String ::= "#responseFile" [function, total, symbol(responseFile)]
+      // ----------------------------------------------------------------------
+
       rule [[ #responseFile => IO_DIR +String "/response.json" ]]
         <ioDir> IO_DIR </ioDir>
 
@@ -1783,9 +1843,10 @@ This section defines rules to write RPCResponses to a file.
             ...
            </k>
 
-    syntax KItem ::= "#batchPrefix"
-                   | "#batchSuffix"
-                   | "#clearResponseFile"
+    syntax KItem ::= "#batchPrefix"       [symbol(batchPrefix)]
+                   | "#batchSuffix"       [symbol(batchSuffix)]
+                   | "#clearResponseFile" [symbol(clearResponseFile)]
+    // --------------------------------------------------------------
 
     rule <k> #clearResponseFile => #writeFile(#responseFile, "") ... </k>
 
@@ -1793,7 +1854,9 @@ This section defines rules to write RPCResponses to a file.
 
     rule <k> #batchSuffix => #appendFile(#responseFile, "\n]") ... </k>
 
-    syntax String ::= "#batchSep" [function, total]
+    syntax String ::= "#batchSep" [function, total, symbol(batchSep)]
+    // --------------------------------------------------------------
+
     rule [[ #batchSep => ",\n" ]]
         <rpcRequestBatchIndex> BATCH_INDEX </rpcRequestBatchIndex>
         requires BATCH_INDEX >Int 0
@@ -1807,9 +1870,12 @@ This section defines rules to write RPCResponses to a file.
 This section defines rules to read a RPCRequests from a file.
 
 ```k
-    syntax KItem ::= "#loadRpcRequest"
+    syntax KItem ::= "#loadRpcRequest" [symbol(loadRpcRequest)]
+    // --------------------------------------------------------
     
-    syntax String ::= "#requestFile" [function, total]
+    syntax String ::= "#requestFile" [function, total, symbol(requestFile)]
+    // --------------------------------------------------------------------
+
     rule [[ #requestFile => IO_DIR +String "/request.json" ]]
         <ioDir> IO_DIR </ioDir>
 
@@ -1826,10 +1892,12 @@ This seciont defines rules to write a StateDump JSON object to disk.
 
 ```k
 
-    syntax KItem ::= "#writeStateDump"
-                   | "#saveStateDump"
+    syntax KItem ::= "#writeStateDump" [symbol(writeStateDump)]
+                   | "#saveStateDump"  [symbol(saveStateDump)]
+    // -------------------------------------------------------
 
-    syntax String ::= #snapshotFile( Int ) [function, total]
+    syntax String ::= #snapshotFile( Int ) [function, total, symbol(snapshotFile)]
+    // ---------------------------------------------------------------------------
 
     rule [[ #snapshotFile( BLOCK_NUMBER )
             => IO_DIR +String "/blocks/block_" +String Int2String( BLOCK_NUMBER ) +String ".json"
@@ -1855,7 +1923,8 @@ This secion defines rules to read a StateDump JSON object from disk.
 
 ```k
 
-    syntax KItem ::= #loadSnapshotFile( Int )
+    syntax KItem ::= #loadSnapshotFile( Int ) [symbol(loadSnapshotFile)]
+    // -----------------------------------------------------------------
 
     rule <k> #loadSnapshotFile( BLOCK_NUMBER )
           => #let CONTENTS:IOString = #readFile( #snapshotFile( BLOCK_NUMBER ) )
@@ -1863,20 +1932,25 @@ This secion defines rules to read a StateDump JSON object from disk.
               ...
          </k>
 
-    syntax KItem ::= "#loadLatestSnapshot"
+    syntax KItem ::= "#loadLatestSnapshot" [symbol(loadLatestSnapshot)]
+    // ----------------------------------------------------------------
 
     rule <k> #loadLatestSnapshot
           => #loadSnapshotFile( #getInt( "latest_block_number", #loadMetadata, 0 ) )
           ...
          </k>
 
-    syntax String ::= "#metadataFile" [function, total]
+    syntax String ::= "#metadataFile" [function, total, symbol(metadataFile)]
+    // ----------------------------------------------------------------------
     
     rule [[ #metadataFile=> IO_DIR +String "/metadata.json" ]]
         <ioDir> IO_DIR </ioDir>
 
-    syntax KItem ::= "#saveMetadata"
-    syntax JSON ::= "#loadMetadata" [function]
+    syntax KItem ::= "#saveMetadata" [symbol(saveMetadata)]
+    // ----------------------------------------------------
+
+    syntax JSON ::= "#loadMetadata" [function, symbol(loadMetadata)]
+    // -------------------------------------------------------------
 
     rule #loadMetadata =>
             #let CONTENTS:IOString = #readFile( #metadataFile ) #in
@@ -1893,7 +1967,8 @@ This secion defines rules to read a StateDump JSON object from disk.
 
 ```k
 
-    syntax String ::= #traceFile( Int ) [function, total]
+    syntax String ::= #traceFile( Int ) [function, total, symbol(traceFile)]
+    // ---------------------------------------------------------------------
 
     rule [[ #traceFile( MSG_ID ) => IO_DIR +String "/transactions/trace_" +String Int2String( MSG_ID ) +String ".json" ]]
       <ioDir> IO_DIR </ioDir>

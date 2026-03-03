@@ -49,8 +49,11 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       "|" Bool         // is init code
       "|" StatusCode   // status
     "}" [symbol(traceItem)]
+ // -----------------------
 
-   syntax Map ::= updateNested( Map, KItem, KItem, KItem ) [function]
+   syntax Map ::= updateNested( Map, KItem, KItem, KItem ) [function, symbol(updateNested)]
+ // ---------------------------------------------------------------------------------------
+
    rule updateNested(MAP, INDEX1, INDEX2, VALUE) => MAP[ INDEX1 <- MAP[INDEX1] orDefault .Map [INDEX2 <- VALUE] ]
 
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
@@ -386,6 +389,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
  // ---------------------------------------------------------------------------------------------------------------
     syntax DataChange ::= ".DataChange" [symbol(UnchangedData)]
                         | Bytes
+ // ---------------------------
  
     // trace `isInitcode`
     // create a second callstack <tracesCallStack> with <isInitcode> subcell
@@ -393,8 +397,9 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     //  and insert new productions `#pushTracesCallStack`/`#popTracesCallStack`
     // init <isInitcode> to false and update state on `#mkCreate/#mkCall/#mkSystemCall`
 
-    syntax KItem ::= "#pushTracesCallStack"
-                   | "#popTracesCallStack"
+    syntax KItem ::= "#pushTracesCallStack" [symbol(pushTracesCallStack)]
+                   | "#popTracesCallStack"  [symbol(popTracesCallStack)]
+ // --------------------------------------------------------------------
 
     // `#pushCallStack` does not append new KItems after itself
     // therefore this kind of hook is safe

@@ -207,7 +207,9 @@ module TRACE-JSON
 
     // split memory into 32 bytes chunks
 
-    syntax JSONs ::= prepend( JSON, JSONs ) [function, total]
+    syntax JSONs ::= prepend( JSON, JSONs ) [function, total, symbol(prependJSONs)]
+    // ----------------------------------------------------------------------------
+  
     rule prepend( X, XS ) => X, XS
 
     rule memoryToJson(.DataChange) => null
@@ -316,7 +318,8 @@ module TRACE-JSON
          <recordedTrace> true => false </recordedTrace>
       [priority(25)]
 
-    syntax KItem ::= "#storeTraceItem" TraceItem
+    syntax KItem ::= "#storeTraceItem" TraceItem [symbol(storeTraceItem)]
+    // ------------------------------------------------------------------
 
     rule <k> (.K => #storeTraceItem { PCOUNT
                                     | OPC
