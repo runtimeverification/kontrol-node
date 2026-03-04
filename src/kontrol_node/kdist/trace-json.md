@@ -214,11 +214,11 @@ module TRACE-JSON
 
     rule memoryToJson(.DataChange) => null
     rule memoryToJson( MEM:Bytes )      => [ .JSONs ]
-      requires lengthBytes(MEM) ==Int 0
+      requires 0 ==Int lengthBytes(MEM)
 
     rule memoryToJson(MEM:Bytes)
       => [ memoryToJsons(MEM, maxInt(0, ((lengthBytes(MEM) -Int 1) /Int 32) *Int 32), .JSONs) ]
-      requires lengthBytes(MEM) >Int 0
+      requires 0 <Int lengthBytes(MEM)
 
     rule memoryToJsons(MEM, OFFSET, ACC)
       => memoryToJsons(
@@ -235,7 +235,7 @@ module TRACE-JSON
             ACC
           )
         )
-      requires OFFSET >=Int 32
+      requires 32 <=Int OFFSET
 
     rule memoryToJsons(MEM, OFFSET, ACC)
       => Bytes2Hex(

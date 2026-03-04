@@ -72,7 +72,7 @@ Mnemonic: test test test test test test test test test test test junk
 
     rule [[ #getLatestBlockNumber => BLOCK_NUMBER -Int 1 ]]
         <number> BLOCK_NUMBER </number>
-        requires BLOCK_NUMBER >Int 0
+        requires 0 <Int BLOCK_NUMBER
     rule #getLatestBlockNumber => 0 [owise]
 
     syntax Int ::= "#getLatestTxID" [function, symbol(getLatestTxID)]
@@ -142,13 +142,7 @@ Similarly, we save a state snapshot after the block was mined.
 ```k
     syntax KItem ::= "#ethSendTransactionResponse"   [symbol(ethSendTransactionResponse)]
                    | "#resetCallState"               [symbol(resetCallState)]
-                   |  #ensureAccountExists( Int )    [symbol(ensureAccountExists)]
     // ---------------------------------------------------------------------------
-
-    rule <k> #ensureAccountExists( ACCT:Int ) => .K ... </k>
-         <account> <acctID> ACCT </acctID> ... </account>
-
-    rule <k> #ensureAccountExists( ACCT:Int ) => #newAccount( ACCT ) ... </k> [owise]
 
     rule <k> #resetCallState => .K ... </k>
          <statusCode> _ => .StatusCode </statusCode>
@@ -188,7 +182,7 @@ Similarly, we save a state snapshot after the block was mined.
          
 
     rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
-            => #ensureAccountExists( FROM )
+            => #loadAccount( FROM )
             ~> #signTx(#getNextTxID, FROM)
             ...
         </k>
@@ -1859,7 +1853,7 @@ This section defines rules to write RPCResponses to a file.
 
     rule [[ #batchSep => ",\n" ]]
         <rpcRequestBatchIndex> BATCH_INDEX </rpcRequestBatchIndex>
-        requires BATCH_INDEX >Int 0
+        requires 0 <Int BATCH_INDEX
     
     rule #batchSep => "" [owise]
 

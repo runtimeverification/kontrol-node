@@ -17,7 +17,7 @@ module JSON-UTILS
     rule #getJSON( KEY, { KEY : J, _     }, _ ) => J
     rule #getJSON(   _, { .JSONs         }, DEF_VAL ) => DEF_VAL
     rule #getJSON( KEY, { KEY2 : _, REST }, DEF_VAL ) => #getJSON( KEY, { REST }, DEF_VAL )
-        requires KEY =/=String KEY2
+        requires KEY =/=K KEY2
 
     rule #getJSON( KEY, J ) => #getJSON( KEY, J, null )
 
@@ -74,11 +74,11 @@ module JSON-UTILS
     rule bytesToHex( BYTES, LEN ) => "0x" +String Bytes2Hex( padLeftBytes(BYTES, LEN, 0) )
 
     rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
-        requires A >=Int 0
+        requires 0 <=Int A
     rule intToHex( A:Int ) => "-0x" +String Base2String( absInt(A), 16) [owise]
 
     rule intToHex( A:Int, LEN:Int ) => "0x" +String Bytes2Hex( Int2Bytes( LEN, A, BE) )
-        requires A >=Int 0
+        requires 0 <=Int A
     rule intToHex( A:Int, LEN:Int ) => "-0x" +String Bytes2Hex( Int2Bytes( LEN, absInt(A), BE) ) [owise]
 
     rule addrToHex( A:Int ) => intToHex( A, 20 )
