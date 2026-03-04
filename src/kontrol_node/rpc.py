@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import atexit
 import cProfile
-import gzip
 import json
 import logging
 import os
