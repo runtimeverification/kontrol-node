@@ -116,6 +116,14 @@
 			"storage": {
 
 			}	
+		},
+		"0x7109709ECFA91A80626FF3989D68F67F5B1DD12D": {
+			"nonce": 0,
+			"balance": "0x0",
+			"code": "0x00",
+			"storage": {
+
+			}
 		}
 	},
 	"best_block_number": 0,
