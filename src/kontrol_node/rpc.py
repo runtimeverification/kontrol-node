@@ -150,8 +150,6 @@ class InterpreterProcess:
         with open(self._response_file(), 'rb') as f:
             response = f.read()
 
-        # response = self._postprocess(request_data, response)
-
         return response
 
     def shutdown(self) -> None:
@@ -162,17 +160,6 @@ class InterpreterProcess:
 
     def _response_file(self) -> Path:
         return self.io_dir / 'response.json'
-
-    def _postprocess(self, request_data: dict, response_data: bytes) -> bytes:
-        if request_data.get('method') == 'anvil_dumpState':
-            response_json = json.loads(response_data.decode('utf-8'))
-            result = response_json.get('result', {})
-            result_bytes = json.dumps(result).encode('utf-8')
-            compressed_data = gzip.compress(result_bytes)
-            hex_data = '0x' + compressed_data.hex()
-            response_json['result'] = hex_data
-            response_data = json.dumps(response_json).encode('utf-8')
-        return response_data
 
 
 def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
