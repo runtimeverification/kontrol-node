@@ -34,9 +34,7 @@ module KONTROL-NODE-CONFIG
             <traceCallData>           true  </traceCallData>
             <traceReturnData>         true  </traceReturnData>
             <tracesCallStack>         .List </tracesCallStack>
-            <tracesCallState>
-                <isInitCode>          false </isInitCode>
-            </tracesCallState>
+            <isInitCode>              false </isInitCode>
 
             <traceCurrentProgram>          true  </traceCurrentProgram>
             <programChanged>               true  </programChanged>

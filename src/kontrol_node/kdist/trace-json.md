@@ -30,10 +30,10 @@ module TRACE-JSON
                   | dataChangeToJson(DataChange)         [function, total, symbol(dataChangeToJson)]
  // ------------------------------------------------------------------------------------------------
     syntax JSONs ::= wordstackToJsons(WordStack, JSONs)  [function, total, symbol(wordstackToJsons)]
-                  | memoryToJsons(Bytes, JSONs)          [function, total, symbol(memoryToJsons)]
-                  | intMapToJsons(Map)                   [function, total, symbol(intMapToJsons)]
-                  | bytesMapToJsons(Map)                 [function, total, symbol(bytesMapToJsons)]
-                  | storageMapToJsons(Map)               [function, total, symbol(storageMapToJsons)]
+                  | memoryToJsons(Bytes, JSONs)          [function, symbol(memoryToJsons)]
+                  | intMapToJsons(Map)                   [function, symbol(intMapToJsons)]
+                  | bytesMapToJsons(Map)                 [function, symbol(bytesMapToJsons)]
+                  | storageMapToJsons(Map)               [function, symbol(storageMapToJsons)]
  // -------------------------------------------------------------------------------------------------
 
 

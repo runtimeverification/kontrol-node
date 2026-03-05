@@ -416,15 +416,15 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // track with <contextSwitch> that call data and return data has changed and needs to be included in the next trace
     rule <k> #pushTracesCallStack => .K ... </k>
          <injectedTracesCallStack> true => false </injectedTracesCallStack>
-         <tracesCallStack> STACK => ListItem(<tracesCallState> TRACESCALLSTATE </tracesCallState>) STACK </tracesCallStack>
-         <tracesCallState> TRACESCALLSTATE </tracesCallState>
+         <tracesCallStack> STACK => ListItem(IS_INIT_CODE) STACK </tracesCallStack>
+         <isInitCode> IS_INIT_CODE </isInitCode>
          <contextSwitch> _ => true </contextSwitch>
 
     // track with <contextSwitch> that call data and return data has changed and needs to be included in the next trace
     rule <k> #popTracesCallStack => .K ... </k>
          <injectedTracesCallStack> true => false </injectedTracesCallStack>
-         <tracesCallStack> ListItem(<tracesCallState> TRACESCALLSTATE </tracesCallState>) REST => REST </tracesCallStack>
-         <tracesCallState> _ => TRACESCALLSTATE </tracesCallState>
+         <tracesCallStack> ListItem(IS_INIT_CODE) REST => REST </tracesCallStack>
+         <isInitCode> _ => IS_INIT_CODE </isInitCode>
          <contextSwitch> _ => true </contextSwitch>
          <programChanged> _ => true </programChanged>
          <localMemoryChanged> _ => true </localMemoryChanged>

@@ -599,8 +599,7 @@ just build the response string directly.
 
     rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
         => #let STRUCT_LOGS = #readFile( #traceFile( TXID) ) #in
-           #let LENGTH = lengthString( {STRUCT_LOGS}:>String ) #in
-           #let WITHOUT_TRAILING_COMMA = substrString( {STRUCT_LOGS}:>String, 0, LENGTH -Int 2 ) #in
+           #let WITHOUT_TRAILING_COMMA = stripSuffix( {STRUCT_LOGS}:>String, ",\n" ) #in
             RPCRawResponse(
                 "{ \"jsonrpc\": \"2.0\"" +String
                 ", \"id\": " +String Int2String(REQ_ID) +String
@@ -620,6 +619,14 @@ just build the response string directly.
             <txStatus> TX_STATUS </txStatus>
             ...
         </txReceipt>
+
+    syntax String ::= stripSuffix( String, String ) [function, symbol(stripSuffix)]
+    // ----------------------------------------------------------------------------
+
+    rule stripSuffix( STR, SUFFIX ) => substrString( STR, 0, lengthString(STR) -Int lengthString(SUFFIX) )
+        requires substrString( STR, lengthString(STR) -Int lengthString(SUFFIX), lengthString(STR) ) ==String SUFFIX
+
+    rule stripSuffix( STR, _ ) => STR [owise]
 
 ```
 
@@ -751,8 +758,6 @@ just build the response string directly.
          <txPending> ListItem(TXID:Int) ... </txPending>
          <message>
             <msgID>      TXID     </msgID>
-            <txGasPrice> GPRICE   </txGasPrice>
-            <txGasLimit> GLIMIT   </txGasLimit>
             <to>         .Account </to>
             <value>      VALUE    </value>
             <data>       CODE     </data>
@@ -781,8 +786,6 @@ just build the response string directly.
          <callDepth> _ => -1 </callDepth>
          <message>
             <msgID>      TXID   </msgID>
-            <txGasPrice> GPRICE </txGasPrice>
-            <txGasLimit> GLIMIT </txGasLimit>
             <to>         ACCTTO </to>
             <value>      VALUE  </value>
             <data>       DATA   </data>
@@ -829,7 +832,6 @@ just build the response string directly.
          <gasUsed>    CGAS </gasUsed>
          <log>        LOGS </log>
          <number>     BN   </number>
-         <origin>     ACCT </origin>
 
 ```
 
@@ -1215,13 +1217,13 @@ K configuration.
                    | accountToJSON( AccountCell )            [function, total, symbol(accountToJSON)]
                    | storageToJSON(Map)                      [function, total, symbol(accStorageToJson)]
                    | blocksToJSON(Map)                       [function, total, symbol(blocksToJSON)]
-                   | blockToJSON(BlockData)                  [function, total, symbol(blockToJSON)]
+                   | blockToJSON(BlockData)                  [function, symbol(blockToJSON)]
                    | receiptsToJSON( TxReceiptsCell )        [function, total, symbol(receiptsToJSON)]
                    | receiptToJSON( TxReceiptCell )          [function, total, symbol(receiptToJSON)]
     // ----------------------------------------------------------------------------------------------
 
     syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsToJSONs)]
-                   | storageToJSONs( Map, JSONs )            [function, total, symbol(accStorageToJSONs)]
+                   | storageToJSONs( Map, JSONs )            [function, symbol(accStorageToJSONs)]
                    | blocksToJSONs( Map, JSONs )             [function, total, symbol(blocksToJSONs)]
                    | receiptsToJSONs( TxReceiptsCell, JSONs ) [function, total, symbol(receiptsToJSONs)]
     // -------------------------------------------------------------------------------------------------
@@ -1343,7 +1345,6 @@ K configuration.
         }) ...
     </k>
     <block>
-        <number>        BLOCK_NUMBER          </number>
         <coinbase>      BLOCK_COINBASE        </coinbase>
         <timestamp>     BLOCK_TIMESTAMP       </timestamp>
         <gasLimit>      BLOCK_GAS_LIMIT       </gasLimit>
@@ -1480,15 +1481,15 @@ StateDump format - not the ethereum/test format.
           ~> #loadTransactions( REST ) ... </k>
 
     rule <k> #loadTransaction( TransactionData(
-            BLOCK_HASH,
+            _BLOCK_HASH,
             BLOCK_NUMBER,
             TransactionInfo(
                 _TX_CONTRACT_ADDR,
                 _TX_EXIT,
-                TX_FROM,
-                TX_GAS_USED,
+                _TX_FROM,
+                _TX_GAS_USED,
                 TX_NONCE,
-                TX_OUT,
+                _TX_OUT,
                 TX_TO,
                 [ TraceRoot( TraceData( MSG_DATA, TX_VALUE, TX_GAS_LIMIT, TX_GAS_PRICE ) ) ],
                 TX_HASH,
@@ -1975,7 +1976,6 @@ This secion defines rules to read a StateDump JSON object from disk.
                 JSON2String( traceItemToJson( TRITEM ) ) +String ",\n"
              ) ...
          </k>
-         <ioDir> IO_DIR </ioDir>
 
 endmodule
 ```
