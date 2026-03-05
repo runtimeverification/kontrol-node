@@ -140,8 +140,8 @@ Additionally, we eagerly compute the transaction trace and and save it to disk.
 Similarly, we save a state snapshot after the block was mined.
 
 ```k
-    syntax KItem ::= "#ethSendTransactionResponse"   [symbol(ethSendTransactionResponse)]
-                   | "#resetCallState"               [symbol(resetCallState)]
+    syntax KItem ::= #ethSendTransactionResponse( Int ) [symbol(ethSendTransactionResponse)]
+                   | "#resetCallState"                  [symbol(resetCallState)]
     // ---------------------------------------------------------------------------
 
     rule <k> #resetCallState => .K ... </k>
@@ -181,12 +181,11 @@ Similarly, we save a state snapshot after the block was mined.
 
     rule <k> RPCRequest( REQ_ID, EthSendTransaction( FROM, TO, GAS_LIMIT, GAS_PRICE, VALUE, DATA ) )
             => #loadAccount( FROM )
-            ~> #signTx(#getNextTxID, FROM)
+            ~> #signTx
             ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <origin>       _ => FROM   </origin>
-        <currentTxID>  _ => #getNextTxID </currentTxID>
         <schedule>     SCHED       </schedule>
         <callState>
             <callGas> _ => G0(SCHED, DATA, (TO ==K .Account) ) </callGas>
@@ -232,10 +231,9 @@ Similarly, we save a state snapshot after the block was mined.
         </k>
 
     rule <k> #signTxSuccess
-        => #applyIntrinsicGas( TX_ID )
+        => #applyIntrinsicGas
         ...
         </k>
-        <currentTxID> TX_ID </currentTxID>
 
     rule <k> #intrinsicGasError( _ERR_CODE )
         => #resetCallState
@@ -247,7 +245,7 @@ Similarly, we save a state snapshot after the block was mined.
         </k>
 
     rule <k> #intrinsicGasSuccess
-        => #executeTx( TX_ID )
+        => #executeTx
         ~> #finishTx
         ~> #finalizeTx(false, Ctxfloor(SCHED, DATA))
         ~> #makeTxReceipt( TX_ID )
@@ -256,10 +254,10 @@ Similarly, we save a state snapshot after the block was mined.
         ~> #saveStateDump
         ~> #saveMetadata
         ~> #resetCallState
-        ~> #ethSendTransactionResponse
+        ~> #ethSendTransactionResponse( TX_ID )
         ...
         </k>
-        <currentTxID> TX_ID  </currentTxID>
+        <txPending> ListItem( TX_ID ) ... </txPending>
         <schedule>    SCHED  </schedule>
         <message>
             <msgID> TX_ID </msgID>
@@ -267,10 +265,9 @@ Similarly, we save a state snapshot after the block was mined.
             ...
         </message>
 
-    rule <k> #ethSendTransactionResponse
+    rule <k> #ethSendTransactionResponse( TXID )
         => RPCResponse( uint256ToHex( TX_HASH ) )
         ... </k>
-        <currentTxID> TXID    </currentTxID>
         <txReceipt>
             <txMsg>   TXID    </txMsg>
             <txHash>  TX_HASH </txHash>
@@ -636,20 +633,22 @@ just build the response string directly.
     // previously of EIP155, v is computed as:  v = recid + 27
     // post of EIP155, v is computed as :       v = 2 * CHAIN_ID + recid + 35
 
-    syntax KItem ::= #signTx(Int, Int)    [symbol(signTx)]
-                   | #signTx(Int, String) [symbol(signTxWithSig)]
-                   | "#signTxSuccess"     [symbol(signTxSuccess)]
-                   | "#signTxError"       [symbol(signTxError)]
+    syntax KItem ::= "#signTx"        [symbol(signTx)]
+                   | #signTx(String)  [symbol(signTxWithSig)]
+                   | "#signTxSuccess" [symbol(signTxSuccess)]
+                   | "#signTxError"   [symbol(signTxError)]
     // --------------------------------------------------------
     
     // Sign a transaction with an account managed by this node   
-    rule <k> #signTx(TXID, ACCTFROM:Int)
-          => #signTx(TXID, ECDSASign( 
+    rule <k> #signTx
+          => #signTx(ECDSASign( 
                 Keccak256raw(#rlpEncodeTxData(LegacySignedTxData(TN, TP, TG, TT, TV, TD, B))),
                 KEY
           )) ... </k>
+        <origin> ACCTFROM </origin>
         <accountKeys> ... ACCTFROM |-> KEY ... </accountKeys>
         <mode> NORMAL </mode>
+        <txPending> ListItem( TXID ) ... </txPending>
         <chainID> B </chainID>
          <message>
            <msgID> TXID </msgID>
@@ -663,16 +662,18 @@ just build the response string directly.
          </message>
 
     // Error signing a transaction with an unknown account
-    rule <k> #signTx(TXID, ACCTFROM:Int) => #signTxError ... </k>
+    rule <k> #signTx => #signTxError ... </k>
+         <origin>      ACCTFROM                    </origin>
          <accountKeys> KEYMAP                      </accountKeys>
          <mode>        NORMAL                      </mode>
-         <txPending>   ListItem(TXID) => .List ... </txPending> // TODO: Is this the best place to remove the tx from pending?
-         <txOrder>     ListItem(TXID) => .List ... </txOrder>
+         <txPending> ListItem(TXID) REST1 => REST1 </txPending>
+         <txOrder>   ListItem(TXID) REST2 => REST2 </txOrder>
       requires notBool ACCTFROM in_keys(KEYMAP)
   
     // Sign a transaction with a given signature
-    rule <k> #signTx(TXID, SIG:String) => #signTxSuccess ... </k>
+    rule <k> #signTx(SIG:String) => #signTxSuccess ... </k>
          <chainID> B </chainID>
+         <txPending> ListItem( TXID ) ... </txPending>
          <message>
            <msgID> TXID </msgID>
            <sigR> _ => #parseHexBytes( substrString( SIG, 0, 64 ) )           </sigR>
@@ -681,16 +682,18 @@ just build the response string directly.
            ...
          </message>
 
-    syntax KItem ::= #applyIntrinsicGas( Int )                   [symbol(applyIntrinsicGas)]
+    syntax KItem ::= "#applyIntrinsicGas"                        [symbol(applyIntrinsicGas)]
                    | "#intrinsicGasSuccess"                      [symbol(intrinsicGasSuccess)]
                    | #intrinsicGasError( ExceptionalStatusCode ) [symbol(intrinsicGasError)]
     // -------------------------------------------------------------------------------------
 
     // Revert if insufficient gas
-    rule <k> #applyIntrinsicGas( TXID )
+    rule <k> #applyIntrinsicGas
           => #intrinsicGasError( #if BAL <Int GLIMIT *Int GPRICE #then EVMC_BALANCE_UNDERFLOW #else EVMC_OUT_OF_GAS #fi)
           ...
          </k>
+         <txPending> ListItem( TXID ) REST1 => REST1 </txPending>
+         <txOrder>   ListItem( TXID ) REST2 => REST2 </txOrder>
          <callGas> G0_INIT </callGas>
          <origin> ACCTFROM </origin>
          <account>
@@ -708,10 +711,11 @@ just build the response string directly.
         orBool BAL <Int GLIMIT *Int GPRICE
 
     // Sufficient gas
-    rule <k> #applyIntrinsicGas( TXID )
+    rule <k> #applyIntrinsicGas
           => #intrinsicGasSuccess ... </k>
          <origin> ACCTFROM </origin>
          <callGas> G0_INIT => GLIMIT -Int G0_INIT </callGas>
+         <txPending> ListItem( TXID ) ... </txPending>
          <account>
            <acctID> ACCTFROM </acctID>
            <balance> BAL => BAL -Int (GLIMIT *Int GPRICE)</balance>
@@ -730,11 +734,11 @@ just build the response string directly.
       requires GLIMIT >=Int G0_INIT
        andBool BAL >=Int GLIMIT *Int GPRICE
 
-    syntax KItem ::= #executeTx( Int ) [symbol(executeTx)]
+    syntax KItem ::= "#executeTx" [symbol(executeTx)]
     // ---------------------------------------------------
 
     // Execute a contract creation transaction
-    rule <k> #executeTx( TXID:Int )
+    rule <k> #executeTx
           => #accessAccounts ACCTFROM #newAddr(ACCTFROM, NONCE) #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
           ~> #create ACCTFROM #newAddr(ACCTFROM, NONCE) VALUE CODE
@@ -763,7 +767,7 @@ just build the response string directly.
          
 
     // Exeucte a contract call transaction
-    rule <k> #executeTx( TXID:Int )
+    rule <k> #executeTx
           => #accessAccounts ACCTFROM ACCTTO #precompiledAccountsSet(SCHED)
           ~> #loadAccessList(TA)
           ~> #call ACCTFROM ACCTTO ACCTTO VALUE VALUE DATA false

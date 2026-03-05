@@ -14,7 +14,6 @@ module KONTROL-NODE-CONFIG
             <rpcRequestBatchIndex>    -1        </rpcRequestBatchIndex>
             <accountKeys>             .Map      </accountKeys>
             <timeFreeze>              true      </timeFreeze>
-            <currentTxID>             0         </currentTxID>
 
             // Tracing
             <activeTracing>           true  </activeTracing>          // signals if the tracing is gloablly enabled
