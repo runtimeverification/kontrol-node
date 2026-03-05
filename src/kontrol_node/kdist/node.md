@@ -145,23 +145,21 @@ Similarly, we save a state snapshot after the block was mined.
     // ---------------------------------------------------------------------------
 
     rule <k> #resetCallState => .K ... </k>
-         <statusCode> _ => .StatusCode </statusCode>
-         <origin>     _ => .Account    </origin>
-         <recordedTrace> _ => false    </recordedTrace>
-         <injectedTracesCallStack> _ => false </injectedTracesCallStack>
-         <recordedMkCallCreate>    _ => false </recordedMkCallCreate>
-         <contextSwitch>           _ => true  </contextSwitch>
-         <currentNonceMutations>   _ => .Map  </currentNonceMutations>
-         <currentBalanceMutations> _ => .Map  </currentBalanceMutations>
-         <currentStorageMutations> _ => .Map  </currentStorageMutations>
-         <localMemoryChanged>      _ => true  </localMemoryChanged>
-         <programChanged>          _ => true  </programChanged>
-         <tracesCallStack>         _ => .List  </tracesCallStack>
-         <tracesCallState>
-            <isInitCode>          _ => false </isInitCode>
-         </tracesCallState>
-         <currentDeployedCodeMutations> _ => .Map </currentDeployedCodeMutations>
-         <currentInitCodeMutations>     _ => .Map </currentInitCodeMutations>
+         <statusCode>                   _ => .StatusCode </statusCode>
+         <origin>                       _ => .Account    </origin>
+         <recordedTrace>                _ => false       </recordedTrace>
+         <injectedTracesCallStack>      _ => false       </injectedTracesCallStack>
+         <recordedMkCallCreate>         _ => false       </recordedMkCallCreate>
+         <contextSwitch>                _ => true        </contextSwitch>
+         <currentNonceMutations>        _ => .Map        </currentNonceMutations>
+         <currentBalanceMutations>      _ => .Map        </currentBalanceMutations>
+         <currentStorageMutations>      _ => .Map        </currentStorageMutations>
+         <localMemoryChanged>           _ => true        </localMemoryChanged>
+         <programChanged>               _ => true        </programChanged>
+         <tracesCallStack>              _ => .List       </tracesCallStack>
+         <isInitCode>                   _ => false       </isInitCode>
+         <currentDeployedCodeMutations> _ => .Map        </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     _ => .Map        </currentInitCodeMutations>
          <callState>
             <program>    _ => .Bytes     </program>
             <jumpDests>  _ => .Bytes     </jumpDests>
@@ -243,7 +241,7 @@ Similarly, we save a state snapshot after the block was mined.
         => #resetCallState
         ~> RPCResponse({
                 "code"    : -32000,
-                "message" : "Intrinsic gas error "
+                "message" : "Intrinsic gas error"
             })
         ...
         </k>
