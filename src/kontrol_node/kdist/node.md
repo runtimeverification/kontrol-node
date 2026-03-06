@@ -1103,9 +1103,8 @@ intermediate representation.
     rule <k> #rpcLoad( { J } )
           => #clearResponseFile
           ~> #rpcLoadSingle( { J }) ... </k>
-    // If the request is malformed, we ignore it
-    // TODO: add error handling
-    rule <k> #rpcLoad( _ ) => .K ... </k> [owise]
+
+    rule <k> #rpcLoad( _ ) => RPCResponse({"code": -32000, "message" : "Invalid Request" }) ... </k> [owise]
 
     // RPC requests can be batched, in this case we iterate over the list
     rule <k> #rpcLoadBatch( [ .JSONs ] ) => .K ... </k>
