@@ -34,7 +34,7 @@ def test_rpc_file(
 
     with open(INPUT_FILES / f'{test_id}.in.json') as test_file:
         payload = json.loads(test_file.read())
-        if type(payload) is dict:
+        if type(payload) is not list:
             payload = [payload]
         if type(payload) is list:
             response_list = []
@@ -57,7 +57,7 @@ def test_rpc_file_batched(
 
     with open(INPUT_FILES / f'{test_id}.in.json') as test_file:
         payload = json.loads(test_file.read())
-        if type(payload) is dict:
+        if type(payload) is not list:
             payload = [payload]
         if type(payload) is list:
             request_result = execute_json_rpc(server, payload)

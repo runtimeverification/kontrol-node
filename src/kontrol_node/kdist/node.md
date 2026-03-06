@@ -223,10 +223,7 @@ Similarly, we save a state snapshot after the block was mined.
 
     rule <k> #signTxError
         => #resetCallState
-        ~> RPCResponse({
-                "code"    : -32000,
-                "message" : "Could not sign transaction: account not found"
-            })
+        ~> RPCErrorResponse(-32603, "Could not sign transaction: account not found")
         ...
         </k>
 
@@ -237,10 +234,7 @@ Similarly, we save a state snapshot after the block was mined.
 
     rule <k> #intrinsicGasError( _ERR_CODE )
         => #resetCallState
-        ~> RPCResponse({
-                "code"    : -32000,
-                "message" : "Intrinsic gas error"
-            })
+        ~> RPCErrorResponse(-32603, "Intrinsic gas error")
         ...
         </k>
 
@@ -1049,9 +1043,10 @@ This section defines an intermediate represention for JSON RPC requests.
                    | RPCRequest
     // ------------------------
 
-    syntax RPCResponse ::= RPCResponse( JSON )      [symbol(RPCStructuredResponse)]
-                         | RPCRawResponse( String ) [symbol(RPCRawResponse)]
-    // ---------------------------------------------------------------------
+    syntax RPCResponse ::= RPCResponse( JSON )             [symbol(RPCStructuredResponse)]
+                         | RPCRawResponse( String )        [symbol(RPCRawResponse)]
+                         | RPCErrorResponse( Int, String ) [symbol(RPCErrorResponse)]
+    // ------------------------------------------------------------------------------
 
     syntax RPCRequest  ::= RPCRequest( Int, RPCRequestParams) [symbol(RPCRequestWithParams)]
     // -------------------------------------------------------------------------------------
@@ -1076,7 +1071,9 @@ This section defines an intermediate represention for JSON RPC requests.
                               | AnvilDumpState()                   // TODO: add options
                               | AnvilSetBalance( Int, Int )        // address, balance
                               | DebugTraceTransaction( Int )        // tx hash
-    // -----------------------------------------------------
+                              | UnknownMethod()
+                              | InvalidRequest()
+    // ----------------------------------------
 ```
 
 ###############################################################################
@@ -1104,7 +1101,13 @@ intermediate representation.
           => #clearResponseFile
           ~> #rpcLoadSingle( { J }) ... </k>
 
-    rule <k> #rpcLoad( _ ) => RPCResponse({"code": -32000, "message" : "Invalid Request" }) ... </k> [owise]
+    rule <k> #rpcLoad( _ ) => RPCRequest( -1, InvalidRequest() ) ... </k>[owise]
+
+    rule <k> RPCRequest( REQ_ID, UnknownMethod() ) => RPCErrorResponse(-32601, "Method not found") ... </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
+
+    rule <k> RPCRequest( REQ_ID, InvalidRequest() ) => RPCErrorResponse(-32600, "Invalid Request") ... </k>
+         <rpcRequestID> _ => REQ_ID </rpcRequestID>
 
     // RPC requests can be batched, in this case we iterate over the list
     rule <k> #rpcLoadBatch( [ .JSONs ] ) => .K ... </k>
@@ -1112,16 +1115,21 @@ intermediate representation.
         => #rpcLoadRequest( FIRST )
         ~> #rpcLoadBatch( [ REST ] ) ... </k>
         <rpcRequestBatchIndex> BATCH_ID => BATCH_ID +Int 1 </rpcRequestBatchIndex>
+
+    rule <k> #rpcLoadBatch( _ ) => RPCRequest(-1, InvalidRequest()) ... </k> [owise]
+
     // If the request is not batched, we just load a single request
     rule <k> #rpcLoadSingle( { FIRST } ) 
         => #rpcLoadRequest( { FIRST } ) ... </k>
 
-    rule #rpcLoadRequest( J )
-            => #let REQ_ID  = #getInt(    "id",     J) #in
-            #let METHOD     = #getString( "method", J) #in
-            #let PARAMS_RAW = #getJSON(   "params", J) #in
+    rule #rpcLoadRequest( { J } )
+            => #let REQ_ID  = #getInt(    "id",     { J }) #in
+            #let METHOD     = #getString( "method", { J }) #in
+            #let PARAMS_RAW = #getJSON(   "params", { J }) #in
             #let REQ_PARAMS = #rpcLoadParams( METHOD, PARAMS_RAW ) #in
             RPCRequest(REQ_ID, REQ_PARAMS)
+
+    rule #rpcLoadRequest( _ ) => RPCRequest(-1, InvalidRequest()) [owise]
 
     rule #rpcLoadParams( "eth_chainId", [ .JSONs ] )
         => EthChainId()
@@ -1180,6 +1188,8 @@ intermediate representation.
     rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String, _OPTIONS:JSON ] )
         => DebugTraceTransaction( #parseWord( TX_HASH ) )
 
+    rule #rpcLoadParams( _, _ ) => UnknownMethod() [owise]
+
     // Helpers
 
     syntax Int ::= #parseBlockNumber( String ) [function, symbol(parseBlockNumber)]
@@ -1225,9 +1235,9 @@ K configuration.
                    | receiptToJSON( TxReceiptCell )          [function, total, symbol(receiptToJSON)]
     // ----------------------------------------------------------------------------------------------
 
-    syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )  [function, total, symbol(accountsToJSONs)]
-                   | storageToJSONs( Map, JSONs )            [function, symbol(accStorageToJSONs)]
-                   | blocksToJSONs( Map, JSONs )             [function, total, symbol(blocksToJSONs)]
+    syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )   [function, total, symbol(accountsToJSONs)]
+                   | storageToJSONs( Map, JSONs )             [function, symbol(accStorageToJSONs)]
+                   | blocksToJSONs( Int, Map, JSONs )         [function, total, symbol(blocksToJSONs)]
                    | receiptsToJSONs( TxReceiptsCell, JSONs ) [function, total, symbol(receiptsToJSONs)]
     // -------------------------------------------------------------------------------------------------
 
@@ -1362,9 +1372,10 @@ K configuration.
     <blockStorage> BLOCK_STORAGE </blockStorage>
     <txReceipts> RECEIPTS </txReceipts>
 
-    rule blocksToJSON( BS ) => [ blocksToJSONs( BS, .JSONs ) ] [priority(50)]
-    rule blocksToJSONs( .Map, ACCU ) => ACCU
-    rule blocksToJSONs( (_ |-> VAL) BS, ACCU) => blockToJSON({VAL}:>BlockData), blocksToJSONs( BS, ACCU )
+    rule blocksToJSON( BS ) => [ blocksToJSONs( 0, BS, .JSONs ) ] [priority(50)]
+    rule blocksToJSONs( BN, BS, ACCU) => blockToJSON({BS[BN]}:>BlockData), blocksToJSONs( BN +Int 1, BS, ACCU )
+        requires BN in_keys(BS)
+    rule blocksToJSONs( _, _, ACCU ) => ACCU [owise]
 
     rule blockToJSON( BlockData(
             PH, HO, HC, HR, HT, HE, HB, HD, BN, HL, HG, HS, HX, HM, HN, BF, WR, BG, EG, BR, RR, OBH
@@ -1834,6 +1845,18 @@ This section defines rules to write RPCResponses to a file.
                   "jsonrpc" : "2.0",
                   "id"      : REQ_ID,
                   "result"  : JSON_RESPONSE
+            }))
+            ... </k>
+            <rpcRequestID> REQ_ID </rpcRequestID>
+
+      rule <k> RPCErrorResponse( ERROR_CODE, ERROR_MESSAGE )
+            => #appendFile(#responseFile, #batchSep +String JSON2String({
+                  "jsonrpc" : "2.0",
+                  "id"      : #if 0 <=Int REQ_ID #then REQ_ID #else null #fi,
+                  "error"   : {
+                      "code": ERROR_CODE,
+                      "message": ERROR_MESSAGE
+                  }
             }))
             ... </k>
             <rpcRequestID> REQ_ID </rpcRequestID>

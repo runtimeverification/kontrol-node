@@ -26,7 +26,7 @@ _LOGGER: Final = logging.getLogger(__name__)
 
 _PROFILING: Final[bool] = False
 
-_DEBUG_KORE: Final[bool] = False
+_DEBUG_KORE: Final[bool] = True
 
 # Simbolik needs at minimum the following RPC methods
 # eth_sendTransaction
