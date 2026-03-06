@@ -1186,7 +1186,11 @@ intermediate representation.
     syntax Int ::= #parseBlockNumber( String ) [function, symbol(parseBlockNumber)]
     // ----------------------------------------------------------------------------
 
+    rule #parseBlockNumber( "earliest" ) => 0
     rule #parseBlockNumber( "latest" ) => #getLatestBlockNumber
+    rule #parseBlockNumber( "safe" ) => #getLatestBlockNumber
+    rule #parseBlockNumber( "finalized" ) => #getLatestBlockNumber
+    rule #parseBlockNumber( "pending" ) => #getLatestBlockNumber +Int 1
     rule #parseBlockNumber( BN ) => #parseWord( BN ) [owise]
 
 ```
