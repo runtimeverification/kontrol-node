@@ -702,6 +702,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
         init_config = set_cell(init_config, 'TRACECURRENTPROGRAM_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEDEPLOYEDCODE_CELL', TRUE)
         init_config = set_cell(init_config, 'TRACEINITCODE_CELL', TRUE)
+        init_config = set_cell(init_config, 'TRACECONSOLELOGS_CELL', TRUE)
         init_config = set_cell(init_config, 'WRITETRACELOGSTOFILE_CELL', TRUE)
 
         init_term = Subst(init_subst)(init_config)

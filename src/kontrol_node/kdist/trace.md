@@ -661,9 +661,11 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       [owise,priority(49)]
 
    // The console.log of Kontrol does not have a rewrite rule, as it is meant to generate a stuck state.
-   // rule <k> #consoleLog _ _ => .K ... </k>
+   rule <k> #consoleLog _ _ => .K ... </k>
+        <traceConsoleLogs> false </traceConsoleLogs>
 
    rule <k> #consoleLog LOGSELECTOR LOGBYTES => .K ... </k>
+        <traceConsoleLogs> true </traceConsoleLogs>
         <currentConsoleLogs> CONLOGS => CONLOGS ListItem( "0x" +String Bytes2Hex( #padToWidth ( 4 , #asByteStack ( LOGSELECTOR ) ) ) +String Bytes2Hex( LOGBYTES ) ) </currentConsoleLogs>
       requires #rangeUInt(32, LOGSELECTOR)
       [priority(49)]
