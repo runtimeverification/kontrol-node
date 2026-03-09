@@ -24,12 +24,15 @@ module TRACE-JSON
                   | accountToJson(Account)               [function, total, symbol(accountToJson)]
                   | statusToJson(StatusCode)             [function, total, symbol(statusToJson)]
                   | dataChangeToJson(DataChange)         [function, total, symbol(dataChangeToJson)]
+                  | consoleLogsToJson(List)              [function, total, symbol(consoleLogsToJson)]
+                  
  // ------------------------------------------------------------------------------------------------
     syntax JSONs ::= wordstackToJsons(WordStack, JSONs)  [function, total, symbol(wordstackToJsons)]
                   | memoryToJsons(Bytes, JSONs)          [function, total, symbol(memoryToJsons)]
                   | intMapToJsons(Map)                   [function, total, symbol(intMapToJsons)]
                   | bytesMapToJsons(Map)                 [function, total, symbol(bytesMapToJsons)]
                   | storageMapToJsons(Map)               [function, total, symbol(storageMapToJsons)]
+                  | consoleLogsToJsons(List, JSONs)      [function, total, symbol(consoleLogsToJsons)]
  // -------------------------------------------------------------------------------------------------
     syntax String ::= intToHex(Int)    [function, total, symbol(intToHex)]
                    | bytesToHex(Bytes) [function, total, symbol(bytesToHex)]
@@ -258,6 +261,10 @@ module TRACE-JSON
     rule dataChangeToJson( .DataChange ) => null
     rule dataChangeToJson( BYTES ) => bytesToJson( BYTES) [owise]
 
+    rule consoleLogsToJson( LOGS ) => [ consoleLogsToJsons( LOGS, .JSONs ) ] [priority(50)]
+    rule consoleLogsToJsons( .List, LOGS ) => LOGS
+    rule consoleLogsToJsons( ListItem( CONSOLELOG:String ) LOGS:List , JSONLOGS:JSONs ) => consoleLogsToJsons( LOGS , (CONSOLELOG, JSONLOGS) )
+
     rule traceItemToJson (
       { VAR_PC
       | VAR_OPCODE
@@ -285,6 +292,7 @@ module TRACE-JSON
       | VAR_TX_ORIGIN
       | VAR_IS_INIT_CODE
       | VAR_STATUS_CODE
+      | VAR_CONSOLE_LOGS
       } ) => {
         "pc": VAR_PC,
         "op": opcodeToJson( VAR_OPCODE ),
@@ -311,7 +319,8 @@ module TRACE-JSON
         "msgValue": VAR_MESSAGE_VALUE,
         "txOrigin": accountToJson( VAR_TX_ORIGIN ),
         "isInitCode": VAR_IS_INIT_CODE,
-        "statusCode": statusToJson( VAR_STATUS_CODE )
+        "statusCode": statusToJson( VAR_STATUS_CODE ),
+        "consoleLogs": consoleLogsToJson( VAR_CONSOLE_LOGS )
       }
 
     // IO
@@ -348,6 +357,7 @@ module TRACE-JSON
                                     | TXORIG
                                     | ISINIT
                                     | STATUS
+                                    | CONLOGS
                                     })
              ~> #next [ OPC ] ...
          </k>
@@ -367,6 +377,7 @@ module TRACE-JSON
          <programChanged>               PROGCHANGED => false   </programChanged>
          <currentDeployedCodeMutations> DEPLCODECH => .Map     </currentDeployedCodeMutations>
          <currentInitCodeMutations>     INITCODECH => .Map     </currentInitCodeMutations>
+         <currentConsoleLogs>           CONLOGS => .List       </currentConsoleLogs>
          <callData>                     CADA                   </callData>
          <output>                       REDA                   </output>
          <pc>                           PCOUNT                 </pc>

@@ -20,3 +20,4 @@ kontrol_addAccount_0
 debug_traceTransaction_1
 debug_traceTransaction_slow
 debug_traceTransaction_mocks
+debug_traceTransaction_logs
