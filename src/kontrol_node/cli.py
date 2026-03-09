@@ -96,7 +96,7 @@ def _create_argument_parser() -> ArgumentParser:
     )
     run.add_argument(
         '--host',
-        dest='host',
+        dest='addr',
         default='127.0.0.1',
         help='host address',
     )
