@@ -80,7 +80,7 @@ class StatefulKJsonRpcServer(JsonRpcServer):
     block_storage: BlockStore
 
     def __init__(self, options: VMOptions) -> None:
-        super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'host': options.host}))
+        super().__init__(ServeRpcOptions({'definition_dir': None, 'port': int(options.port), 'addr': options.addr}))
 
         self._register_rpc_methods()
         dir_path = Path(f'{kdist.kdist_dir}/kontrol-node/simbolik')
