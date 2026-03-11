@@ -530,12 +530,15 @@ Similarly, we save a state snapshot after the block was mined.
 ## anvil_dumpState
 
 ```k
+
     rule <k> RPCRequest( REQ_ID, AnvilDumpState() )
-        => RPCResponse(
-                #let CONTENTS:IOString = #readFile( #snapshotFile( #getLatestBlockNumber ) )
-                #in String2JSON( {CONTENTS}:>String )
-           )
-        ...
+          => #appendFile( #responseFile, #batchSep +String
+              "{ \"jsonrpc\": \"2.0\"" +String
+              ", \"id\": " +String Int2String(REQ_ID) +String
+              ", \"result\": " )
+          ~> #appendFileToFile( #responseFile, #snapshotFile( #getLatestBlockNumber ) )
+          ~> #appendFile( #responseFile, "}" )
+          ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
 
@@ -1222,14 +1225,14 @@ K configuration.
                    | storageToJSON(Map)                      [function, total, symbol(accStorageToJson)]
                    | blocksToJSON(Map)                       [function, total, symbol(blocksToJSON)]
                    | blockToJSON(BlockData)                  [function, symbol(blockToJSON)]
-                   | receiptsToJSON( TxReceiptsCell )        [function, total, symbol(receiptsToJSON)]
-                   | receiptToJSON( TxReceiptCell )          [function, total, symbol(receiptToJSON)]
+                   | receiptsToJSON()                        [function, total, symbol(receiptsToJSON)]
+                   | receiptToJSON( Int )                    [function, total, symbol(receiptToJSON)]
     // ----------------------------------------------------------------------------------------------
 
     syntax JSONs ::= accountsToJSONs( AccountsCell, JSONs )   [function, total, symbol(accountsToJSONs)]
                    | storageToJSONs( Map, JSONs )             [function, symbol(accStorageToJSONs)]
                    | blocksToJSONs( Int, Map, JSONs )         [function, total, symbol(blocksToJSONs)]
-                   | receiptsToJSONs( TxReceiptsCell, JSONs ) [function, total, symbol(receiptsToJSONs)]
+                   | receiptsToJSONs( Int, JSONs )            [function, total, symbol(receiptsToJSONs)]
     // -------------------------------------------------------------------------------------------------
 
     // Duplicated in trace-json.md where this is called intMapToJson
@@ -1258,18 +1261,8 @@ K configuration.
             => accountsToJSONs( <accounts> ACCS </accounts>, (accountToJSON( <account> ACC </account> ) , ACCU) ) 
     rule accountsToJSONs( <accounts> .Bag </accounts>, ACCU ) => ACCU [owise]
 
-    rule [[ receiptToJSON (
-            <txReceipt>
-                <txMsg>           MSG_ID            </txMsg>
-                <txBlockNumber>   BLOCK_NUMBER      </txBlockNumber>
-                <txHash>          TX_HASH           </txHash>
-                <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
-                <txLogs>          _TX_LOGS          </txLogs>
-                <txLogsBloom>     TX_BLOOMFILTER    </txLogsBloom>
-                <txStatus>        TX_STATUS         </txStatus>
-                ...
-            </txReceipt>
-        ) => {
+    rule [[ receiptToJSON ( MSG_ID )
+         => {
             "blockHash":         uint256ToHex( #hashBlockNumber( BLOCK_NUMBER ) ),
             "blockNumber":       BLOCK_NUMBER,
             "info": {
@@ -1307,6 +1300,16 @@ K configuration.
                 "type":               intToHex( #dasmTxPrefix( MSG_TYPE ) )
             }
         } ]]
+        <txReceipt>
+            <txMsg>           MSG_ID            </txMsg>
+            <txBlockNumber>   BLOCK_NUMBER      </txBlockNumber>
+            <txHash>          TX_HASH           </txHash>
+            <txCumulativeGas> TX_CUMULATIVE_GAS </txCumulativeGas>
+            <txLogs>          _TX_LOGS          </txLogs>
+            <txLogsBloom>     TX_BLOOMFILTER    </txLogsBloom>
+            <txStatus>        TX_STATUS         </txStatus>
+            ...
+        </txReceipt>
         <message>
             <msgID>           MSG_ID            </msgID>
             <txNonce>         MSG_NONCE         </txNonce>
@@ -1322,10 +1325,16 @@ K configuration.
             ...
         </message>
 
-    rule receiptsToJSON( TR ) => [ receiptsToJSONs( TR, .JSONs ) ] [priority(50)]
-    rule receiptsToJSONs( <txReceipts> <txReceipt> R </txReceipt> TRS:Bag </txReceipts>, ACCU)
-            => receiptsToJSONs( <txReceipts> TRS </txReceipts>, (receiptToJSON( <txReceipt> R </txReceipt> ) , ACCU) ) 
-    rule receiptsToJSONs( <txReceipts> .Bag </txReceipts>, ACCU ) => ACCU [owise]
+    rule receiptsToJSON() => [ receiptsToJSONs( 1, .JSONs ) ] [priority(50)]
+
+    rule [[ receiptsToJSONs( MSG_ID, ACCU)
+         => receiptsToJSONs( MSG_ID +Int 1, (receiptToJSON( MSG_ID ) , ACCU) ) ]]
+        <txReceipt>
+            <txMsg> MSG_ID </txMsg>
+            ...
+        </txReceipt>
+
+    rule receiptsToJSONs( _, ACCU ) => ACCU [owise]
 
     rule <k> #createStateDump
         => #StateDump({
@@ -1345,7 +1354,7 @@ K configuration.
             },
             "accounts": accountsToJSON( <accounts> ACCOUNTS </accounts> ),
             "blocks": blocksToJSON( BLOCK_STORAGE ),
-            "transactions": receiptsToJSON( <txReceipts> RECEIPTS </txReceipts> )
+            "transactions": receiptsToJSON()
         }) ...
     </k>
     <block>
@@ -1361,7 +1370,6 @@ K configuration.
     </block>
     <accounts> ACCOUNTS </accounts>
     <blockStorage> BLOCK_STORAGE </blockStorage>
-    <txReceipts> RECEIPTS </txReceipts>
 
     rule blocksToJSON( BS ) => [ blocksToJSONs( 0, BS, .JSONs ) ] [priority(50)]
     rule blocksToJSONs( BN, BS, ACCU) => blockToJSON({BS[BN]}:>BlockData), blocksToJSONs( BN +Int 1, BS, ACCU )
