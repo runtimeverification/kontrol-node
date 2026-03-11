@@ -160,6 +160,7 @@ Similarly, we save a state snapshot after the block was mined.
          <isInitCode>                   _ => false       </isInitCode>
          <currentDeployedCodeMutations> _ => .Map        </currentDeployedCodeMutations>
          <currentInitCodeMutations>     _ => .Map        </currentInitCodeMutations>
+         <stepCount>                    _ => 0           </stepCount>
          <callState>
             <program>    _ => .Bytes     </program>
             <jumpDests>  _ => .Bytes     </jumpDests>
@@ -592,18 +593,17 @@ just build the response string directly.
         [owise]
 
     rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
-        => #let STRUCT_LOGS = #readFile( #traceFile( TXID) ) #in
-           #let WITHOUT_TRAILING_COMMA = stripSuffix( {STRUCT_LOGS}:>String, ",\n" ) #in
-            RPCRawResponse(
+            => #appendFile( #responseFile, #batchSep +String
                 "{ \"jsonrpc\": \"2.0\"" +String
                 ", \"id\": " +String Int2String(REQ_ID) +String
                 ", \"result\": " +String
                     "{ \"failed\":" +String #if TX_STATUS ==Int 1 #then "false" #else "true" #fi +String
                     ", \"gas\":" +String Int2String( TX_CUMULATIVE_GAS ) +String
-                    ", \"returnValue\": \"\"" +String // TODO
-                    ", \"structLogs\": [" +String WITHOUT_TRAILING_COMMA +String
-                "] } }"
-            ) ...
+                    ", \"returnValue\": \"\"" +String
+                    ", \"structLogs\": [" )
+            ~> #appendFileToFile( #responseFile, #traceFile( TXID ) )
+            ~> #appendFile( #responseFile, "] } }" )
+            ...
         </k>
         <rpcRequestID> _ => REQ_ID </rpcRequestID>
         <txReceipt>
@@ -613,14 +613,6 @@ just build the response string directly.
             <txStatus> TX_STATUS </txStatus>
             ...
         </txReceipt>
-
-    syntax String ::= stripSuffix( String, String ) [function, symbol(stripSuffix)]
-    // ----------------------------------------------------------------------------
-
-    rule stripSuffix( STR, SUFFIX ) => substrString( STR, 0, lengthString(STR) -Int lengthString(SUFFIX) )
-        requires substrString( STR, lengthString(STR) -Int lengthString(SUFFIX), lengthString(STR) ) ==String SUFFIX
-
-    rule stripSuffix( STR, _ ) => STR [owise]
 
 ```
 
@@ -1044,7 +1036,6 @@ This section defines an intermediate represention for JSON RPC requests.
     // ------------------------
 
     syntax RPCResponse ::= RPCResponse( JSON )             [symbol(RPCStructuredResponse)]
-                         | RPCRawResponse( String )        [symbol(RPCRawResponse)]
                          | RPCErrorResponse( Int, String ) [symbol(RPCErrorResponse)]
     // ------------------------------------------------------------------------------
 
@@ -1860,11 +1851,6 @@ This section defines rules to write RPCResponses to a file.
             }))
             ... </k>
             <rpcRequestID> REQ_ID </rpcRequestID>
-            
-      rule <k> RPCRawResponse( RESPONSE:String )
-            => #appendFile(#responseFile, #batchSep +String RESPONSE)
-            ...
-           </k>
 
     syntax KItem ::= "#batchPrefix"       [symbol(batchPrefix)]
                    | "#batchSuffix"       [symbol(batchSuffix)]
@@ -1999,9 +1985,19 @@ This secion defines rules to read a StateDump JSON object from disk.
     rule <k> #storeTraceItem TRITEM
           => #appendFile(
                 #traceFile( #getNextTxID ),
-                JSON2String( traceItemToJson( TRITEM ) ) +String ",\n"
+                #logSep +String JSON2String( traceItemToJson( TRITEM ) )
              ) ...
          </k>
+         <stepCount> STEP_COUNT  => STEP_COUNT +Int 1 </stepCount>
+
+    syntax String ::= "#logSep" [function, total, symbol(logSep)]
+    // ----------------------------------------------------------
+
+    rule [[ #logSep => ",\n" ]]
+        <stepCount> STEP_COUNT </stepCount>
+        requires 0 <Int STEP_COUNT
+
+    rule #logSep => "" [owise]
 
 endmodule
 ```

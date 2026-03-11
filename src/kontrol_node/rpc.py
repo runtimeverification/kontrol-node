@@ -99,6 +99,7 @@ class InterpreterProcess:
         metadata_file = self.io_dir / 'metadata.json'
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f)
+        self._response_file().touch(exist_ok=True)
 
     def _run(self) -> Pattern:
         # Create the initial KORE configuration
@@ -117,7 +118,7 @@ class InterpreterProcess:
         result = llvm_interpret(definition_dir=kdist.get('kontrol-node.simbolik'), pattern=initial_kore, check=False)
         return result
 
-    def request(self, payload: bytes) -> bytes:
+    def request(self, payload: bytes) -> Path:
         # remove old response file if it exists
         response_file = self._response_file()
         if response_file.exists():
@@ -126,7 +127,7 @@ class InterpreterProcess:
         try:
             json.loads(payload.decode('utf-8'))
         except json.JSONDecodeError:
-            return json.dumps(
+            response = json.dumps(
                 {
                     'jsonrpc': '2.0',
                     'error': {
@@ -135,6 +136,9 @@ class InterpreterProcess:
                     },
                 }
             ).encode('utf-8')
+            with open(self._response_file(), 'wb') as f:
+                f.write(response)
+            return self._response_file()
 
         # write request to file
         with open(self._request_file(), 'wb') as f:
@@ -145,11 +149,7 @@ class InterpreterProcess:
             # write output.kore for debugging
             with open('output.kore', 'w') as f:
                 f.write(output.text)
-        # read response from file
-        with open(self._response_file(), 'rb') as f:
-            response = f.read()
-
-        return response
+        return response_file
 
     def shutdown(self) -> None:
         shutil.rmtree(self.io_dir, ignore_errors=True)
@@ -177,13 +177,16 @@ def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
             assert type(content_len) is str
             content = self.rfile.read(int(content_len))
 
-            result = interpreter.request(content)
+            result_file = interpreter.request(content)
+            result_size = result_file.stat().st_size
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(len(result)))
+            self.send_header('Content-Length', str(result_size))
             self.end_headers()
-            self.wfile.write(result)
+
+            with open(result_file, 'rb') as f:
+                shutil.copyfileobj(f, self.wfile)
 
             if _PROFILING:
                 profile.disable()

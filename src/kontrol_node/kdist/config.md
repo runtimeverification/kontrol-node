@@ -16,6 +16,7 @@ module KONTROL-NODE-CONFIG
             <timeFreeze>              true      </timeFreeze>
 
             // Tracing
+            <stepCount>               0     </stepCount>
             <activeTracing>           true  </activeTracing>          // signals if the tracing is gloablly enabled
             <traceNonce>              true  </traceNonce>             // signals if nonce tracing is enabled
             <traceBalance>            true  </traceBalance>           // signals if balance tracing enabled

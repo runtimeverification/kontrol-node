@@ -20,6 +20,7 @@ module FILE-SYSTEM
 
     syntax K ::= #writeFile( String, String ) [function, strict, impure, symbol(writeFile)]
                | #appendFile( String, String) [function, strict, impure, symbol(appendFile)]
+               | #appendFileToFile( String, String ) [function, strict, impure, symbol(appendFileToFile)]
     // -------------------------------------------------------------------------------------
 
     rule #readFile( FILE )
@@ -39,6 +40,11 @@ module FILE-SYSTEM
              #let RESULT = #write({HANDLE}:>Int, CONTENTS) #in
              #let _ = #close({HANDLE}:>Int) #in
              RESULT
+
+    rule #appendFileToFile( DEST, SOURCE )
+          => #system( "dd if=" +String SOURCE +String " of=" +String DEST +String " bs=1M oflag=append conv=notrunc" )
+
+    rule #systemResult( _, _, _ ) => .K [owise]
 
 endmodule
 ```
