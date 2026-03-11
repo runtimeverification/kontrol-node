@@ -27,7 +27,7 @@ class KontrolNodeSourceTarget(Target):
 
 class KontrolNodeTarget(KEVMTarget):
     def deps(self) -> tuple[str, ...]:
-        return super().deps() + ('kontrol-node.source',)
+        return super().deps()
 
     def source(self) -> tuple[Path, ...]:
         # return empty source, as otherwise manifest generation fails due to missing files in kontrol_node python module

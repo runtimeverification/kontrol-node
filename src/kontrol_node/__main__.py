@@ -12,7 +12,7 @@ from rich.logging import RichHandler
 
 from . import VERSION
 from .cli import _create_argument_parser, generate_options, get_argument_type_setter, get_option_string_destination
-from .rpc import StatefulKJsonRpcServer
+from .rpc import KontrolNodeServer
 
 if TYPE_CHECKING:
     from typing import Final, TypeVar
@@ -69,7 +69,7 @@ def exec_version(options: VersionOptions) -> None:
 
 
 def exec_run(options: VMOptions) -> None:
-    server = StatefulKJsonRpcServer(options)
+    server = KontrolNodeServer(options)
     server.serve()
 
 

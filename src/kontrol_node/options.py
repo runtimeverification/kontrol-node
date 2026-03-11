@@ -12,6 +12,8 @@ class VMOptions(LoggingOptions):
     addr: str
     port: int
     steps_tracing: bool
+    chain_id: int
+    gas_price: int
 
     @staticmethod
     def default() -> dict[str, Any]:
@@ -19,6 +21,8 @@ class VMOptions(LoggingOptions):
             'addr': '127.0.0.1',
             'port': 8081,
             'steps_tracing': False,
+            'chain_id': 31337,
+            'gas_price': 0,
         }
 
     @staticmethod
