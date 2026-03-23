@@ -23,7 +23,7 @@ uv run kdist --verbose build -j2 kontrol-node.simbolik
 
 To change the default compiler:
 ```sh
-CXX=clang++-14 uv run kdist --verbose build -j2 kontrol-node.simbolik
+CXX=clang++-15 uv run kdist --verbose build -j2 kontrol-node.simbolik -f
 ```
 
 On Apple Silicon:

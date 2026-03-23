@@ -1,7 +1,7 @@
 ```k
 requires "foundry.md"
 requires "driver.md"
-
+requires "config.md"
 ```
 
 Debug Collection with KEVM
@@ -13,68 +13,8 @@ module EVM-TRACING
     imports EVM
     imports FOUNDRY
     imports ETHEREUM-SIMULATION
+    imports KONTROL-NODE-CONFIG
 
-
-```
-The configuration of the KEVMTracing is defined as following:
-- `<activeTracing>` signals if the tracing feature is active or not.
-- `<traceStorage>` signals if the storage should be recorded in the `TraceItem`.
-- `<traceWordStack>` signals if the storage should be recorded in the `TraceItem`.
-- `<traceMemory>` signals if the storage should be recorded in the `TraceItem`.
-- `<recordedTrace>` is an auxiliary cell that is used to determine if the current step has been recorded or not.
-- `<traceData>` is a collection of `TraceItem`s.
-
-```k
-    configuration
-      <KEVMTracing>
-        <activeTracing>           false       </activeTracing>
-        <traceStorage>            false       </traceStorage>
-        <traceWordStack>          false       </traceWordStack>
-        <traceMemory>             false       </traceMemory>
-        <recordedTrace>           false       </recordedTrace>
-        <traceData>               .List       </traceData>
-        <traceLogsFileDescriptor> .FileDescr  </traceLogsFileDescriptor>
-        <traceLogsFilePath>       "":String   </traceLogsFilePath>
-        <writeTraceLogsToFile>    false       </writeTraceLogsToFile>
-
-        <currentNonceMutations>   .Map </currentNonceMutations>
-        <traceNonce>              false </traceNonce>
-        <currentBalanceMutations> .Map </currentBalanceMutations>
-        <traceBalance>            false </traceBalance>
-        <currentStorageMutations> .Map </currentStorageMutations>
-
-        <localMemoryChanged>      true  </localMemoryChanged>
-
-        <injectedTracesCallStack> false </injectedTracesCallStack>
-        <recordedMkCallCreate>    false </recordedMkCallCreate>
-        <contextSwitch>           true  </contextSwitch>
-        <traceCallData>           false </traceCallData>
-        <traceReturnData>         false </traceReturnData>
-        <tracesCallStack>         .List </tracesCallStack>
-        <tracesCallState>
-           <isInitCode> false </isInitCode>
-        </tracesCallState>
-
-        <traceCurrentProgram> false </traceCurrentProgram>
-        <programChanged> true </programChanged>
-
-        <traceDeployedCode> false </traceDeployedCode>
-        <currentDeployedCodeMutations> .Map </currentDeployedCodeMutations>
-
-        <traceInitCode> false </traceInitCode>
-        <currentInitCodeMutations> .Map </currentInitCodeMutations>
-        <recordedCreate> false </recordedCreate>
-      </KEVMTracing>
-```
-
-```k
-   syntax KItem ::= "#openTraceLogsFile"            [symbol(openTraceLogsFile)]
-                  | "#closeTraceLogsFile"           [symbol(closeTraceLogsFile)]
-                  | "#storeTraceLogsFileDescriptor" [symbol(storeTraceLogsFileDescriptor)]
-
-   
-   syntax FILEDESCR ::= Int | ".FileDescr"
- // ----------------------------------------------------------------------------------
 ```
 
 The `TraceItem` is a sort used to serialize information from the configuration about the executed opcodes.
@@ -109,8 +49,11 @@ The `TraceItem` is a sort used to serialize information from the configuration a
       "|" Bool         // is init code
       "|" StatusCode   // status
     "}" [symbol(traceItem)]
+ // -----------------------
 
-   syntax Map ::= updateNested( Map, KItem, KItem, KItem ) [function]
+   syntax Map ::= updateNested( Map, KItem, KItem, KItem ) [function, symbol(updateNested)]
+ // ---------------------------------------------------------------------------------------
+
    rule updateNested(MAP, INDEX1, INDEX2, VALUE) => MAP[ INDEX1 <- MAP[INDEX1] orDefault .Map [INDEX2 <- VALUE] ]
 
     // accounts are stored as subcells in the <accounts> cell with multiplicity="*" and type="Map"
@@ -125,10 +68,22 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // ideally, new rules are introduced in the future in evm-semantics that moduralize mutations of nonce and balance 
     //  that would allow for tracing rules that do not re-implement evm-semantics specifications
 
+    // Idea: Maybe we can hook into the rules without re-implementing them entirely by using a similar hook mechanism as below
+    // <k> something ~> ... </k>
+
+    // <k> something => #before( something ) ... </k>
+    // <hooked> False </hooked> [priority(10)]
+
+    // <k> #before( something ) => something ~> #after( something ) ... </k>
+    // <hooked> False => True </hooked> [owise]
+
+    // <k> #after ( something ) => .K ... </k>
+    // <hooked> True => False </hooked> [owise]
+
+
     // evm.md:1483 [sstore] `STORE`
     rule [sstore]:
          <k> SSTORE INDEX NEW => .K ... </k>
-         <traceStorage> true </traceStorage>
          <id> ACCT </id>
          <account>
            <acctID> ACCT </acctID>
@@ -141,7 +96,6 @@ The `TraceItem` is a sort used to serialize information from the configuration a
  // ---------------------------------------------------------------------------------------------------------------
     // cheatcodes.md:1282 `#setStorage` 
     rule <k> #setStorage ACCTID LOC VALUE => .K ... </k>
-         <traceStorage> true </traceStorage>
          <account>
            <acctID> ACCTID </acctID>
            <storage> STORAGE => STORAGE [ LOC <- VALUE ] </storage>
@@ -435,6 +389,7 @@ The `TraceItem` is a sort used to serialize information from the configuration a
  // ---------------------------------------------------------------------------------------------------------------
     syntax DataChange ::= ".DataChange" [symbol(UnchangedData)]
                         | Bytes
+ // ---------------------------
  
     // trace `isInitcode`
     // create a second callstack <tracesCallStack> with <isInitcode> subcell
@@ -442,8 +397,9 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     //  and insert new productions `#pushTracesCallStack`/`#popTracesCallStack`
     // init <isInitcode> to false and update state on `#mkCreate/#mkCall/#mkSystemCall`
 
-    syntax KItem ::= "#pushTracesCallStack"
-                   | "#popTracesCallStack"
+    syntax KItem ::= "#pushTracesCallStack" [symbol(pushTracesCallStack)]
+                   | "#popTracesCallStack"  [symbol(popTracesCallStack)]
+ // --------------------------------------------------------------------
 
     // `#pushCallStack` does not append new KItems after itself
     // therefore this kind of hook is safe
@@ -460,15 +416,15 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // track with <contextSwitch> that call data and return data has changed and needs to be included in the next trace
     rule <k> #pushTracesCallStack => .K ... </k>
          <injectedTracesCallStack> true => false </injectedTracesCallStack>
-         <tracesCallStack> STACK => ListItem(<tracesCallState> TRACESCALLSTATE </tracesCallState>) STACK </tracesCallStack>
-         <tracesCallState> TRACESCALLSTATE </tracesCallState>
+         <tracesCallStack> STACK => ListItem(IS_INIT_CODE) STACK </tracesCallStack>
+         <isInitCode> IS_INIT_CODE </isInitCode>
          <contextSwitch> _ => true </contextSwitch>
 
     // track with <contextSwitch> that call data and return data has changed and needs to be included in the next trace
     rule <k> #popTracesCallStack => .K ... </k>
          <injectedTracesCallStack> true => false </injectedTracesCallStack>
-         <tracesCallStack> ListItem(<tracesCallState> TRACESCALLSTATE </tracesCallState>) REST => REST </tracesCallStack>
-         <tracesCallState> _ => TRACESCALLSTATE </tracesCallState>
+         <tracesCallStack> ListItem(IS_INIT_CODE) REST => REST </tracesCallStack>
+         <isInitCode> _ => IS_INIT_CODE </isInitCode>
          <contextSwitch> _ => true </contextSwitch>
          <programChanged> _ => true </programChanged>
          <localMemoryChanged> _ => true </localMemoryChanged>
@@ -564,52 +520,42 @@ The `TraceItem` is a sort used to serialize information from the configuration a
     // when memory change, we trace the entire memory contents
     // the <localMemory> cell is also changed at `#popTracesCallStack`
     rule <k> MSTORE _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> MSTORE8 _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> MCOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> CODECOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> CALLDATACOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> RETURNDATACOPY _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> EXTCODECOPY _ _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> #initVM ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> #setLocalMem _ _ _ ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 
     rule <k> clearTX ... </k>
-         <traceMemory> true </traceMemory>
          <localMemoryChanged> false => true </localMemoryChanged>
       [priority(49)]
 

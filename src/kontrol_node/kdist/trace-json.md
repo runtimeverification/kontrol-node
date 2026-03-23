@@ -4,20 +4,24 @@
 requires "foundry.md"
 requires "driver.md"
 requires "trace.md"
+requires "fs.md"
+requires "config.md"
+requires "json-utils.md"
 
 module TRACE-JSON
-  
+    imports JSON-UTILS
     imports EVM
     imports FOUNDRY
     imports EVM-TRACING
     imports JSON
     imports K-IO
+    imports FILE-SYSTEM
+    imports KONTROL-NODE-CONFIG
 
     syntax JSON ::= traceItemToJson(TraceItem)           [function, total, symbol(traceItemToJson)]
                   | opcodeToJson(OpCode)                 [function, total, symbol(opcodeToJson)]
                   | wordstackToJson(WordStack)           [function, total, symbol(wordstackToJson)]
                   | memoryToJson(DataChange)             [function, total, symbol(memoryToJson)]
-                  | bytesToJson(Bytes)                   [function, total, symbol(bytesToJson)]
                   | intMapToJson(Map)                    [function, total, symbol(intMapToJson)]
                   | bytesMapToJson(Map)                  [function, total, symbol(bytesMapToJson)]
                   | storageMapToJson(Map)                [function, total, symbol(storageMapToJson)]
@@ -26,15 +30,11 @@ module TRACE-JSON
                   | dataChangeToJson(DataChange)         [function, total, symbol(dataChangeToJson)]
  // ------------------------------------------------------------------------------------------------
     syntax JSONs ::= wordstackToJsons(WordStack, JSONs)  [function, total, symbol(wordstackToJsons)]
-                  | memoryToJsons(Bytes, JSONs)          [function, total, symbol(memoryToJsons)]
-                  | intMapToJsons(Map)                   [function, total, symbol(intMapToJsons)]
-                  | bytesMapToJsons(Map)                 [function, total, symbol(bytesMapToJsons)]
-                  | storageMapToJsons(Map)               [function, total, symbol(storageMapToJsons)]
+                  | memoryToJsons(Bytes, JSONs)          [function, symbol(memoryToJsons)]
+                  | intMapToJsons(Map)                   [function, symbol(intMapToJsons)]
+                  | bytesMapToJsons(Map)                 [function, symbol(bytesMapToJsons)]
+                  | storageMapToJsons(Map)               [function, symbol(storageMapToJsons)]
  // -------------------------------------------------------------------------------------------------
-    syntax String ::= intToHex(Int)    [function, total, symbol(intToHex)]
-                   | bytesToHex(Bytes) [function, total, symbol(bytesToHex)]
- // ------------------------------------------------------------------------
-
 
 
     rule opcodeToJson( STOP ) => "STOP"
@@ -193,18 +193,13 @@ module TRACE-JSON
     rule wordstackToJsons( .WordStack, ACC ) => ACC
     rule wordstackToJsons( W:WS, ACC ) => wordstackToJsons(WS, (intToHex( W ), ACC) )
 
-    rule bytesToJson( BYTES ) => "0x" +String Bytes2Hex( BYTES ) 
-    rule intToHex( A:Int ) => "0x" +String Base2String(A, 16)
-      requires A >=Int 0
-    rule intToHex( A:Int ) => "-0x" +String Base2String( absInt(A), 16) [owise]
-
     rule intMapToJson( M:Map ) => { intMapToJsons(M) }
     rule intMapToJsons( .Map) => .JSONs
     rule intMapToJsons( (ACC:Int |-> VAL:Int) REST:Map ) => intToHex( ACC) : intToHex( VAL ), intMapToJsons( REST )
     
     rule bytesMapToJson( M:Map ) => { bytesMapToJsons( M ) }
     rule bytesMapToJsons( .Map) => .JSONs
-    rule bytesMapToJsons( (ACC:Int |-> VAL:Bytes) REST:Map ) => intToHex( ACC) : bytesToJson( VAL ), bytesMapToJsons( REST )
+    rule bytesMapToJsons( (ACC:Int |-> VAL:Bytes) REST:Map ) => intToHex( ACC) : bytesToHex( VAL ), bytesMapToJsons( REST )
 
     rule storageMapToJson( M:Map ) => { storageMapToJsons(M ) }
     rule storageMapToJsons( .Map ) => .JSONs
@@ -212,16 +207,18 @@ module TRACE-JSON
 
     // split memory into 32 bytes chunks
 
-    syntax JSONs ::= prepend( JSON, JSONs ) [function, total]
+    syntax JSONs ::= prepend( JSON, JSONs ) [function, total, symbol(prependJSONs)]
+    // ----------------------------------------------------------------------------
+  
     rule prepend( X, XS ) => X, XS
 
     rule memoryToJson(.DataChange) => null
     rule memoryToJson( MEM:Bytes )      => [ .JSONs ]
-      requires lengthBytes(MEM) ==Int 0
+      requires 0 ==Int lengthBytes(MEM)
 
     rule memoryToJson(MEM:Bytes)
       => [ memoryToJsons(MEM, maxInt(0, ((lengthBytes(MEM) -Int 1) /Int 32) *Int 32), .JSONs) ]
-      requires lengthBytes(MEM) >Int 0
+      requires 0 <Int lengthBytes(MEM)
 
     rule memoryToJsons(MEM, OFFSET, ACC)
       => memoryToJsons(
@@ -238,7 +235,7 @@ module TRACE-JSON
             ACC
           )
         )
-      requires OFFSET >=Int 32
+      requires 32 <=Int OFFSET
 
     rule memoryToJsons(MEM, OFFSET, ACC)
       => Bytes2Hex(
@@ -248,15 +245,16 @@ module TRACE-JSON
             0
           )
         ) , ACC
-      requires OFFSET <Int 32
+      [owise]
 
     rule accountToJson( .Account ) => null
     rule accountToJson( ACC ) => ACC [owise]
 
-    rule statusToJson( STATUS ) => StatusCode2String( STATUS )
+    rule statusToJson( .StatusCode ) => "empty"
+    rule statusToJson( STATUS ) => StatusCode2String( STATUS ) [owise]
 
     rule dataChangeToJson( .DataChange ) => null
-    rule dataChangeToJson( BYTES ) => bytesToJson( BYTES) [owise]
+    rule dataChangeToJson( BYTES ) => bytesToHex( BYTES) [owise]
 
     rule traceItemToJson (
       { VAR_PC
@@ -320,18 +318,19 @@ module TRACE-JSON
          <recordedTrace> true => false </recordedTrace>
       [priority(25)]
 
-    syntax KItem ::= "#storeTraceItem" TraceItem
+    syntax KItem ::= "#storeTraceItem" TraceItem [symbol(storeTraceItem)]
+    // ------------------------------------------------------------------
 
     rule <k> (.K => #storeTraceItem { PCOUNT
                                     | OPC
-                                    | #if DSTK ==K true #then WS      #else .WordStack #fi
-                                    | #if (DMEM andBool MEMCH)          ==K true #then MEM  #else .DataChange #fi
+                                    | WS
+                                    | #if MEMCH #then MEM #else .DataChange #fi
                                     | STORCH
                                     | NONCECH
                                     | BALCH
-                                    | #if (DCADA andBool CONTEXTSWITCH) ==K true #then CADA #else .DataChange #fi
-                                    | #if (DREDA andBool CONTEXTSWITCH) ==K true #then REDA #else .DataChange #fi
-                                    | #if PROGCHANGED                   ==K true #then PROG #else .DataChange #fi
+                                    | #if CONTEXTSWITCH #then CADA #else .DataChange #fi
+                                    | #if CONTEXTSWITCH #then REDA #else .DataChange #fi
+                                    | #if PROGCHANGED  #then PROG #else .DataChange #fi
                                     | DEPLCODECH
                                     | INITCODECH
                                     | CD
@@ -352,21 +351,17 @@ module TRACE-JSON
              ~> #next [ OPC ] ...
          </k>
          <activeTracing>                true                   </activeTracing>
-         <traceWordStack>               DSTK                   </traceWordStack>
-         <traceMemory>                  DMEM                   </traceMemory>
-         <traceCallData>                DCADA                  </traceCallData>
-         <traceReturnData>              DREDA                  </traceReturnData>
-         <recordedTrace>                false => true          </recordedTrace>
-         <recordedMkCallCreate>         _ => false             </recordedMkCallCreate>
-         <recordedCreate>               _ => false             </recordedCreate>
-         <localMemoryChanged>           MEMCH => false         </localMemoryChanged>
-         <currentNonceMutations>        NONCECH => .Map        </currentNonceMutations>          
+         <recordedTrace>                false       => true    </recordedTrace>
+         <recordedMkCallCreate>         _           => false   </recordedMkCallCreate>
+         <recordedCreate>               _           => false   </recordedCreate>
+         <localMemoryChanged>           MEMCH       => false   </localMemoryChanged>
+         <currentNonceMutations>        NONCECH     => .Map    </currentNonceMutations>          
          <contextSwitch>                CONTEXTSWITCH => false </contextSwitch>
-         <currentBalanceMutations>      BALCH => .Map          </currentBalanceMutations>          
-         <currentStorageMutations>      STORCH => .Map         </currentStorageMutations>
+         <currentBalanceMutations>      BALCH       => .Map    </currentBalanceMutations>          
+         <currentStorageMutations>      STORCH      => .Map    </currentStorageMutations>
          <programChanged>               PROGCHANGED => false   </programChanged>
-         <currentDeployedCodeMutations> DEPLCODECH => .Map     </currentDeployedCodeMutations>
-         <currentInitCodeMutations>     INITCODECH => .Map     </currentInitCodeMutations>
+         <currentDeployedCodeMutations> DEPLCODECH  => .Map    </currentDeployedCodeMutations>
+         <currentInitCodeMutations>     INITCODECH  => .Map    </currentInitCodeMutations>
          <callData>                     CADA                   </callData>
          <output>                       REDA                   </output>
          <pc>                           PCOUNT                 </pc>
@@ -388,36 +383,6 @@ module TRACE-JSON
          <isInitCode>                   ISINIT                 </isInitCode>
          <statusCode>                   STATUS                 </statusCode>
       [priority(24)]
-
-    rule <k> #storeTraceItem TRITEM => .K ... </k>
-         <writeTraceLogsToFile> false </writeTraceLogsToFile>
-         <traceData> ... .List => ListItem(TRITEM) </traceData>
-
-    rule <k> #storeTraceItem TRITEM
-             => #write (
-              TRFILEDESCR, 
-              JSON2String( traceItemToJson( TRITEM ) ) +String "\n"
-             ) ...
-         </k>
-         <writeTraceLogsToFile>    true        </writeTraceLogsToFile>
-         <traceLogsFileDescriptor> TRFILEDESCR </traceLogsFileDescriptor>
-      requires TRFILEDESCR =/=K .FileDescr
-
-    rule <k> #openTraceLogsFile => #open(TRFILEPATH, "w") ~> #storeTraceLogsFileDescriptor ... </k>
-        <traceLogsFilePath> TRFILEPATH </traceLogsFilePath>
-        <writeTraceLogsToFile> true </writeTraceLogsToFile>
-
-    rule <k> #openTraceLogsFile => .K ... </k>
-        <writeTraceLogsToFile> false </writeTraceLogsToFile>
-
-    rule <k> TRFILEDESCR ~> #storeTraceLogsFileDescriptor => .K ... </k>
-        <traceLogsFileDescriptor> _ => TRFILEDESCR </traceLogsFileDescriptor>
-
-    rule <k> #closeTraceLogsFile => #close(TRFILEDESCR) ... </k>
-        <traceLogsFileDescriptor> TRFILEDESCR => .FileDescr </traceLogsFileDescriptor>
-      requires TRFILEDESCR =/=K .FileDescr
-
-    rule <k> #closeTraceLogsFile => .K ... </k> [owise]
 
 endmodule
 ```
