@@ -58,12 +58,12 @@ jobs:
         if: always()
         run: docker stop --time=0 ${CONTAINER}
 
-  integration-tests:
+  tests:
     needs: code-quality-checks
-    name: 'Integration Tests'
+    name: 'Tests'
     runs-on: [self-hosted, linux, normal]
     env:
-      CONTAINER: kontrol-node-integration-${{ github.sha }}
+      CONTAINER: kontrol-node-test-${{ github.sha }}
     steps:
       - name: 'Check out code'
         uses: actions/checkout@v3
@@ -75,8 +75,8 @@ jobs:
           container-name: ${CONTAINER}
       - name: 'Build kontrol-node'
         run: docker exec --user user ${CONTAINER} uv run kdist -v build kontrol-node.simbolik
-      - name: 'Run integration tests'
-        run: docker exec --user user ${CONTAINER} make test-integration
+      - name: 'Run tests'
+        run: docker exec --user user ${CONTAINER} make test
       - name: 'Tear down Docker'
         if: always()
         run: docker stop --time=0 ${CONTAINER}
