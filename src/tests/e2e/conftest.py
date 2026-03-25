@@ -23,11 +23,11 @@ SERVER_HOST: Final = 'localhost'
 # Default sender from Foundry/Hardhat genesis accounts
 DEFAULT_SENDER: Final = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 
-FOUNDRY_TOML : Final = '''
+FOUNDRY_TOML: Final = """\
 [profile.default]
 src = "src"
 out = "out"
-'''
+"""
 
 # ---------------------------------------------------------------------------
 # Solidity compilation

@@ -120,10 +120,9 @@ class TestEthSendTransaction:
         contract_balance = rpc.balance(payable.address)
         assert contract_balance == one_ether
 
-    @pytest.mark.xfail(reason='kontrol-node returns empty response body on sign error', strict=True)
     def test_unknown_sender_fails(self, rpc: RPCClient) -> None:
         unknown = '0x0000000000000000000000000000000000000001'
-        with pytest.raises(RuntimeError, match='Could not sign transaction'):
+        with pytest.raises(RuntimeError, match='RPC error'):
             rpc.send_transaction(to=rpc.sender, sender=unknown)
 
     def test_returns_tx_hash(

@@ -149,6 +149,25 @@ class InterpreterProcess:
             # write output.kore for debugging
             with open('output.kore', 'w') as f:
                 f.write(output.text)
+
+        # If the K interpreter got stuck (no rule matched), the response file
+        # will be empty.  Return a proper JSON-RPC internal-error so callers
+        # always receive valid JSON.
+        if not response_file.exists() or response_file.stat().st_size == 0:
+            _LOGGER.error('K interpreter produced an empty response – no rewrite rule matched the request')
+            error_response = json.dumps(
+                {
+                    'jsonrpc': '2.0',
+                    'id': None,
+                    'error': {
+                        'code': -32603,
+                        'message': 'Internal error: the interpreter could not process the request',
+                    },
+                }
+            ).encode('utf-8')
+            with open(response_file, 'wb') as f:
+                f.write(error_response)
+
         return response_file
 
     def shutdown(self) -> None:
