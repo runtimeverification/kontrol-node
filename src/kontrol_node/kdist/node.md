@@ -46,6 +46,8 @@ Mnemonic: test test test test test test test test test test test junk
 
 ```k
 
+    rule  <k> #cheatcode_error _ _ => #end EVMC_REVERT ... </k>
+
     syntax KItem ::= #unlockAccounts()
     // -------------------------------
 
