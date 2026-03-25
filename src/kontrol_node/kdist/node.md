@@ -41,13 +41,17 @@ module KONTROL-NODE
 
 ```
 
+Kontrol gets stuck when an unknown cheatcode is called, this is inteded behavior since it's handy for debugging proofs.
+The kontrol-node on the other hand should revert the current tx instead of hanging.
+
+```k
+    rule  <k> #cheatcode_error _ _ ~> #cheatcode_return _ _ => #end EVMC_REVERT ... </k>
+```
+
 Unlocked test accounts. These are the same ten accounts used by most dev tools.
 Mnemonic: test test test test test test test test test test test junk
 
 ```k
-
-    rule  <k> #cheatcode_error _ _ => #end EVMC_REVERT ... </k>
-
     syntax KItem ::= #unlockAccounts()
     // -------------------------------
 

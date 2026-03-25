@@ -57,6 +57,48 @@ contract SimpleStorage {
 }
 """
 
+CHEATCODE_CALLER_SOL = """\
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+
+contract CheatcodeCaller {
+    address constant VM_ADDR = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
+
+    function callBogusCheatcode() external {
+        // Call the cheatcode address with a selector that doesn't exist
+        (bool success, ) = VM_ADDR.call(abi.encodeWithSelector(0xdeadbeef));
+        require(success, "cheatcode call failed");
+    }
+}
+"""
+
+CHEATCODE_INTERFACE_SOL = """\
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+
+interface Vm {
+    // An unimplemented cheatcode declared as `pure` (compiles to STATICCALL)
+    function assertEqDecimal(uint256 left, uint256 right, uint256 decimals) external pure;
+    // An unimplemented cheatcode declared as non-pure (compiles to CALL)
+    function assertGt(uint256 left, uint256 right) external pure;
+}
+
+contract CheatcodeInterfaceCaller {
+    Vm constant vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+    bool public success = false;
+
+    function callUnimplementedCheatcode() external {
+        vm.assertEqDecimal(100, 100, 18);
+        success = true;
+    }
+
+    function callUnimplementedCheatcodeNonPure() external {
+        vm.assertGt(200, 100);
+        success = true;
+    }
+}
+"""
+
 PAYABLE_SOL = """\
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
@@ -124,6 +166,56 @@ class TestEthSendTransaction:
         unknown = '0x0000000000000000000000000000000000000001'
         with pytest.raises(RuntimeError, match='RPC error'):
             rpc.send_transaction(to=rpc.sender, sender=unknown)
+
+    def test_call_nonexistent_cheatcode(
+        self,
+        compile_solidity: Callable[[str, str], CompiledContract],
+        rpc: RPCClient,
+    ) -> None:
+        """Calling a non-existing function selector on the cheatcode address
+        (0x7109709ECfa91a80626fF3989D68f67F5b1DD12D) via an internal CALL
+        should revert the transaction, not crash the node."""
+        compiled = compile_solidity(CHEATCODE_CALLER_SOL, 'CheatcodeCaller')
+        caller = rpc.deploy(compiled)
+
+        tx_hash = caller.send('callBogusCheatcode()', gas=200_000)
+        receipt = rpc.receipt(tx_hash)
+        # The internal call to the cheatcode address with an unknown selector
+        # should cause a revert
+        assert receipt['status'] == '0x0'
+
+    def test_call_unimplemented_cheatcode_via_interface(
+        self,
+        compile_solidity: Callable[[str, str], CompiledContract],
+        rpc: RPCClient,
+    ) -> None:
+        """Calling an unimplemented cheatcode through a Solidity interface
+        (which may compile to STATICCALL for pure/view functions) should
+        revert the transaction, not hang the node."""
+        compiled = compile_solidity(CHEATCODE_INTERFACE_SOL, 'CheatcodeInterfaceCaller')
+        caller = rpc.deploy(compiled)
+
+        tx_hash = caller.send('callUnimplementedCheatcode()', gas=200_000)
+        receipt = rpc.receipt(tx_hash)
+        assert receipt['status'] == '0x0'
+
+    def test_trace_unimplemented_cheatcode(
+        self,
+        compile_solidity: Callable[[str, str], CompiledContract],
+        rpc: RPCClient,
+    ) -> None:
+        """debug_traceTransaction should return a valid trace for a transaction
+        that reverted due to an unimplemented cheatcode."""
+        compiled = compile_solidity(CHEATCODE_INTERFACE_SOL, 'CheatcodeInterfaceCaller')
+        caller = rpc.deploy(compiled)
+
+        tx_hash = caller.send('callUnimplementedCheatcode()', gas=200_000)
+        receipt = rpc.receipt(tx_hash)
+        assert receipt['status'] == '0x0'
+
+        trace = rpc._rpc('debug_traceTransaction', [tx_hash, {}])
+        assert trace is not None
+        assert trace['failed'] is True
 
     def test_returns_tx_hash(
         self,
