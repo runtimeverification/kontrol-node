@@ -23,6 +23,11 @@ SERVER_HOST: Final = 'localhost'
 # Default sender from Foundry/Hardhat genesis accounts
 DEFAULT_SENDER: Final = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 
+FOUNDRY_TOML : Final = '''
+[profile.default]
+src = "src"
+out = "out"
+'''
 
 # ---------------------------------------------------------------------------
 # Solidity compilation
@@ -46,7 +51,7 @@ def _forge_compile(source: str, contract_name: str, tmp_path_factory: pytest.Tem
     (src_dir / f'{contract_name}.sol').write_text(source)
 
     # Minimal foundry.toml
-    (project_dir / 'foundry.toml').write_text('[profile.default]\nsrc = "src"\nout = "out"\n')
+    (project_dir / 'foundry.toml').write_text(FOUNDRY_TOML)
 
     result = subprocess.run(
         ['forge', 'build', '--no-auto-detect'],
@@ -171,10 +176,17 @@ class RPCClient:
         }
         self._next_id += 1
         response = requests.post(self.rpc_url, json=payload)
+        if not response.content:
+            raise RuntimeError(f'RPC returned empty response for {method}')
         data = response.json()
         if 'error' in data:
             raise RuntimeError(f'RPC error: {data["error"]}')
         return data.get('result')
+
+    def _rpc_raw(self, payload: str | bytes) -> requests.Response:
+        """Send a raw request (not necessarily valid JSON-RPC) and return the raw response."""
+        headers = {'Content-Type': 'application/json'}
+        return requests.post(self.rpc_url, data=payload, headers=headers)
 
     # -- RPC convenience methods ---------------------------------------------
 
@@ -235,6 +247,7 @@ class RPCClient:
         compiled: CompiledContract,
         constructor_args: list[str] | None = None,
         gas: int = 5_000_000,
+        sender: str | None = None,
     ) -> DeployedContract:
         """Deploy a compiled contract and return a DeployedContract handle."""
         deploy_data = compiled.bytecode
@@ -244,7 +257,7 @@ class RPCClient:
             # pre-encoded constructor args.
             raise NotImplementedError('Constructor args not yet supported — encode manually into bytecode')
 
-        tx_hash = self.send_transaction(data=deploy_data, gas=gas)
+        tx_hash = self.send_transaction(data=deploy_data, gas=gas, sender=sender)
         rx = self.receipt(tx_hash)
         contract_address = rx.get('contractAddress')
         if not contract_address:
@@ -269,10 +282,12 @@ class DeployedContract:
     abi: list[dict[str, Any]]
     client: RPCClient
 
-    def send(self, sig: str, args: list[str] | None = None, value: int = 0, gas: int = 90000) -> str:
+    def send(
+        self, sig: str, args: list[str] | None = None, value: int = 0, gas: int = 90000, sender: str | None = None
+    ) -> str:
         """Send a state-changing transaction. Returns the tx hash."""
         calldata = _abi_encode(sig, args or [])
-        return self.client.send_transaction(to=self.address, data=calldata, value=value, gas=gas)
+        return self.client.send_transaction(to=self.address, data=calldata, value=value, gas=gas, sender=sender)
 
     def storage(self, slot: int | str) -> str:
         """Read a raw storage slot (returns 32-byte hex)."""
