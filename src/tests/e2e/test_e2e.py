@@ -2,9 +2,6 @@
 
 Each test compiles Solidity source via ``forge``, deploys to the kontrol-node,
 and interacts with the contract through JSON-RPC.
-
-Note: kontrol-node does not implement ``eth_call``, so we read contract state
-via ``eth_getStorageAt`` (storage slot reads) rather than view function calls.
 """
 
 from __future__ import annotations

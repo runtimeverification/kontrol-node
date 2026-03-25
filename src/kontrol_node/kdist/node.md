@@ -52,6 +52,7 @@ Unlocked test accounts. These are the same ten accounts used by most dev tools.
 Mnemonic: test test test test test test test test test test test junk
 
 ```k
+
     syntax KItem ::= #unlockAccounts()
     // -------------------------------
 
