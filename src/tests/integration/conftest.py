@@ -31,7 +31,7 @@ def server() -> Iterator[str]:
     """
     sys.setrecursionlimit(15000000)
 
-    server = KontrolNodeServer(VMOptions({'host': SERVER_HOST, 'port': 0}))
+    server = KontrolNodeServer(VMOptions({'addr': SERVER_HOST, 'port': 0}))
 
     server_thread = threading.Thread(target=server.serve)
     server_thread.start()

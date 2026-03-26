@@ -47,6 +47,10 @@ test-unit:
 test-integration:
 	$(UV_RUN) pytest src/tests/integration --maxfail=1 --verbose --durations=0 --numprocesses=6 --dist=worksteal $(TEST_ARGS)
 
+.PHONY: test-e2e
+test-e2e:
+	$(UV_RUN) pytest src/tests/e2e --maxfail=1 --verbose --durations=0 $(TEST_ARGS)
+
 
 # Coverage
 
@@ -64,6 +68,9 @@ cov-unit: test-unit
 
 cov-integration: TEST_ARGS += --cov-report=html:cov-integration-html $(COV_ARGS)
 cov-integration: test-integration
+
+cov-e2e: TEST_ARGS += --cov-report=html:cov-e2e-html $(COV_ARGS)
+cov-e2e: test-e2e
 
 
 # Checks and formatting
