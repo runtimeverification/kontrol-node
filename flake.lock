@@ -516,16 +516,16 @@
         "uv2nix": "uv2nix_2"
       },
       "locked": {
-        "lastModified": 1780686018,
-        "narHash": "sha256-RRnZud1EfZA3h05ZCKhWn0dUkV33SMuxAf1nfTsh4Hk=",
+        "lastModified": 1781075147,
+        "narHash": "sha256-etnFWuPKOMaltxct8c5nmbl1oZm5Ht6DcXr5ogHGH1w=",
         "owner": "runtimeverification",
         "repo": "evm-semantics",
-        "rev": "b78f0a3401effd1a18dbcb58022358d11be46a44",
+        "rev": "c8ec904f64f251eb90e0bf05ccbe90fdb733319b",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v1.0.910",
+        "ref": "v1.0.912",
         "repo": "evm-semantics",
         "type": "github"
       }
@@ -559,16 +559,16 @@
         "uv2nix": "uv2nix_3"
       },
       "locked": {
-        "lastModified": 1780946900,
-        "narHash": "sha256-RuNu7j+DNSwwpBC2XqzT8WjqQkR8XaDX//4watAkb60=",
+        "lastModified": 1781080695,
+        "narHash": "sha256-90BjDfZzexmHGDfQdhess+URBN9rNIXz0XZAr1wpbrM=",
         "owner": "runtimeverification",
         "repo": "kontrol",
-        "rev": "0f227534fd2d622b03642892cdeac0c4000d04bd",
+        "rev": "126422765a401fc879f651fc9a51fc45ae664f74",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "v1.0.244",
+        "ref": "v1.0.247",
         "repo": "kontrol",
         "type": "github"
       }
@@ -730,11 +730,11 @@
     },
     "nixpkgs-unstable_3": {
       "locked": {
-        "lastModified": 1780243769,
-        "narHash": "sha256-x5UQuRsH3MqI0U9afaXSNqzTPSeZlRLvFAav2Ux1pNw=",
+        "lastModified": 1780749050,
+        "narHash": "sha256-3av0pIjlOWQ6rDbNOmpUSvbNnJkGORQKKjb4LtCZsIY=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "331800de5053fcebacf6813adb5db9c9dca22a0c",
+        "rev": "a799d3e3886da994fa307f817a6bc705ae538eeb",
         "type": "github"
       },
       "original": {
