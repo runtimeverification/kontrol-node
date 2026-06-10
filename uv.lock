@@ -813,8 +813,8 @@ wheels = [
 
 [[package]]
 name = "kevm-pyk"
-version = "1.0.910"
-source = { git = "https://github.com/runtimeverification/evm-semantics.git?subdirectory=kevm-pyk&rev=v1.0.910#b78f0a3401effd1a18dbcb58022358d11be46a44" }
+version = "1.0.912"
+source = { git = "https://github.com/runtimeverification/evm-semantics.git?subdirectory=kevm-pyk&rev=v1.0.912#c8ec904f64f251eb90e0bf05ccbe90fdb733319b" }
 dependencies = [
     { name = "frozendict" },
     { name = "kframework" },
@@ -850,8 +850,8 @@ wheels = [
 
 [[package]]
 name = "kontrol"
-version = "1.0.244"
-source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.244#0f227534fd2d622b03642892cdeac0c4000d04bd" }
+version = "1.0.247"
+source = { git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.247#126422765a401fc879f651fc9a51fc45ae664f74" }
 dependencies = [
     { name = "eth-abi" },
     { name = "eth-utils" },
@@ -897,7 +897,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.244" },
+    { name = "kontrol", git = "https://github.com/runtimeverification/kontrol.git?rev=v1.0.247" },
     { name = "pydantic", specifier = ">=2.10.6,<3" },
 ]
 
