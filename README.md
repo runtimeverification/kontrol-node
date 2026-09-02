@@ -85,8 +85,6 @@ kontrol-node run --port 8545              # use the conventional Ethereum port
 kontrol-node run --host 0.0.0.0           # accept connections from outside localhost
 ```
 
-Tracing is always on, so `debug_traceTransaction` needs no flag.
-
 Chain state lives in a fresh `io_dir*` directory under the working directory and is removed on exit,
 so **every run starts from genesis**. Requests are handled one at a time.
 
