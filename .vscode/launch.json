@@ -1,14 +1,13 @@
 {
     "version": "0.2.0",
     "configurations": [
-    
         {
             "name": "Kontrol Node: debug",
             "type": "debugpy",
             "request": "launch",
             "justMyCode": false,
             "module": "kontrol_node",
-            "args": ["run", "--steps-tracing", "--port", "8081"],
+            "args": ["run", "--port", "8081"],
             "cwd": "${workspaceFolder}"
         }
     ]
