@@ -3,36 +3,48 @@ description: 'Run a given stage with Docker Image'
 inputs:
   container-name:
     description: 'Docker container name to use'
-    type: string
     required: true
 runs:
   using: 'composite'
   steps:
+  # The Dockerfile's first stage is `FROM ghcr.io/foundry-rs/foundry`, a
+  # third-party org's public image. Self-hosted runners can carry a stale
+  # ghcr.io credential in their docker config; BuildKit then sends it when
+  # fetching the pull token and ghcr.io rejects it ("denied: denied") instead
+  # of falling back to anonymous. Log in with a fresh token so the credential
+  # is always valid (a valid GITHUB_TOKEN can pull public images from any org).
+  - name: 'Log in to ghcr.io'
+    uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
+    with:
+      registry: ghcr.io
+      username: ${{ github.actor }}
+      password: ${{ github.token }}
   - name: 'Set up Docker'
+    env:
+      CONTAINER_NAME: ${{ inputs.container-name }}
     shell: bash {0}
     run: |
       set -euxo pipefail
 
-      CONTAINER_NAME=${{ inputs.container-name }}
-      TAG=runtimeverificationinc/${CONTAINER_NAME}
+      TAG="runtimeverificationinc/${CONTAINER_NAME}"
       K_VERSION=$(cat deps/k_release)
       UV_VERSION=$(cat deps/uv_release)
 
       docker build .                                  \
         --file .github/actions/with-docker/Dockerfile \
-        --tag ${TAG}                                  \
-        --build-arg K_VERSION=${K_VERSION}            \
-        --build-arg UV_VERSION=${UV_VERSION}
+        --tag "${TAG}"                                \
+        --build-arg K_VERSION="${K_VERSION}"          \
+        --build-arg UV_VERSION="${UV_VERSION}"
 
       docker run                          \
-        --name ${CONTAINER_NAME}          \
+        --name "${CONTAINER_NAME}"        \
         --rm                              \
         --interactive                     \
         --tty                             \
         --detach                          \
         --user root                       \
         --workdir /home/user              \
-        ${TAG}
+        "${TAG}"
 
-      docker cp . ${CONTAINER_NAME}:/home/user
-      docker exec ${CONTAINER_NAME} chown -R user:user /home/user
+      docker cp . "${CONTAINER_NAME}":/home/user
+      docker exec "${CONTAINER_NAME}" chown -R user:user /home/user
