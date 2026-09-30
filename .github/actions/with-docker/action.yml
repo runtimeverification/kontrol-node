@@ -46,5 +46,8 @@ runs:
         --workdir /home/user              \
         "${TAG}"
 
-      docker cp . "${CONTAINER_NAME}":/home/user
+      # `./.` copies the checkout's contents into /home/user under both Docker and
+      # Podman; with a bare `.`, Podman copies the directory itself to
+      # /home/user/<checkout-name>, leaving no project where `uv run` looks for one.
+      docker cp ./. "${CONTAINER_NAME}":/home/user
       docker exec "${CONTAINER_NAME}" chown -R user:user /home/user
