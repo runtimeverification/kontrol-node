@@ -1,7 +1,7 @@
 [
   {
     "jsonrpc": "2.0",
-    "method": "anvil_dumpState",
+    "method": "kontrol_dumpState",
     "params": [],
     "id": 0
   }

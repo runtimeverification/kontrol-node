@@ -21,7 +21,7 @@ What differs is what happens *inside* a transaction. Execution is by KEVM, the s
 specification [Kontrol](https://github.com/runtimeverification/kontrol) uses for formal
 verification, which buys two things an ordinary dev node cannot offer:
 
-- **Opcode-level traces with full state deltas.** `debug_traceTransaction` returns geth-style
+- **Opcode-level traces with full state deltas.** `kontrol_traceTransaction` returns geth-style
   `structLogs`, but each step also carries the storage, balance, nonce and code changes, the memory,
   calldata, returndata and program deltas, and the full call context. That is enough to replay an
   execution step by step — which is what makes it a debugger backend, and the engine behind
@@ -154,13 +154,13 @@ curl -s http://127.0.0.1:8081 -H 'Content-Type: application/json' \
 
 #### Trace a transaction
 
-`debug_traceTransaction` returns the record of every opcode a mined transaction executed, keyed by
+`kontrol_traceTransaction` returns the record of every opcode a mined transaction executed, keyed by
 the hash `eth_sendTransaction` gave you — so tracing is two requests: send, then trace. The second
 parameter is geth's tracer-options object, currently ignored; pass `{}`.
 
 ```bash
 curl -s http://127.0.0.1:8081 -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":6,"method":"debug_traceTransaction",
+  -d '{"jsonrpc":"2.0","id":6,"method":"kontrol_traceTransaction",
        "params":["0x8f2c14205d39e138de7b5133c260405ff4fb68f2ee7212ee521986956867bd81",{}]}'
 ```
 
@@ -254,9 +254,9 @@ are `POST`ed to the server root.
 | `eth_getStorageAt` | `[address, slot, block]` | |
 | `eth_getBlockByNumber` | `[block, hydrated]` | |
 | `eth_getBlockByHash` | `[hash, hydrated]` | |
-| `anvil_dumpState` | `[""]` | Full state snapshot: latest block header, every account's balance, nonce, code and storage, the block history, and all transaction receipts |
-| `anvil_setBalance` | `[address, balance]` | |
-| `debug_traceTransaction` | `[hash, options]` | Opcode-level trace; `options` is accepted and ignored |
+| `kontrol_dumpState` | `[""]` | Full state snapshot: latest block header, every account's balance, nonce, code and storage, the block history, and all transaction receipts |
+| `kontrol_setBalance` | `[address, balance]` | |
+| `kontrol_traceTransaction` | `[hash, options]` | Opcode-level trace; `options` is accepted and ignored |
 
 `block` takes a hex number or the tags `"earliest"`, `"latest"`, `"safe"`, `"finalized"`,
 `"pending"` — the middle two resolve to latest, since every block here is final. Errors follow
@@ -312,7 +312,7 @@ CREATE2 deployer is pre-deployed at `0x4e59b44847b379578588920ca78fbf26c0b4956c`
 ## For Developers
 
 Prerequisites: `python >= 3.10`, [`uv`](https://docs.astral.sh/uv/), and the K Framework. Integration
-and end-to-end tests also need [Foundry](https://getfoundry.sh/), for `forge` and `anvil`.
+and end-to-end tests also need [Foundry](https://getfoundry.sh/), for `forge`.
 
 ### Build from source
 
@@ -361,7 +361,7 @@ Driven by `make` (see the [Makefile](Makefile) for the full list):
 | `make kdist-build` | Compile the K semantics (required before integration, e2e, and any real use) |
 | `make build` | Build the wheel |
 | `make test-unit` | Run unit tests (fast; no semantics needed) |
-| `make test-integration` | Replay recorded JSON-RPC requests, singly and batched, against expected responses — and against real Anvil |
+| `make test-integration` | Replay recorded JSON-RPC requests, singly and batched, against expected responses |
 | `make test-e2e` | Compile Solidity with `forge`, deploy it, and drive it over JSON-RPC |
 | `make test` | Run the full test suite |
 | `make cov` | Run tests with a coverage report |
@@ -375,10 +375,6 @@ with an `.expected.json` response. Regenerate expectations rather than hand-edit
 ```bash
 make test-integration TEST_ARGS=--update-expected-output
 ```
-
-That suite also includes `test_anvil_compatibility`, which sends every recorded request to both
-`kontrol-node` and a real `anvil` and asserts the responses match — run it before changing any
-response shape.
 
 ### Repository layout
 

@@ -201,7 +201,7 @@ class TestEthSendTransaction:
         compile_solidity: Callable[[str, str], CompiledContract],
         rpc: RPCClient,
     ) -> None:
-        """debug_traceTransaction should return a valid trace for a transaction
+        """kontrol_traceTransaction should return a valid trace for a transaction
         that reverted due to an unimplemented cheatcode."""
         compiled = compile_solidity(CHEATCODE_INTERFACE_SOL, 'CheatcodeInterfaceCaller')
         caller = rpc.deploy(compiled)
@@ -210,7 +210,7 @@ class TestEthSendTransaction:
         receipt = rpc.receipt(tx_hash)
         assert receipt['status'] == '0x0'
 
-        trace = rpc._rpc('debug_traceTransaction', [tx_hash, {}])
+        trace = rpc._rpc('kontrol_traceTransaction', [tx_hash, {}])
         assert trace is not None
         assert trace['failed'] is True
 
@@ -525,16 +525,16 @@ class TestEthGetStorageAt:
 
 
 # ---------------------------------------------------------------------------
-# Tests: anvil_setBalance
+# Tests: kontrol_setBalance
 # ---------------------------------------------------------------------------
 
 
-class TestAnvilSetBalance:
+class TestKontrolSetBalance:
     def test_set_existing_account_balance(self, rpc: RPCClient) -> None:
         account = '0x976EA74026E726554dB657fA54763abd0C3a0aa9'
         new_balance = 12345
 
-        result = rpc._rpc('anvil_setBalance', [account, hex(new_balance)])
+        result = rpc._rpc('kontrol_setBalance', [account, hex(new_balance)])
         assert result is None  # returns null on success
 
         balance = rpc.balance(account)
@@ -544,20 +544,20 @@ class TestAnvilSetBalance:
         new_account = '0x0000000000000000000000000000000000001234'
         new_balance = 999
 
-        rpc._rpc('anvil_setBalance', [new_account, hex(new_balance)])
+        rpc._rpc('kontrol_setBalance', [new_account, hex(new_balance)])
 
         balance = rpc.balance(new_account)
         assert balance == new_balance
 
 
 # ---------------------------------------------------------------------------
-# Tests: anvil_dumpState
+# Tests: kontrol_dumpState
 # ---------------------------------------------------------------------------
 
 
-class TestAnvilDumpState:
+class TestKontrolDumpState:
     def test_returns_state(self, rpc: RPCClient) -> None:
-        result = rpc._rpc('anvil_dumpState', [None])
+        result = rpc._rpc('kontrol_dumpState', [None])
 
         assert result is not None
         assert isinstance(result, dict)
@@ -571,7 +571,7 @@ class TestAnvilDumpState:
         compiled = compile_solidity(COUNTER_SOL, 'Counter')
         counter = rpc.deploy(compiled)
 
-        result = rpc._rpc('anvil_dumpState', [None])
+        result = rpc._rpc('kontrol_dumpState', [None])
         assert result is not None
 
         # The contract address should appear in accounts
@@ -583,11 +583,11 @@ class TestAnvilDumpState:
 
 
 # ---------------------------------------------------------------------------
-# Tests: debug_traceTransaction
+# Tests: kontrol_traceTransaction
 # ---------------------------------------------------------------------------
 
 
-class TestDebugTraceTransaction:
+class TestKontrolTraceTransaction:
     def test_trace_simple_tx(
         self,
         compile_solidity: Callable[[str, str], CompiledContract],
@@ -597,7 +597,7 @@ class TestDebugTraceTransaction:
         counter = rpc.deploy(compiled)
 
         tx_hash = counter.send('increment()')
-        trace = rpc._rpc('debug_traceTransaction', [tx_hash, {}])
+        trace = rpc._rpc('kontrol_traceTransaction', [tx_hash, {}])
 
         assert trace is not None
         assert 'failed' in trace
@@ -608,7 +608,7 @@ class TestDebugTraceTransaction:
 
     def test_trace_nonexistent_returns_null(self, rpc: RPCClient) -> None:
         fake_hash = '0x' + '00' * 32
-        result = rpc._rpc('debug_traceTransaction', [fake_hash, {}])
+        result = rpc._rpc('kontrol_traceTransaction', [fake_hash, {}])
         assert result is None
 
 

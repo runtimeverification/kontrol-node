@@ -12,7 +12,7 @@
     },
     {
         "jsonrpc": "2.0",
-        "method": "anvil_setBalance",
+        "method": "kontrol_setBalance",
         "params": [
             "0x5fbdb2315678afecb367f032d93f642f64180aa3",
             "1000000000000000000000000"
@@ -45,7 +45,7 @@
     },
     {
         "jsonrpc": "2.0",
-        "method": "debug_traceTransaction",
+        "method": "kontrol_traceTransaction",
         "params": [
             "0x16b3ff55a2953aaaeaca1d5e4324dad6b170dec5dfd2f70dec704430bdc7fc29",
             {

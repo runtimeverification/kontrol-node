@@ -16,7 +16,7 @@
   {
     "jsonrpc": "2.0",
     "id": 1,
-    "method": "debug_traceTransaction",
+    "method": "kontrol_traceTransaction",
     "params": [
       "0xa2a48bf94c47073aa235c34e3dfe9bd9687e7b6a6cce28a2380ed48138f51680",
       {
