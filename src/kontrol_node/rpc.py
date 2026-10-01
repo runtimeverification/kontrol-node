@@ -37,8 +37,8 @@ _DEBUG_KORE: Final[bool] = False
 # eth_getBlockByHash
 # eth_getTransactionCount
 # eth_getStorageAt
-# anvil_stateDump
-# debug_traceTransaction
+# kontrol_dumpState
+# kontrol_traceTransaction
 
 # requests.json                                <- JSON-RPC requests
 # blocks/block_0.json                          <- The initial StateDump (genesis state)

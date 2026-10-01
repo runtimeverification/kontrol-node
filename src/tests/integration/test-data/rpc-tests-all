@@ -1,7 +1,7 @@
-anvil_dumpState_0
-anvil_dumpState_1
-anvil_setBalance_0
-anvil_setBalance_1
+kontrol_dumpState_0
+kontrol_dumpState_1
+kontrol_setBalance_0
+kontrol_setBalance_1
 eth_chainId_0
 eth_getBalance_0
 eth_getBlockByHash_0
@@ -15,9 +15,9 @@ eth_getTransactionReceipt_0
 eth_getTransactionReceipt_1
 eth_sendTransaction_deploy_counter
 eth_sendTransaction_no_sender
-debug_traceTransaction_0
-debug_traceTransaction_1
-debug_traceTransaction_slow
-debug_traceTransaction_mocks
+kontrol_traceTransaction_0
+kontrol_traceTransaction_1
+kontrol_traceTransaction_slow
+kontrol_traceTransaction_mocks
 method_not_found
 invalid_request

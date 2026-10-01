@@ -2,3 +2,5 @@
 __pycache__/
 .coverage
 .vscode
+.kdist
+io_dir*/

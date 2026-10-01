@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 class VMOptions(LoggingOptions):
     addr: str
     port: int
-    steps_tracing: bool
     chain_id: int
     gas_price: int
 
@@ -20,7 +19,6 @@ class VMOptions(LoggingOptions):
         return {
             'addr': '127.0.0.1',
             'port': 8081,
-            'steps_tracing': False,
             'chain_id': 31337,
             'gas_price': 0,
         }

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-import subprocess
 import sys
 import threading
 import time
@@ -40,31 +38,3 @@ def server() -> Iterator[str]:
     yield f'http://{SERVER_HOST}:{server.port()}'
     server.shutdown()
     server_thread.join()
-
-
-@pytest.fixture
-def anvil() -> Iterator[str]:
-    """Fixture to start an Anvil instance on a dynamically assigned port.
-
-    This fixture starts an Anvil instance for each test function, running it on a dynamically allocated
-    port to avoid conflicts. The fixture yields the host and port information for the Anvil instance.
-
-    :yield: A tuple containing the host and port of the Anvil instance.
-    """
-    cmd = ('anvil', '--port', '0', '--steps-tracing')
-    host_pattern = r'Listening on (.+):(\d+)'
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    time.sleep(2)
-    assert process.stdout is not None
-    for line in process.stdout:
-        match = re.search(host_pattern, line)
-        if match:
-            host, port = match.groups()
-            break
-    else:
-        process.terminate()
-        raise RuntimeError('Failed to start Anvil and retrieve host/port information.')
-
-    yield f'http://{host}:{port}'
-    process.terminate()

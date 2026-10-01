@@ -534,11 +534,11 @@ Similarly, we save a state snapshot after the block was mined.
 ```
 
 ###############################################################################
-## anvil_dumpState
+## kontrol_dumpState
 
 ```k
 
-    rule <k> RPCRequest( REQ_ID, AnvilDumpState() )
+    rule <k> RPCRequest( REQ_ID, KontrolDumpState() )
           => #appendFile( #responseFile, #batchSep +String
               "{ \"jsonrpc\": \"2.0\"" +String
               ", \"id\": " +String Int2String(REQ_ID) +String
@@ -552,10 +552,10 @@ Similarly, we save a state snapshot after the block was mined.
 ```
 
 ###############################################################################
-## anvil_setBalance
+## kontrol_setBalance
 
 ```k
-    rule <k> RPCRequest( REQ_ID, AnvilSetBalance(ADDR, NEW_BALANCE))
+    rule <k> RPCRequest( REQ_ID, KontrolSetBalance(ADDR, NEW_BALANCE))
         => #saveStateDump
         ~> RPCResponse( null )
         ...
@@ -567,7 +567,7 @@ Similarly, we save a state snapshot after the block was mined.
             ...
         </account>
 
-    rule <k> RPCRequest( REQ_ID, AnvilSetBalance(ADDR, NEW_BALANCE))
+    rule <k> RPCRequest( REQ_ID, KontrolSetBalance(ADDR, NEW_BALANCE))
         => #saveStateDump
         ~> RPCResponse( null )
         ...
@@ -587,22 +587,22 @@ Similarly, we save a state snapshot after the block was mined.
 ```
 
 ###############################################################################
-## debug_traceTransaction
+## kontrol_traceTransaction
 
-At the point the debug_traceTransaction method is called, the transaction has already been
+At the point the kontrol_traceTransaction method is called, the transaction has already been
 processed and its trace stored on disk. We just need to read the trace and return it.
 Since the trace can be large, we avoid loading it into memory as a JSON object, and 
 just build the response string directly.
 
 ```k
 
-    rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( _TX_HASH ) )
+    rule <k> RPCRequest( REQ_ID, KontrolTraceTransaction( _TX_HASH ) )
           => RPCResponse( null ) ...
          </k>
          <rpcRequestID> _ => REQ_ID </rpcRequestID>
         [owise]
 
-    rule <k> RPCRequest( REQ_ID, DebugTraceTransaction( TX_HASH ) )
+    rule <k> RPCRequest( REQ_ID, KontrolTraceTransaction( TX_HASH ) )
             => #appendFile( #responseFile, #batchSep +String
                 "{ \"jsonrpc\": \"2.0\"" +String
                 ", \"id\": " +String Int2String(REQ_ID) +String
@@ -1069,9 +1069,9 @@ This section defines an intermediate represention for JSON RPC requests.
                               | EthGetBlockByHash( Int, Bool )     // block hash
                               | EthGetTransactionCount( Int, Int ) // address, block number
                               | EthGetStorageAt( Int, Int, Int )   // address, slot, block number
-                              | AnvilDumpState()                   // TODO: add options
-                              | AnvilSetBalance( Int, Int )        // address, balance
-                              | DebugTraceTransaction( Int )        // tx hash
+                              | KontrolDumpState()                   // TODO: add options
+                              | KontrolSetBalance( Int, Int )        // address, balance
+                              | KontrolTraceTransaction( Int )        // tx hash
                               | UnknownMethod()
                               | InvalidRequest()
     // ----------------------------------------
@@ -1178,16 +1178,16 @@ intermediate representation.
            #let BLOCK_INT = #parseBlockNumber( BLOCK_NUM ) #in
            EthGetStorageAt( ADDR_INT, SLOT_INT, BLOCK_INT )
 
-    rule #rpcLoadParams( "anvil_dumpState", [ _ ] )
-        => AnvilDumpState()
+    rule #rpcLoadParams( "kontrol_dumpState", [ _ ] )
+        => KontrolDumpState()
 
-    rule #rpcLoadParams( "anvil_setBalance", [ ADDR:String, NEW_BALANCE:String ] )
+    rule #rpcLoadParams( "kontrol_setBalance", [ ADDR:String, NEW_BALANCE:String ] )
         => #let ADDR_INT = #parseAddr( ADDR ) #in
            #let BALANCE_INT = #parseWord( NEW_BALANCE ) #in
-           AnvilSetBalance( ADDR_INT, BALANCE_INT )
+           KontrolSetBalance( ADDR_INT, BALANCE_INT )
 
-    rule #rpcLoadParams( "debug_traceTransaction", [ TX_HASH:String, _OPTIONS:JSON ] )
-        => DebugTraceTransaction( #parseWord( TX_HASH ) )
+    rule #rpcLoadParams( "kontrol_traceTransaction", [ TX_HASH:String, _OPTIONS:JSON ] )
+        => KontrolTraceTransaction( #parseWord( TX_HASH ) )
 
     rule #rpcLoadParams( _, _ ) => UnknownMethod() [owise]
 
@@ -1289,7 +1289,7 @@ K configuration.
                         "value": intToHex( MSG_VALUE ),
                         "gas_limit": MSG_GAS_LIMIT,
                         "gas_price": MSG_GAS_PRICE
-                        // TODO: We're currently using debug_traceTransaction for tracing
+                        // TODO: We're currently using kontrol_traceTransaction for tracing
                         // We may consider switching to this new format in the future
                     }
                 }],
