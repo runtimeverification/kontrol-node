@@ -86,7 +86,7 @@ step_github_release() {
     fi
     local existing
     if existing="$(GH_TOKEN="${GH_TOKEN:-}" gh release view "${TAG}" --repo "${REPO}" --json tagName --jq .tagName 2>/dev/null)"; then
-        warn "Release ${existing} already exists, skipping."
+        warn "Release ${existing} already exists at HEAD, skipping."
         return
     fi
     GH_TOKEN="${GH_TOKEN:-}" gh release create "${TAG}" --repo "${REPO}" --target "${REV}" --title "${TAG}" --notes ''
@@ -151,12 +151,24 @@ if [[ -z "$(git branch --remotes --contains "${REV}")" ]]; then
     STATE="${STATE}, HEAD not pushed"
 fi
 
+# Consumers resolve a version through its tag, so publishing any commit other than the tagged one
+# under this version would be inconsistent. An annotated tag's commit is its peeled `^{}` entry.
+TAG_REV="$(git ls-remote --tags origin \
+    | awk -v ref="refs/tags/${TAG}" '$2 == ref {c = $1} $2 == ref "^{}" {p = $1} END {print (p ? p : c)}')"
+if [[ -z "${TAG_REV}" ]]; then
+    TAG_STATE="new"
+elif [[ "${TAG_REV}" == "${REV}" ]]; then
+    TAG_STATE="exists at HEAD"
+else
+    fatal "Tag ${TAG} already points at ${TAG_REV}, not HEAD (${REV}). Bump package/version or check out ${TAG}."
+fi
+
 cat >&2 <<EOF
 
   Commit:   ${REV}
             $(git log -1 --format='%s (%an, %ad)' --date=short "${REV}")
   State:    ${STATE}
-  Version:  ${VERSION} (tag ${TAG})
+  Version:  ${VERSION} (tag ${TAG}: ${TAG_STATE})
   Package:  ${FLAKE_REF}
   System:   ${SYSTEM}  (only this system's binaries are cached; run on other machines for more)
 
