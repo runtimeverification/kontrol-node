@@ -10,8 +10,11 @@ let
   # `setuptools-scm[toml]` in pyproject.toml would be written as
   # `foo.setuptools-scm = [ "toml" ]` in Nix
   buildSystemOverrides = {
-    # add dependencies here, e.g.:
-    # pyperclip.setuptools = [ ];
+    # git dependencies are built from source, but uv.lock does not record their build systems
+    kevm-pyk.hatchling = [ ];
+    kontrol.hatchling = [ ];
+    # sdist-only on PyPI
+    typing.setuptools = [ ];
   };
 in
 mapAttrs (

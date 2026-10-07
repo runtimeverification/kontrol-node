@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kontrol-node"
-version = "0.1.60"
+version = "0.1.62"
 description = "A local testnet node powered by KEVM"
 readme = "README.md"
 requires-python = ">=3.10,<4"
