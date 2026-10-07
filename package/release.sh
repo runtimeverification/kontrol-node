@@ -14,8 +14,8 @@
 #
 # Credentials are read from the environment, or prompted for (input hidden) when missing:
 #   GH_TOKEN                  GitHub token for `gh` (only needed if `gh auth status` fails)
-#   CACHIX_PUBLIC_TOKEN       Cachix auth token for `k-framework`
-#   CACHIX_PRIVATE_KFB_TOKEN  Cachix auth token for `k-framework-binary`
+#   CACHIX_SOURCE_TOKEN       Cachix auth token for `k-framework`
+#   CACHIX_BINARY_TOKEN  Cachix auth token for `k-framework-binary`
 #
 # Do NOT run this script with `bash -x`: tracing would print the credentials.
 
@@ -35,7 +35,7 @@ Builds and publishes the local checkout.
 
   --yes  Run all steps without asking for confirmation.
 
-Environment: GH_TOKEN, CACHIX_PUBLIC_TOKEN, CACHIX_PRIVATE_KFB_TOKEN,
+Environment: GH_TOKEN, CACHIX_SOURCE_TOKEN, CACHIX_BINARY_TOKEN,
              PACKAGE (default: kontrol-node), KEEP_DAYS (default: 180).
 EOF
 }
@@ -94,7 +94,7 @@ step_github_release() {
 }
 
 step_source_cache() {
-    require_secret CACHIX_PUBLIC_TOKEN "Cachix token for ${SOURCE_CACHE}"
+    require_secret CACHIX_SOURCE_TOKEN "Cachix token for ${SOURCE_CACHE}"
     ensure_tool cachix nixpkgs#cachix
     notif "Building ${FLAKE_REF} ..."
     nix_ build "${FLAKE_REF}" --no-link --print-build-logs
@@ -102,16 +102,16 @@ step_source_cache() {
     drv="$(nix_ path-info --derivation "${FLAKE_REF}")"
     notif "Pushing build closure of ${drv} to ${SOURCE_CACHE} ..."
     nix-store --query --requisites --include-outputs "${drv}" \
-        | CACHIX_AUTH_TOKEN="${CACHIX_PUBLIC_TOKEN}" cachix push "${SOURCE_CACHE}"
+        | CACHIX_AUTH_TOKEN="${CACHIX_SOURCE_TOKEN}" cachix push "${SOURCE_CACHE}"
 }
 
 step_binary_cache() {
-    require_secret CACHIX_PRIVATE_KFB_TOKEN "Cachix token for ${BINARY_CACHE}"
+    require_secret CACHIX_BINARY_TOKEN "Cachix token for ${BINARY_CACHE}"
     ensure_tool cachix nixpkgs#cachix
     ensure_tool kup github:runtimeverification/kup
     # kup builds the local directory and pins the result under `github:<origin>/<HEAD>#<package>`.
     notif "Publishing ${FLAKE_REF} to ${BINARY_CACHE} (keep ${KEEP_DAYS} days) ..."
-    CACHIX_AUTH_TOKEN="${CACHIX_PRIVATE_KFB_TOKEN}" kup publish --keep-days "${KEEP_DAYS}" "${BINARY_CACHE}" "${FLAKE_REF}"
+    CACHIX_AUTH_TOKEN="${CACHIX_BINARY_TOKEN}" kup publish --keep-days "${KEEP_DAYS}" "${BINARY_CACHE}" "${FLAKE_REF}"
 }
 
 # --- Main -------------------------------------------------------------------------------------
