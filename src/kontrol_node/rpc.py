@@ -189,10 +189,14 @@ class InterpreterProcess:
         return self.io_dir / 'response.json'
 
 
+class SemanticsNotBuiltError(RuntimeError):
+    pass
+
+
 def _definition_dir() -> Path:
     definition_dir = kdist.get_or_none(_DEFINITION_TARGET)
     if definition_dir is None:
-        raise RuntimeError(
+        raise SemanticsNotBuiltError(
             f'The K semantics {_DEFINITION_TARGET} are not built (looked in {kdist.kdist_dir}). '
             f'Build them with `kdist build {_DEFINITION_TARGET}`, '
             'or reinstall with `kup install kontrol-node`, which ships them prebuilt.'
@@ -221,16 +225,10 @@ def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
             except Exception:
                 # Answer with an error instead of dropping the connection, which clients see as a hang.
                 _LOGGER.exception('Failed to process request')
-                self._send_json(
-                    json.dumps(
-                        {
-                            'jsonrpc': '2.0',
-                            'id': None,
-                            'error': {'code': -32603, 'message': 'Internal error'},
-                        }
-                    ).encode('utf-8')
+                result_file = interpreter._response_file()
+                result_file.write_text(
+                    json.dumps({'jsonrpc': '2.0', 'id': None, 'error': {'code': -32603, 'message': 'Internal error'}})
                 )
-                return
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -245,13 +243,6 @@ def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
                 transaction_hash = 'TODO'
                 filename = f'profiling/profiling-{transaction_hash}.prof'
                 profile.dump_stats(filename)
-
-        def _send_json(self, body: bytes) -> None:
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
 
     return (KontrolNodeHandler, interpreter)
 
