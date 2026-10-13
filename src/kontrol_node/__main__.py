@@ -12,7 +12,7 @@ from rich.logging import RichHandler
 
 from . import VERSION
 from .cli import _create_argument_parser, generate_options, get_argument_type_setter, get_option_string_destination
-from .rpc import KontrolNodeServer
+from .rpc import KontrolNodeServer, SemanticsNotBuiltError
 
 if TYPE_CHECKING:
     from typing import Final, TypeVar
@@ -70,7 +70,11 @@ def exec_version(options: VersionOptions) -> None:
 
 def exec_run(options: VMOptions) -> None:
     server = KontrolNodeServer(options)
-    server.serve()
+    try:
+        server.serve()
+    except SemanticsNotBuiltError as err:
+        _LOGGER.error(err)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

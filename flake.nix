@@ -1,5 +1,6 @@
 {
   description = "kontrol-node - A local testnet node powered by KEVM";
+
   inputs = {
     rv-nix-tools.url = "github:runtimeverification/rv-nix-tools/854d4f05ea78547d46e807b414faad64cea10ae4";
     nixpkgs.follows = "rv-nix-tools/nixpkgs";
@@ -7,10 +8,9 @@
     kontrol.url = "github:runtimeverification/kontrol/v1.0.213";
     kontrol.inputs.nixpkgs.follows = "nixpkgs";
 
-    k-framework.follows = "kontrol/k-framework";
-    k-framework.inputs.nixpkgs.follows = "nixpkgs";
-
-    flake-utils.url = "github:numtide/flake-utils";
+    kevm.follows = "kontrol/kevm";
+    k-framework.follows = "kevm/k-framework";
+    flake-utils.follows = "kevm/flake-utils";
     uv2nix.url = "github:pyproject-nix/uv2nix/4cca323a547a1aaa9b94929c4901bed5343eafe8";
     # uv2nix requires a newer version of nixpkgs
     # therefore, we pin uv2nix specifically to a newer version of nixpkgs
@@ -28,16 +28,21 @@
     };
     pyproject-nix.follows = "uv2nix/pyproject-nix";
   };
-  outputs = { self, rv-nix-tools, nixpkgs, kontrol, k-framework, flake-utils, pyproject-nix, pyproject-build-systems, uv2nix, nixpkgs-unstable }:
+  outputs = {
+      self,
+      k-framework,
+      nixpkgs,
+      flake-utils,
+      kevm,
+      kontrol,
+      pyproject-nix,
+      pyproject-build-systems,
+      uv2nix,
+      nixpkgs-unstable,
+      ... }:
   let
     pythonVer = "310";
-    nixLibs = pkgs: with pkgs; "-I${openssl.dev}/include -L${openssl.out}/lib -I${secp256k1}/include -L${secp256k1}/lib";
-  in flake-utils.lib.eachSystem [
-      "x86_64-linux"
-      "x86_64-darwin"
-      "aarch64-linux"
-      "aarch64-darwin"
-    ] (system:
+  in flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs-unstable = import nixpkgs-unstable {
         inherit system;
@@ -47,72 +52,77 @@
         inherit (pkgs-unstable) replaceVars;
       };
       # due to the nixpkgs that we use in this flake being outdated, uv is also heavily outdated
-      # we can instead use the binary release of uv provided by uv2nix for now
+      # we can just use the binary release of uv provided by uv2nix
       uvOverlay = final: prev: {
         uv = uv2nix.packages.${final.system}.uv-bin;
       };
-      kOverlay = final: prev: {
-        k = k-framework.packages.${system}.k;
-      };
-      kontrol-nodeOverlay = final: prev: {
-        kontrol-node = final.callPackage ./nix/kontrol-node {
-          inherit pyproject-nix pyproject-build-systems uv2nix;
+      kontrol-nodeOverlay = final: prev:
+      let
+        kontrol-node-pyproject = final.callPackage ./nix/kontrol-node-pyproject {
+          inherit uv2nix;
+        };
+        kontrol-node-pyk = final.callPackage ./nix/kontrol-node-pyk {
+          inherit pyproject-nix pyproject-build-systems kontrol-node-pyproject;
+          pyproject-overlays = [
+            (k-framework.overlays.pyk-pyproject system)
+            (kevm.overlays.pyk-pyproject system)
+            # `kontrol.overlays.pyk-pyproject` overrides `kontrol-pyk`, which is not a python package,
+            # so it would leave `kontrol` from `uv.lock` in place; override the right package instead
+            (final: prev: {
+              inherit (kontrol.packages.${system}.kontrol-pyk-pyproject.lockFileOverlay final prev) kontrol;
+            })
+          ];
           python = final."python${pythonVer}";
         };
+        kontrol-node = final.callPackage ./nix/kontrol-node {
+          inherit kontrol-node-pyk;
+          rev = self.rev or null;
+        };
+      in {
+        inherit kontrol-node kontrol-node-pyk kontrol-node-pyproject;
       };
       pkgs = import nixpkgs {
         inherit system;
         overlays = [
           staleNixpkgsOverlay
+          k-framework.overlay
           uvOverlay
-          kOverlay
           kontrol-nodeOverlay
         ];
       };
       python = pkgs."python${pythonVer}";
     in {
-      devShells.default = pkgs.mkShell {
-        name = "uv develop shell";
-        packages = with pkgs; ([
-          k
-          autoconf
-          automake
-          cmake
-          pkg-config
+      devShells.default =
+      let
+        kevmShell = kevm.devShells.${system}.default;
+      in pkgs.mkShell {
+        # kevm's shell lists K and the build tools in `packages`, which end up in `nativeBuildInputs`
+        nativeBuildInputs = kevmShell.nativeBuildInputs;
+        buildInputs = kevmShell.buildInputs ++ [
           python
-          clang
-          uv
-          which
-        ] ++ lib.optionals (!stdenv.isDarwin) [
-          elfutils
-        ]);
-        buildInputs = with pkgs; [
-          fmt
-          libtool
-          mpfr
-          openssl
-          secp256k1
-          boost
+          pkgs.uv
         ];
         env = {
           # prevent uv from managing Python downloads and force use of specific
           UV_PYTHON_DOWNLOADS = "never";
           UV_PYTHON = python.interpreter;
         };
-        shellHook = ''
-          export NIX_LIBS="${nixLibs pkgs}"
-          unset PYTHONPATH
-        '' + pkgs.lib.strings.optionalString (pkgs.stdenv.isAarch64 && pkgs.stdenv.isDarwin) ''
-          export APPLE_SILICON=true
-        '';
+        inherit (kevmShell) shellHook;
       };
       packages = rec {
-        inherit (pkgs) kontrol-node;
+        inherit (pkgs) kontrol-node kontrol-node-pyk kontrol-node-pyproject;
         default = kontrol-node;
       };
     }) // {
-      overlays.default = final: prev: {
-        inherit (self.packages.${final.system}) kontrol-node;
+      overlays = {
+        default = final: prev: {
+          inherit (self.packages.${final.system}) kontrol-node;
+        };
+        # this pyproject-nix overlay allows for overriding the python packages that are otherwise locked in `uv.lock`
+        # by using this overlay in dependant nix flakes, you ensure that nix overrides also override the python package
+        pyk-pyproject = system: final: prev: {
+          inherit (self.packages.${system}.kontrol-node-pyproject.lockFileOverlay final prev) kontrol-node;
+        };
       };
     };
 }
