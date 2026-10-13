@@ -35,7 +35,6 @@
       flake-utils,
       kevm,
       kontrol,
-      rv-nix-tools,
       pyproject-nix,
       pyproject-build-systems,
       uv2nix,
@@ -86,9 +85,7 @@
         inherit system;
         overlays = [
           staleNixpkgsOverlay
-          (final: prev: { llvm-backend-release = false; })
           k-framework.overlay
-          kevm.overlays.default
           uvOverlay
           kontrol-nodeOverlay
         ];
@@ -100,19 +97,17 @@
         kevmShell = kevm.devShells.${system}.default;
       in pkgs.mkShell {
         # kevm's shell lists K and the build tools in `packages`, which end up in `nativeBuildInputs`
-        nativeBuildInputs = kevmShell.nativeBuildInputs or [ ];
-        buildInputs = (kevmShell.buildInputs or [ ]) ++ [
+        nativeBuildInputs = kevmShell.nativeBuildInputs;
+        buildInputs = kevmShell.buildInputs ++ [
           python
           pkgs.uv
         ];
-        env = (kevmShell.env or { }) // {
+        env = {
           # prevent uv from managing Python downloads and force use of specific
           UV_PYTHON_DOWNLOADS = "never";
           UV_PYTHON = python.interpreter;
         };
-        shellHook = (kevmShell.shellHook or "") + ''
-          unset PYTHONPATH
-        '';
+        inherit (kevmShell) shellHook;
       };
       packages = rec {
         inherit (pkgs) kontrol-node kontrol-node-pyk kontrol-node-pyproject;

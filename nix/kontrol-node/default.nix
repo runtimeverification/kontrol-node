@@ -48,8 +48,6 @@ stdenv.mkDerivation {
 
   dontUseCmakeConfigure = true;
 
-  enableParallelBuilding = true;
-
   # Build the semantics here so that `kontrol-node run` finds them prebuilt instead of failing on the
   # first request.
   buildPhase = ''
@@ -68,6 +66,6 @@ stdenv.mkDerivation {
     mkdir -p $out/bin
     makeWrapper ${kontrol-node-pyk}/bin/kontrol-node $out/bin/kontrol-node --prefix PATH : ${
       lib.makeBinPath [ which k ]
-    } --set NIX_LIBS "${nixLibs}" --set KDIST_DIR $out
+    } --set KDIST_DIR $out
   '';
 }
