@@ -85,6 +85,9 @@ kontrol-node run --port 8545              # use the conventional Ethereum port
 kontrol-node run --host 0.0.0.0           # accept connections from outside localhost
 ```
 
+Once the node accepts requests it prints `Listening on http://<host>:<port>`; scripts can wait for
+that line before sending requests.
+
 Chain state lives in a fresh `io_dir*` directory under the working directory and is removed on exit,
 so **every run starts from genesis**. Requests are handled one at a time.
 
@@ -343,7 +346,8 @@ uv run kdist clean
 ```
 
 See `kdist --help` for all options. A Nix flake is also provided: `nix develop` gives a shell with K
-and every build dependency, `nix build` builds the package.
+and every build dependency, `nix build` builds the package — the same one `kup` installs, with the
+matching K and the compiled semantics bundled.
 
 To build and install the wheel:
 

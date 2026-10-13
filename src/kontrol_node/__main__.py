@@ -70,7 +70,11 @@ def exec_version(options: VersionOptions) -> None:
 
 def exec_run(options: VMOptions) -> None:
     server = KontrolNodeServer(options)
-    server.serve()
+    try:
+        server.serve()
+    except RuntimeError as err:
+        _LOGGER.error(err)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

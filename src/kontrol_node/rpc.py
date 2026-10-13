@@ -28,6 +28,8 @@ _PROFILING: Final[bool] = False
 
 _DEBUG_KORE: Final[bool] = False
 
+_DEFINITION_TARGET: Final = 'kontrol-node.simbolik'
+
 # Simbolik needs at minimum the following RPC methods
 # eth_sendTransaction
 # eth_getTransactionByHash
@@ -53,12 +55,15 @@ class KontrolNodeServer:
 
     def __init__(self, options: VMOptions) -> None:
         self.options = options
-        print(f'Initialized KontrolNodeServer with options: {self.options}')
+        _LOGGER.info(f'Initialized KontrolNodeServer with options: {self.options}')
 
     def serve(self) -> None:
         _LOGGER.info(f'Starting JSON-RPC server at {self.options.addr}:{self.options.port}')
         self.handler, self.interpreter = create_handler()
         self.http_server = HTTPServer((self.options.addr, int(self.options.port)), self.handler)
+        # Flush explicitly: when stdout is not a TTY it is block-buffered, and callers waiting for
+        # this line to know the node is ready would otherwise never see it.
+        print(f'Listening on http://{self.options.addr}:{self.port()}', flush=True)
         self.http_server.serve_forever()
         _LOGGER.info(f'JSON-RPC server at {self.options.addr}:{self.options.port} shut down.')
 
@@ -83,8 +88,12 @@ class InterpreterProcess:
     """
 
     io_dir: Path
+    definition_dir: Path
 
     def __init__(self) -> None:
+        # Resolve the semantics before creating any state, so that a missing build fails at startup
+        # instead of on the first request.
+        self.definition_dir = _definition_dir()
         self._setup_io_dir()
         atexit.register(self.shutdown)
 
@@ -115,7 +124,7 @@ class InterpreterProcess:
         if _DEBUG_KORE:
             with open('input.kore', 'w') as f:
                 f.write(initial_kore.text)
-        result = llvm_interpret(definition_dir=kdist.get('kontrol-node.simbolik'), pattern=initial_kore, check=False)
+        result = llvm_interpret(definition_dir=self.definition_dir, pattern=initial_kore, check=False)
         return result
 
     def request(self, payload: bytes) -> Path:
@@ -180,6 +189,17 @@ class InterpreterProcess:
         return self.io_dir / 'response.json'
 
 
+def _definition_dir() -> Path:
+    definition_dir = kdist.get_or_none(_DEFINITION_TARGET)
+    if definition_dir is None:
+        raise RuntimeError(
+            f'The K semantics {_DEFINITION_TARGET} are not built (looked in {kdist.kdist_dir}). '
+            f'Build them with `kdist build {_DEFINITION_TARGET}`, '
+            'or reinstall with `kup install kontrol-node`, which ships them prebuilt.'
+        )
+    return definition_dir
+
+
 def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
 
     interpreter = InterpreterProcess()
@@ -196,12 +216,25 @@ def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
             assert type(content_len) is str
             content = self.rfile.read(int(content_len))
 
-            result_file = interpreter.request(content)
-            result_size = result_file.stat().st_size
+            try:
+                result_file = interpreter.request(content)
+            except Exception:
+                # Answer with an error instead of dropping the connection, which clients see as a hang.
+                _LOGGER.exception('Failed to process request')
+                self._send_json(
+                    json.dumps(
+                        {
+                            'jsonrpc': '2.0',
+                            'id': None,
+                            'error': {'code': -32603, 'message': 'Internal error'},
+                        }
+                    ).encode('utf-8')
+                )
+                return
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(result_size))
+            self.send_header('Content-Length', str(result_file.stat().st_size))
             self.end_headers()
 
             with open(result_file, 'rb') as f:
@@ -212,6 +245,13 @@ def create_handler() -> tuple[type[BaseHTTPRequestHandler], InterpreterProcess]:
                 transaction_hash = 'TODO'
                 filename = f'profiling/profiling-{transaction_hash}.prof'
                 profile.dump_stats(filename)
+
+        def _send_json(self, body: bytes) -> None:
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
     return (KontrolNodeHandler, interpreter)
 

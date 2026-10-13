@@ -55,10 +55,11 @@
         k = k-framework.packages.${system}.k;
       };
       kontrol-nodeOverlay = final: prev: {
-        kontrol-node = final.callPackage ./nix/kontrol-node {
+        kontrol-node-pyk = final.callPackage ./nix/kontrol-node-pyk {
           inherit pyproject-nix pyproject-build-systems uv2nix;
           python = final."python${pythonVer}";
         };
+        kontrol-node = final.callPackage ./nix/kontrol-node { };
       };
       pkgs = import nixpkgs {
         inherit system;
@@ -107,7 +108,7 @@
         '';
       };
       packages = rec {
-        inherit (pkgs) kontrol-node;
+        inherit (pkgs) kontrol-node kontrol-node-pyk;
         default = kontrol-node;
       };
     }) // {

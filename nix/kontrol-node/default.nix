@@ -1,55 +1,78 @@
 {
   lib,
-  callPackage,
-  nix-gitignore,
+  stdenv,
+  makeWrapper,
 
-  pyproject-nix,
-  pyproject-build-systems,
-  uv2nix,
+  autoconf,
+  automake,
+  cmake,
+  clang,
+  k,
+  boost,
+  libtool,
+  mpfr,
+  openssl,
+  gmp,
+  pkg-config,
+  secp256k1,
+  which,
 
-  python
+  kontrol-node-pyk,
 }:
 let
-  pyproject-util = callPackage pyproject-nix.build.util {};
-  pyproject-packages = callPackage pyproject-nix.build.packages {
-    inherit python;
-  };
+  nixLibs = "-I${openssl.dev}/include -L${openssl.out}/lib -I${secp256k1}/include -L${secp256k1}/lib";
+in
+stdenv.mkDerivation {
+  pname = "kontrol-node";
+  inherit (kontrol-node-pyk) version;
 
-  # load a uv workspace from a workspace root
-  workspace = uv2nix.lib.workspace.loadWorkspace {
-    workspaceRoot = lib.cleanSource (nix-gitignore.gitignoreSourcePure [
-        ../../.gitignore
-        ".github/"
-        "result*"
-        # do not include submodule directories that might be initilized empty or non-existent due to nix/git
-        # otherwise cachix build might not match the version that is requested by `kup`
-        # TODO: for new projects, add your submodule directories that are not required for nix builds here!
-        # e.g., `"/docs/external-computation"` with `external-computation` being a git submodule directory
-        # "/docs/external-computation"
-      ] ../..
-    );
-  };
+  # Everything is built from the Python package; there are no sources of our own.
+  dontUnpack = true;
+  dontUseCmakeConfigure = true;
 
-  # create overlay
-  lockFileOverlay = workspace.mkPyprojectOverlay {
-    # prefer "wheel" over "sdist" due to maintance overhead
-    # there is no bundled set of overlays for "sdist" in uv2nix, in contrast to poetry2nix
-    sourcePreference = "wheel";
-  };
+  buildInputs = [
+    autoconf
+    automake
+    cmake
+    clang
+    kontrol-node-pyk
+    k
+    boost
+    libtool
+    mpfr
+    openssl.dev
+    gmp
+    pkg-config
+    secp256k1
+    which
+  ];
+  nativeBuildInputs = [ makeWrapper ];
 
-  buildSystemsOverlay = import ./build-systems-overlay.nix;
+  enableParallelBuilding = true;
 
-  # construct package set
-  pythonSet = pyproject-packages.overrideScope (lib.composeManyExtensions [
-    # make build tools available by default as these are not necessarily specified in python lock files
-    pyproject-build-systems.overlays.default
-    # include all packages from the python lock file
-    lockFileOverlay
-    # add build system overrides to certain python packages
-    buildSystemsOverlay
-  ]);
-in pyproject-util.mkApplication {
-  # default dependancy group enables no optional dependencies and no dependency-groups
-  venv = pythonSet.mkVirtualEnv "kontrol-node-env" workspace.deps.default;
-  package = pythonSet.kontrol-node;
+  # Build the semantics here so that `kontrol-node run` finds them prebuilt (via `KDIST_DIR`)
+  # instead of failing on the first request.
+  buildPhase = ''
+    runHook preBuild
+    export HOME=$(mktemp -d)
+    KDIST_DIR=$(pwd)/kdist NIX_LIBS="${nixLibs}" ${
+      lib.optionalString (stdenv.isAarch64 && stdenv.isDarwin) "APPLE_SILICON=true"
+    } ${kontrol-node-pyk.venv}/bin/kdist -v build kontrol-node.simbolik
+    runHook postBuild
+  '';
+
+  # Ship the matching K on PATH: `kontrol-node` checks the K version at startup, and must not pick
+  # up whatever K the user happens to have installed.
+  installPhase = ''
+    runHook preInstall
+    mkdir -p $out/bin
+    cp -r ./kdist $out/kdist
+    makeWrapper ${kontrol-node-pyk}/bin/kontrol-node $out/bin/kontrol-node \
+      --prefix PATH : ${lib.makeBinPath [ which k ]} \
+      --set NIX_LIBS "${nixLibs}" \
+      --set KDIST_DIR $out/kdist
+    runHook postInstall
+  '';
+
+  meta.mainProgram = "kontrol-node";
 }
